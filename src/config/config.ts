@@ -1,26 +1,27 @@
-// Minimal env reader for the frontend. Exports a typed object with defaults.
+// src/config/config.ts
+// Single source of truth for public config used in the browser.
+// Only reads NEXT_PUBLIC_* keys.
+// Import from anywhere as: import { cfg } from '@/config/config';
 
-export type Env = {
-  NEXT_PUBLIC_SUPABASE_URL: string;
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: string;
-  NEXT_PUBLIC_API_BASE?: string;
-};
+type Cfg = Readonly<{
+  appName: string;
+  apiBase: string;                 // your backend URL (Render/local)
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  isDev: boolean;
+}>;
 
-export const getEnv = (): Env => {
-  return {
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
-    NEXT_PUBLIC_API_BASE: process.env.NEXT_PUBLIC_API_BASE ?? undefined,
-  };
-};
-
-export const requireClientEnv = (key: keyof Env): string => {
-  const val = process.env[key];
-  if (!val) {
-    // Keep runtime behavior non-fatal for local dev; return empty string but log to help developer.
-    // In production you may want to throw here.
-    console.warn(`Environment variable ${key} is not set.`);
-    return "";
-  }
+function must(key: string, val: string | undefined): string {
+  if (!val) throw new Error(`Missing environment variable: ${key}`);
   return val;
-};
+}
+
+const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8080';
+
+export const cfg: Cfg = Object.freeze({
+  appName: 'TUIZ',
+  apiBase,
+  supabaseUrl: must('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL),
+  supabaseAnonKey: must('NEXT_PUBLIC_SUPABASE_ANON_KEY', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  isDev: process.env.NODE_ENV !== 'production',
+});
