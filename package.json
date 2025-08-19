@@ -18,7 +18,8 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "test": "vitest --run",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.55.0",
