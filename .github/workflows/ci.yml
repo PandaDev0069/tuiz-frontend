@@ -1,3 +1,5 @@
+permissions:
+  contents: read
 name: ci
 
 on:
@@ -10,8 +12,7 @@ jobs:
   web:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Use Node 22
         uses: actions/setup-node@v4

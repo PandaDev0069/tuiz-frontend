@@ -2,11 +2,21 @@
   "name": "tuiz-frontend",
   "version": "0.1.0",
   "private": true,
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,md,mdx,css}": [
+      "prettier --write"
+    ],
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --max-warnings=0"
+    ]
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.55.0",
@@ -16,6 +26,8 @@
     "zustand": "^5.0.7"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
     "@eslint/eslintrc": "^3",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -23,6 +35,9 @@
     "eslint": "^9",
     "eslint-config-next": "15.4.7",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.5",
+    "prettier": "^3.6.2",
     "typescript": "^5"
   }
 }
