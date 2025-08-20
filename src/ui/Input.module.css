@@ -3,12 +3,19 @@
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-2);
   border: 1px solid var(--border);
-  background: #0b1117;
+  background: var(--card);
   color: var(--fg);
+  transition: all var(--transition-fast);
+  backdrop-filter: blur(10px);
 }
 
 .input:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 30%, transparent);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+  background: var(--card-hover);
+}
+
+.input::placeholder {
+  color: var(--fg-subtle);
 }

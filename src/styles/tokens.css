@@ -1,31 +1,122 @@
 :root {
-  /* Colors - Clean, modern palette */
-  --bg: #0b0f14;
-  --fg: #e7edf3;
-  --muted: #95a3b3;
-  --accent: #6cc0ff;
-  --accent-ink: #06131f;
-  --border: #1e2a36;
-  --card: #0f141a;
+  /* Primary gradient theme - #BFF098 → #6FD6FF */
+  --gradient-primary: linear-gradient(135deg, #bff098 0%, #6fd6ff 100%);
+  --gradient-fallback: #9fe3cb; /* Midpoint color */
+
+  /* Theme colors derived from gradient */
+  --light-green: #bff098;
+  --light-blue: #6fd6ff;
+  --primary: #6fd6ff;
+  --primary-light: #8fdbff;
+  --secondary: #bff098;
+  --secondary-dark: #9fd078;
+
+  /* Light/bright background - using the gradient */
+  --bg: var(--gradient-primary);
+  --bg-fallback: var(--gradient-fallback);
+  --bg-subtle: rgba(255, 255, 255, 0.85);
+  --bg-muted: rgba(255, 255, 255, 0.75);
+  --bg-accent: rgba(255, 255, 255, 0.65);
+
+  /* Darker text colors for bright background */
+  --fg: #1f2937; /* Dark gray */
+  --fg-muted: #374151; /* Medium gray */
+  --fg-subtle: #4b5563; /* Light gray */
+
+  /* Accent colors using theme palette */
+  --accent: var(--primary);
+  --accent-hover: var(--primary-light);
+  --accent-ink: rgba(255, 255, 255, 0.95);
+  --accent-subtle: rgba(111, 214, 255, 0.15);
+
+  /* Semantic colors that complement the bright theme */
+  --success: #059669;
+  --success-light: #10b981;
+  --success-bg: rgba(5, 150, 105, 0.1);
+
+  --warning: #d97706;
+  --warning-light: #f59e0b;
+  --warning-bg: rgba(217, 119, 6, 0.1);
+
+  --error: #dc2626;
+  --error-light: #ef4444;
+  --error-bg: rgba(220, 38, 38, 0.1);
+
+  --info: var(--primary);
+  --info-bg: rgba(111, 214, 255, 0.1);
+
+  /* Border colors for bright theme */
+  --border: rgba(31, 41, 55, 0.15);
+  --border-hover: rgba(31, 41, 55, 0.25);
+  --border-focus: var(--primary);
+
+  /* Surface colors - cards and overlays */
+  --card: rgba(255, 255, 255, 0.9);
+  --card-hover: rgba(255, 255, 255, 0.95);
+  --overlay: rgba(255, 255, 255, 0.4);
 
   /* Spacing system */
+  --space-px: 1px;
+  --space-0: 0;
   --space-1: 0.25rem; /* 4px */
   --space-2: 0.5rem; /* 8px */
   --space-3: 0.75rem; /* 12px */
   --space-4: 1rem; /* 16px */
   --space-5: 1.25rem; /* 20px */
   --space-6: 1.5rem; /* 24px */
+  --space-7: 1.75rem; /* 28px */
   --space-8: 2rem; /* 32px */
+  --space-9: 2.25rem; /* 36px */
   --space-10: 2.5rem; /* 40px */
   --space-12: 3rem; /* 48px */
+  --space-16: 4rem; /* 64px */
+  --space-20: 5rem; /* 80px */
+  --space-24: 6rem; /* 96px */
+
+  /* Typography */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    'Noto Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* Font sizes */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.875rem; /* 14px */
+  --text-base: 1rem; /* 16px */
+  --text-lg: 1.125rem; /* 18px */
+  --text-xl: 1.25rem; /* 20px */
+  --text-2xl: 1.5rem; /* 24px */
+  --text-3xl: 1.875rem; /* 30px */
+  --text-4xl: 2.25rem; /* 36px */
+  --text-5xl: 3rem; /* 48px */
+  --text-6xl: 3.75rem; /* 60px */
+  --text-7xl: 4.5rem; /* 72px */
+  --text-8xl: 6rem; /* 96px */
+  --text-9xl: 8rem; /* 128px */
 
   /* Border radius */
+  --radius-none: 0;
   --radius-1: 4px;
   --radius-2: 8px;
   --radius-3: 12px;
+  --radius-4: 16px;
   --radius-full: 9999px;
 
-  /* Shadows */
-  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.15);
-  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.25);
+  /* Shadows for bright theme - darker shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(31, 41, 55, 0.08);
+  --shadow-1: 0 2px 8px rgba(31, 41, 55, 0.15);
+  --shadow-2: 0 4px 16px rgba(31, 41, 55, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(31, 41, 55, 0.15), 0 4px 6px -2px rgba(31, 41, 55, 0.08);
+  --shadow-glow: 0 0 20px rgba(111, 214, 255, 0.3);
+  --shadow-inner: inset 0 2px 4px 0 rgba(31, 41, 55, 0.1);
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+
+  /* Z-index scale */
+  --z-dropdown: 1000;
+  --z-modal: 1050;
+  --z-tooltip: 1070;
 }

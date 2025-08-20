@@ -37,4 +37,43 @@ describe('Button Component', () => {
     const button = screen.getByRole('button', { name: /disabled button/i });
     expect(button).toBeDisabled();
   });
+
+  it('renders with different variants', () => {
+    const { rerender } = render(<Button variant="primary">Primary</Button>);
+    expect(screen.getByRole('button', { name: /primary/i })).toBeInTheDocument();
+
+    rerender(<Button variant="ghost">Ghost</Button>);
+    expect(screen.getByRole('button', { name: /ghost/i })).toBeInTheDocument();
+
+    rerender(<Button variant="soft">Soft</Button>);
+    expect(screen.getByRole('button', { name: /soft/i })).toBeInTheDocument();
+  });
+
+  it('renders with different sizes', () => {
+    const { rerender } = render(<Button size="sm">Small</Button>);
+    expect(screen.getByRole('button', { name: /small/i })).toBeInTheDocument();
+
+    rerender(<Button size="md">Medium</Button>);
+    expect(screen.getByRole('button', { name: /medium/i })).toBeInTheDocument();
+
+    rerender(<Button size="lg">Large</Button>);
+    expect(screen.getByRole('button', { name: /large/i })).toBeInTheDocument();
+  });
+
+  it('accepts additional className', () => {
+    const { container } = render(<Button className="custom-class">Test</Button>);
+    const button = container.firstChild as HTMLElement;
+    expect(button).toHaveClass('custom-class');
+  });
+
+  it('passes through HTML button attributes', () => {
+    render(
+      <Button type="submit" id="submit-btn">
+        Submit
+      </Button>,
+    );
+    const button = screen.getByRole('button', { name: /submit/i });
+    expect(button).toHaveAttribute('type', 'submit');
+    expect(button).toHaveAttribute('id', 'submit-btn');
+  });
 });

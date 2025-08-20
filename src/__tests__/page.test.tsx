@@ -13,7 +13,7 @@ describe('Page', () => {
   it('renders the welcome message', () => {
     render(<Page />);
 
-    const description = screen.getByText(/welcome to tuiz - your quiz platform/i);
+    const description = screen.getByText(/welcome to tuiz - your interactive quiz platform/i);
     expect(description).toBeInTheDocument();
   });
 
