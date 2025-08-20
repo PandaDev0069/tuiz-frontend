@@ -12,8 +12,8 @@ describe('Badge Component', () => {
     const { rerender } = render(<Badge variant="default">Default</Badge>);
     expect(screen.getByText('Default')).toBeInTheDocument();
 
-    rerender(<Badge variant="primary">Primary</Badge>);
-    expect(screen.getByText('Primary')).toBeInTheDocument();
+    rerender(<Badge variant="secondary">Secondary</Badge>);
+    expect(screen.getByText('Secondary')).toBeInTheDocument();
 
     rerender(<Badge variant="success">Success</Badge>);
     expect(screen.getByText('Success')).toBeInTheDocument();
@@ -21,11 +21,14 @@ describe('Badge Component', () => {
     rerender(<Badge variant="warning">Warning</Badge>);
     expect(screen.getByText('Warning')).toBeInTheDocument();
 
-    rerender(<Badge variant="error">Error</Badge>);
-    expect(screen.getByText('Error')).toBeInTheDocument();
+    rerender(<Badge variant="destructive">Destructive</Badge>);
+    expect(screen.getByText('Destructive')).toBeInTheDocument();
 
-    rerender(<Badge variant="info">Info</Badge>);
-    expect(screen.getByText('Info')).toBeInTheDocument();
+    rerender(<Badge variant="outline">Outline</Badge>);
+    expect(screen.getByText('Outline')).toBeInTheDocument();
+
+    rerender(<Badge variant="ghost">Ghost</Badge>);
+    expect(screen.getByText('Ghost')).toBeInTheDocument();
   });
 
   it('renders with different sizes', () => {

@@ -15,14 +15,11 @@ describe('Flex Component', () => {
   });
 
   it('renders with different direction values', () => {
-    const { rerender } = render(<Flex direction="column">Column</Flex>);
+    const { rerender } = render(<Flex direction="col">Column</Flex>);
     expect(screen.getByText('Column')).toBeInTheDocument();
 
     rerender(<Flex direction="row-reverse">Row Reverse</Flex>);
     expect(screen.getByText('Row Reverse')).toBeInTheDocument();
-
-    rerender(<Flex direction="column-reverse">Column Reverse</Flex>);
-    expect(screen.getByText('Column Reverse')).toBeInTheDocument();
   });
 
   it('renders with different justify values', () => {
@@ -56,20 +53,16 @@ describe('Flex Component', () => {
   });
 
   it('renders with different gap values', () => {
-    const { rerender } = render(<Flex gap="4">Gap 4</Flex>);
+    const { rerender } = render(<Flex gap={4}>Gap 4</Flex>);
     expect(screen.getByText('Gap 4')).toBeInTheDocument();
 
-    rerender(<Flex gap="8">Gap 8</Flex>);
+    rerender(<Flex gap={8}>Gap 8</Flex>);
     expect(screen.getByText('Gap 8')).toBeInTheDocument();
   });
 
-  it('renders with grow and shrink properties', () => {
-    render(
-      <Flex grow shrink>
-        Grow and Shrink
-      </Flex>,
-    );
-    expect(screen.getByText('Grow and Shrink')).toBeInTheDocument();
+  it('renders without grow and shrink properties', () => {
+    render(<Flex>Basic Flex Container</Flex>);
+    expect(screen.getByText('Basic Flex Container')).toBeInTheDocument();
   });
 
   it('accepts additional className', () => {
@@ -91,13 +84,11 @@ describe('Flex Component', () => {
   it('supports complex prop combinations', () => {
     render(
       <Flex
-        direction="column"
+        direction="col"
         align="center"
         justify="between"
-        gap="8"
+        gap={8}
         wrap="wrap"
-        grow
-        shrink
         className="complex-flex"
       >
         Complex Flex

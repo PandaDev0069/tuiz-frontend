@@ -14,7 +14,13 @@ export default function Page() {
       <Header>
         <Container size="sm">
           <div className="flex justify-center items-center mb-6">
-            <Image src="/logo.png" alt="logo" width={100} height={100} className="animate-float" />
+            <Image
+              src="/logo.png"
+              alt="logo"
+              width={100}
+              height={100}
+              className="animate-float rounded-full"
+            />
           </div>
           <h1 className="text-6xl font-black mb-6 gradient-text tracking-tight leading-tight">
             TUIZ情報王
@@ -38,7 +44,7 @@ export default function Page() {
                     <h3 className="text-xl font-semibold text-gray-800">ホストとしてログイン</h3>
                   </CardHeader>
                   <p className="text-gray-600 mb-6">クイズを作成・管理し、クイズを開始、ホスト</p>
-                  <Button variant="gradient" className="w-full">
+                  <Button variant="gradient" size="tall" className="mx-auto px-12">
                     ログイン
                   </Button>
                 </CardContent>
@@ -56,7 +62,7 @@ export default function Page() {
                     <h3 className="text-xl font-semibold text-gray-800">ゲームに参加</h3>
                   </CardHeader>
                   <p className="text-gray-600 mb-6">ルームコードを入力してクイズゲームに参加</p>
-                  <Button variant="gradient" className="w-full">
+                  <Button variant="gradient" size="tall" className="mx-auto px-12">
                     ゲーム参加
                   </Button>
                 </CardContent>

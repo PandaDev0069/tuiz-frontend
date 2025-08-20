@@ -29,9 +29,11 @@ describe('Typography Components', () => {
       expect(screen.getByText('Small Heading')).toBeInTheDocument();
     });
 
-    it('renders gradient text when gradient prop is true', () => {
-      render(<Heading gradient>Gradient Heading</Heading>);
-      expect(screen.getByText('Gradient Heading')).toBeInTheDocument();
+    it('renders with custom className for gradient effect', () => {
+      render(<Heading className="gradient-text">Gradient Heading</Heading>);
+      const heading = screen.getByText('Gradient Heading');
+      expect(heading).toBeInTheDocument();
+      expect(heading).toHaveClass('gradient-text');
     });
 
     it('accepts additional className', () => {
@@ -49,18 +51,11 @@ describe('Typography Components', () => {
       expect(text.tagName).toBe('P'); // default as="p"
     });
 
-    it('renders with different text elements', () => {
-      const { rerender } = render(<Text as="span">Span Text</Text>);
-      let text = screen.getByText('Span Text');
-      expect(text.tagName).toBe('SPAN');
-
-      rerender(<Text as="div">Div Text</Text>);
-      text = screen.getByText('Div Text');
-      expect(text.tagName).toBe('DIV');
-
-      rerender(<Text as="small">Small Text</Text>);
-      text = screen.getByText('Small Text');
-      expect(text.tagName).toBe('SMALL');
+    it('renders as paragraph element', () => {
+      render(<Text>Text Content</Text>);
+      const text = screen.getByText('Text Content');
+      expect(text).toBeInTheDocument();
+      expect(text.tagName).toBe('P');
     });
 
     it('accepts different size and weight props', () => {
@@ -79,9 +74,11 @@ describe('Typography Components', () => {
       expect(screen.getByText('Small Bold Text')).toBeInTheDocument();
     });
 
-    it('renders gradient text when gradient prop is true', () => {
-      render(<Text gradient>Gradient Text</Text>);
-      expect(screen.getByText('Gradient Text')).toBeInTheDocument();
+    it('renders with custom className for gradient effect', () => {
+      render(<Text className="gradient-text">Gradient Text</Text>);
+      const text = screen.getByText('Gradient Text');
+      expect(text).toBeInTheDocument();
+      expect(text).toHaveClass('gradient-text');
     });
 
     it('accepts additional className', () => {
@@ -90,15 +87,15 @@ describe('Typography Components', () => {
       expect(text).toHaveClass('custom-text');
     });
 
-    it('renders with different color variants', () => {
-      const { rerender } = render(<Text color="success">Success Text</Text>);
-      expect(screen.getByText('Success Text')).toBeInTheDocument();
+    it('renders with different variant colors', () => {
+      const { rerender } = render(<Text variant="muted">Muted Text</Text>);
+      expect(screen.getByText('Muted Text')).toBeInTheDocument();
 
-      rerender(<Text color="warning">Warning Text</Text>);
-      expect(screen.getByText('Warning Text')).toBeInTheDocument();
+      rerender(<Text variant="accent">Accent Text</Text>);
+      expect(screen.getByText('Accent Text')).toBeInTheDocument();
 
-      rerender(<Text color="error">Error Text</Text>);
-      expect(screen.getByText('Error Text')).toBeInTheDocument();
+      rerender(<Text variant="default">Default Text</Text>);
+      expect(screen.getByText('Default Text')).toBeInTheDocument();
     });
   });
 });

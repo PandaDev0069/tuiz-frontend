@@ -39,25 +39,31 @@ describe('Button Component', () => {
   });
 
   it('renders with different variants', () => {
-    const { rerender } = render(<Button variant="primary">Primary</Button>);
-    expect(screen.getByRole('button', { name: /primary/i })).toBeInTheDocument();
+    const { rerender } = render(<Button variant="default">Default</Button>);
+    expect(screen.getByRole('button', { name: /default/i })).toBeInTheDocument();
+
+    rerender(<Button variant="gradient">Gradient</Button>);
+    expect(screen.getByRole('button', { name: /gradient/i })).toBeInTheDocument();
 
     rerender(<Button variant="ghost">Ghost</Button>);
     expect(screen.getByRole('button', { name: /ghost/i })).toBeInTheDocument();
 
-    rerender(<Button variant="soft">Soft</Button>);
-    expect(screen.getByRole('button', { name: /soft/i })).toBeInTheDocument();
+    rerender(<Button variant="outline">Outline</Button>);
+    expect(screen.getByRole('button', { name: /outline/i })).toBeInTheDocument();
   });
 
   it('renders with different sizes', () => {
     const { rerender } = render(<Button size="sm">Small</Button>);
     expect(screen.getByRole('button', { name: /small/i })).toBeInTheDocument();
 
-    rerender(<Button size="md">Medium</Button>);
-    expect(screen.getByRole('button', { name: /medium/i })).toBeInTheDocument();
+    rerender(<Button size="default">Default</Button>);
+    expect(screen.getByRole('button', { name: /default/i })).toBeInTheDocument();
 
     rerender(<Button size="lg">Large</Button>);
     expect(screen.getByRole('button', { name: /large/i })).toBeInTheDocument();
+
+    rerender(<Button size="tall">Tall</Button>);
+    expect(screen.getByRole('button', { name: /tall/i })).toBeInTheDocument();
   });
 
   it('accepts additional className', () => {

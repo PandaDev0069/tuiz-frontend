@@ -23,8 +23,7 @@ Practical rules that keep the codebase consistent and maintainable.
 
 ## Styles
 
-- CSS Modules + tokens; no inline constant colors/sizes.
-- BEM-ish classes: `.block`, `.block__elem`, `.block--variant`.
+- tailwindcss + shadcn/ui
 
 ## Imports
 
