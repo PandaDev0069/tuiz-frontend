@@ -30,7 +30,7 @@ export default function Page() {
 
       <Main>
         <Container size="lg">
-          <section className="mt-8">
+          <section className="mt-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
               <Card
                 variant="glass"

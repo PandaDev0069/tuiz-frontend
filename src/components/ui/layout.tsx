@@ -10,7 +10,7 @@ Header.displayName = 'Header';
 
 const Main = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>(
   ({ className, ...props }, ref) => (
-    <main ref={ref} className={cn('flex-1 py-8', className)} {...props} />
+    <main ref={ref} className={cn('flex-1', className)} {...props} />
   ),
 );
 Main.displayName = 'Main';
