@@ -5,6 +5,11 @@ import Home from '@/app/page';
 describe('Home page', () => {
   it('renders headline', () => {
     render(<Home />);
-    expect(screen.getByText(/TUIZ/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /TUIZ/i })).toBeInTheDocument();
+  });
+
+  it('renders welcome message', () => {
+    render(<Home />);
+    expect(screen.getByText(/welcome to tuiz/i)).toBeInTheDocument();
   });
 });

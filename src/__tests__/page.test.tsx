@@ -10,24 +10,17 @@ describe('Page', () => {
     expect(heading).toBeInTheDocument();
   });
 
-  it('renders the description text', () => {
+  it('renders the welcome message', () => {
     render(<Page />);
 
-    const description = screen.getByText(/frontend skeleton running/i);
+    const description = screen.getByText(/welcome to tuiz - your quiz platform/i);
     expect(description).toBeInTheDocument();
   });
 
-  it('renders the room ID input', () => {
+  it('renders main content', () => {
     render(<Page />);
 
-    const input = screen.getByPlaceholderText(/room id/i);
-    expect(input).toBeInTheDocument();
-  });
-
-  it('renders the continue button', () => {
-    render(<Page />);
-
-    const button = screen.getByRole('button', { name: /continue/i });
-    expect(button).toBeInTheDocument();
+    const main = screen.getByRole('main');
+    expect(main).toBeInTheDocument();
   });
 });
