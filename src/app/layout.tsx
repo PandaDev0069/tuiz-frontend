@@ -1,5 +1,7 @@
 import '../styles/globals.css';
 import type { Metadata } from 'next';
+import { MotionProvider } from './MotionProvider';
+import { SocketProvider } from './SocketProvider';
 
 export const metadata: Metadata = {
   title: 'TUIZ',
@@ -9,7 +11,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body>
+        <MotionProvider>
+          <SocketProvider>{children}</SocketProvider>
+        </MotionProvider>
+      </body>
     </html>
   );
 }
