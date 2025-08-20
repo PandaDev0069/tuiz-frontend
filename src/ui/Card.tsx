@@ -1,8 +1,14 @@
 import * as React from 'react';
 import s from './Card.module.css';
 
-export function Card(props: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={s.card} {...props} />;
+type CardVariant = 'default' | 'accent' | 'success' | 'warning' | 'error' | 'glass';
+
+type CardProps = React.HTMLAttributes<HTMLDivElement> & {
+  variant?: CardVariant;
+};
+
+export function Card({ variant = 'default', className = '', ...props }: CardProps) {
+  return <div className={`${s.card} ${s[variant]} ${className}`} {...props} />;
 }
 
 export function CardHeader({ children }: { children: React.ReactNode }) {

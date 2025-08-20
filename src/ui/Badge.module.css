@@ -1,0 +1,68 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  border-radius: var(--radius-1);
+  border: 1px solid transparent;
+  backdrop-filter: blur(10px);
+  transition: all var(--transition-fast);
+}
+
+/* Sizes */
+.sm {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.md {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.lg {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-base);
+}
+
+/* Variants */
+.default {
+  background: var(--card);
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.primary {
+  background: rgba(28, 212, 184, 0.2);
+  color: var(--fg);
+  border-color: var(--primary);
+}
+
+.success {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.error {
+  background: var(--error-bg);
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.info {
+  background: var(--info-bg);
+  color: var(--info);
+  border-color: var(--info);
+}
+
+/* Pill shape */
+.pill {
+  border-radius: var(--radius-full);
+}

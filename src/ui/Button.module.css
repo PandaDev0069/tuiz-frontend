@@ -8,8 +8,9 @@
   cursor: pointer;
   font-weight: 600;
   transition:
-    transform 120ms ease,
-    opacity 120ms ease;
+    transform var(--transition-fast),
+    opacity var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .btn:disabled {
@@ -18,33 +19,51 @@
 }
 
 .primary {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--primary);
+  color: white;
+  box-shadow: var(--shadow-1);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--primary-light);
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
 }
 
 .ghost {
   background: transparent;
-  border-color: var(--accent);
+  border-color: var(--primary);
   color: var(--fg);
 }
 
+.ghost:hover:not(:disabled) {
+  background: var(--accent-subtle);
+  border-color: var(--primary-light);
+}
+
 .soft {
-  background: color-mix(in oklab, var(--accent) 20%, transparent);
+  background: var(--accent-subtle);
   color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.soft:hover:not(:disabled) {
+  background: var(--card);
+  border-color: var(--border-hover);
 }
 
 .sm {
   padding: var(--space-1) var(--space-3);
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .md {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 .lg {
   padding: var(--space-3) var(--space-6);
-  font-size: 1.05rem;
+  font-size: var(--text-lg);
 }
 
 .btn:active {

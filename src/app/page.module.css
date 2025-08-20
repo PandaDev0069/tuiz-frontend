@@ -1,17 +1,79 @@
 /* Page-specific styles */
 .main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: var(--space-6);
+}
+
+.container {
   max-width: 800px;
+  width: 100%;
+  text-align: center;
+}
+
+.title {
+  font-size: var(--text-7xl);
+  font-weight: 900;
+  margin-bottom: var(--space-6);
+  color: var(--fg);
+  text-shadow: 0 4px 8px rgba(31, 41, 55, 0.3);
+  letter-spacing: -0.02em;
+  line-height: 0.9;
+}
+
+/* Simplified animation without gradient text */
+.title:hover {
+  transform: scale(1.02);
+  transition: transform var(--transition-fast);
+}
+
+/* Remove the gradient animation since we're not using gradient text */
+/* @keyframes gradient-shift {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(10deg); }
+} */
+
+.subtitle {
+  font-size: var(--text-lg);
+  color: var(--fg-muted);
+  margin-bottom: var(--space-8);
+  font-weight: 500;
+}
+
+.showcase {
+  margin-top: var(--space-8);
+}
+
+.buttonGroup {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--space-6);
+}
+
+.inputGroup {
+  max-width: 300px;
   margin: 0 auto;
 }
 
-.main h1 {
-  font-size: 2.5rem;
-  margin-bottom: var(--space-4);
-  color: var(--accent);
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-6);
 }
 
-.main p {
-  font-size: 1.1rem;
-  color: var(--muted);
+.cardGrid h3 {
+  margin: 0 0 var(--space-2) 0;
+  color: var(--fg);
+  font-size: var(--text-lg);
+}
+
+.cardGrid p {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
 }
