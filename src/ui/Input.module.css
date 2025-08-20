@@ -17,9 +17,5 @@
 }
 
 .input::placeholder {
-  color: var(--fg-muted);
-}
-
-.input::placeholder {
   color: var(--fg-subtle);
 }
