@@ -8,6 +8,10 @@
   --light-blue: #6fd6ff;
   --primary: #6fd6ff;
   --primary-light: #8fdbff;
+  /* Darker variants derived from gradient */
+  --light-green-dark: #9fd078;
+  --light-blue-dark: #4abbe6;
+  --primary-dark: #4abbe6;
   --secondary: #bff098;
   --secondary-dark: #9fd078;
 
@@ -26,6 +30,7 @@
   /* Accent colors using theme palette */
   --accent: var(--primary);
   --accent-hover: var(--primary-light);
+  --accent-dark: var(--primary-dark);
   --accent-ink: rgba(255, 255, 255, 0.95);
   --accent-subtle: rgba(111, 214, 255, 0.15);
 
@@ -44,6 +49,137 @@
 
   --info: var(--primary);
   --info-bg: rgba(111, 214, 255, 0.1);
+
+  /* Extended color palette */
+  --purple: #8b5cf6;
+  --purple-light: #a78bfa;
+  --purple-dark: #7c3aed;
+  --purple-bg: rgba(139, 92, 246, 0.1);
+
+  --pink: #ec4899;
+  --pink-light: #f472b6;
+  --pink-dark: #db2777;
+  --pink-bg: rgba(236, 72, 153, 0.1);
+
+  --indigo: #6366f1;
+  --indigo-light: #818cf8;
+  --indigo-dark: #4f46e5;
+  --indigo-bg: rgba(99, 102, 241, 0.1);
+
+  --teal: #14b8a6;
+  --teal-light: #2dd4bf;
+  --teal-dark: #0d9488;
+  --teal-bg: rgba(20, 184, 166, 0.1);
+
+  --cyan: #06b6d4;
+  --cyan-light: #22d3ee;
+  --cyan-dark: #0891b2;
+  --cyan-bg: rgba(6, 182, 212, 0.1);
+
+  --emerald: #10b981;
+  --emerald-light: #34d399;
+  --emerald-dark: #059669;
+  --emerald-bg: rgba(16, 185, 129, 0.1);
+
+  --lime: #84cc16;
+  --lime-light: #a3e635;
+  --lime-dark: #65a30d;
+  --lime-bg: rgba(132, 204, 22, 0.1);
+
+  --orange: #f97316;
+  --orange-light: #fb923c;
+  --orange-dark: #ea580c;
+  --orange-bg: rgba(249, 115, 22, 0.1);
+
+  --red: #ef4444;
+  --red-light: #f87171;
+  --red-dark: #dc2626;
+  --red-bg: rgba(239, 68, 68, 0.1);
+
+  --slate: #64748b;
+  --slate-light: #94a3b8;
+  --slate-dark: #475569;
+  --slate-bg: rgba(100, 116, 139, 0.1);
+
+  --gray: #6b7280;
+  --gray-light: #9ca3af;
+  --gray-dark: #4b5563;
+  --gray-bg: rgba(107, 114, 128, 0.1);
+
+  --neutral: #737373;
+  --neutral-light: #a3a3a3;
+  --neutral-dark: #525252;
+  --neutral-bg: rgba(115, 115, 115, 0.1);
+
+  /* Gradient variations */
+  --gradient-purple: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+  --gradient-sunset: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+  --gradient-ocean: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%);
+  --gradient-forest: linear-gradient(135deg, #10b981 0%, #84cc16 100%);
+  --gradient-midnight: linear-gradient(135deg, #1e293b 0%, #6366f1 100%);
+  --gradient-dawn: linear-gradient(135deg, #fbbf24 0%, #f472b6 100%);
+  --gradient-arctic: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  /* Additional gradients */
+  --gradient-mango: linear-gradient(135deg, #ffcf71 0%, #f76b1c 100%);
+  --gradient-berry: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+  --gradient-aurora: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
+  --gradient-lava: linear-gradient(135deg, #ff512f 0%, #dd2476 100%);
+  --gradient-sky: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+  --gradient-mint: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+  --gradient-candy: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+  --gradient-neon: linear-gradient(135deg, #00f5a0 0%, #00d9f5 100%);
+  --gradient-space: linear-gradient(135deg, #0f2027 0%, #2c5364 100%);
+  --gradient-blush: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --gradient-peach: linear-gradient(135deg, #ffd3a5 0%, #fd6585 100%);
+  --gradient-lilac: linear-gradient(135deg, #b993d6 0%, #8ca6db 100%);
+
+  /* Dark gradient variations */
+  --gradient-dark-purple: linear-gradient(135deg, #4c1d95 0%, #7c2d12 100%);
+  --gradient-dark-blue: linear-gradient(135deg, #1e3a8a 0%, #065f46 100%);
+  --gradient-dark-green: linear-gradient(135deg, #14532d 0%, #1f2937 100%);
+  --gradient-dark-red: linear-gradient(135deg, #7f1d1d 0%, #4c1d95 100%);
+  --gradient-dark-orange: linear-gradient(135deg, #9a3412 0%, #7c2d12 100%);
+  --gradient-dark-teal: linear-gradient(135deg, #134e4a 0%, #1e293b 100%);
+  --gradient-dark-pink: linear-gradient(135deg, #831843 0%, #581c87 100%);
+  --gradient-dark-indigo: linear-gradient(135deg, #312e81 0%, #1e1b4b 100%);
+  --gradient-dark-slate: linear-gradient(135deg, #0f172a 0%, #374151 100%);
+  --gradient-dark-emerald: linear-gradient(135deg, #064e3b 0%, #0c4a6e 100%);
+  --gradient-charcoal: linear-gradient(135deg, #374151 0%, #111827 100%);
+  --gradient-obsidian: linear-gradient(135deg, #1f2937 0%, #000000 100%);
+  --gradient-storm: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+  --gradient-shadow: linear-gradient(135deg, #6b7280 0%, #374151 100%);
+  --gradient-midnight-blue: linear-gradient(135deg, #1e3a8a 0%, #0c4a6e 100%);
+  --gradient-deep-forest: linear-gradient(135deg, #14532d 0%, #052e16 100%);
+  --gradient-wine: linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%);
+  --gradient-royal: linear-gradient(135deg, #581c87 0%, #312e81 100%);
+
+  /* Metallic gradients */
+  --gradient-gold: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  --gradient-silver: linear-gradient(135deg, #e5e7eb 0%, #9ca3af 100%);
+  --gradient-bronze: linear-gradient(135deg, #d97706 0%, #92400e 100%);
+  --gradient-copper: linear-gradient(135deg, #ea580c 0%, #9a3412 100%);
+  --gradient-platinum: linear-gradient(135deg, #f3f4f6 0%, #6b7280 100%);
+
+  /* Theme-specific color schemes */
+  --gaming-primary: #ff6b35;
+  --gaming-secondary: #004e89;
+  --gaming-accent: #ffd23f;
+  --gaming-bg: linear-gradient(135deg, #ff6b35 0%, #004e89 100%);
+
+  --nature-primary: #2d5016;
+  --nature-secondary: #61a5c2;
+  --nature-accent: #a9cce3;
+  --nature-bg: linear-gradient(135deg, #2d5016 0%, #61a5c2 100%);
+
+  --neon-primary: #ff0080;
+  --neon-secondary: #00ff80;
+  --neon-accent: #8000ff;
+  --neon-bg: linear-gradient(135deg, #ff0080 0%, #00ff80 100%);
+
+  --pastel-primary: #ffb3d9;
+  --pastel-secondary: #b3d9ff;
+  --pastel-accent: #d9ffb3;
+  --pastel-bg: linear-gradient(135deg, #ffb3d9 0%, #b3d9ff 100%);
 
   /* Border colors for bright theme */
   --border: rgba(31, 41, 55, 0.15);
