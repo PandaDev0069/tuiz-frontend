@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'TUIZ',
-  description: 'Quiz app frontend',
+  description: 'Quiz platform for interactive learning',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

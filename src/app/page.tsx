@@ -1,22 +1,10 @@
-'use client';
-
-import { Button, Card, CardHeader, CardBody, CardFooter, Input } from '@/ui';
+import styles from './page.module.css';
 
 export default function Page() {
   return (
-    <main className="container">
-      <Card>
-        <CardHeader>
-          <h1>TUIZ</h1>
-        </CardHeader>
-        <CardBody>
-          <p>Frontend skeleton running.</p>
-          <Input placeholder="Room ID…" style={{ maxWidth: 240 }} />
-        </CardBody>
-        <CardFooter>
-          <Button>Continue</Button>
-        </CardFooter>
-      </Card>
+    <main className={styles.main}>
+      <h1>TUIZ</h1>
+      <p>Welcome to TUIZ - Your quiz platform</p>
     </main>
   );
 }
