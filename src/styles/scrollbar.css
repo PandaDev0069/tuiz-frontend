@@ -1,0 +1,128 @@
+/* Scrollbar Utility Classes */
+
+/* Hide scrollbars completely */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Thin scrollbars */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Wide scrollbars */
+.scrollbar-wide {
+  scrollbar-width: auto;
+}
+.scrollbar-wide::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+.scrollbar-wide::-webkit-scrollbar-thumb {
+  border-radius: 8px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Colored scrollbar variants */
+.scrollbar-primary::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-foreground)) 100%);
+}
+
+.scrollbar-secondary::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    135deg,
+    hsl(var(--secondary)) 0%,
+    hsl(var(--secondary-foreground)) 100%
+  );
+}
+
+.scrollbar-accent::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(var(--accent-foreground)) 100%);
+}
+
+/* Glow effect scrollbars */
+.scrollbar-glow::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #6fd6ff 0%, #bff098 100%);
+  box-shadow: 0 0 10px rgba(111, 214, 255, 0.3);
+}
+
+.scrollbar-glow::-webkit-scrollbar-thumb:hover {
+  box-shadow: 0 0 15px rgba(111, 214, 255, 0.5);
+}
+
+/* Rounded corner variations */
+.scrollbar-square::-webkit-scrollbar-thumb {
+  border-radius: 0;
+}
+
+.scrollbar-rounded::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+}
+
+.scrollbar-pill::-webkit-scrollbar-thumb {
+  border-radius: 50px;
+}
+
+/* Smooth scrolling behavior */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+/* Auto-hide scrollbars (only show on hover/scroll) */
+.scrollbar-auto-hide {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+
+.scrollbar-auto-hide:hover,
+.scrollbar-auto-hide:focus-within {
+  scrollbar-color: #6fd6ff rgba(255, 255, 255, 0.1);
+}
+
+.scrollbar-auto-hide::-webkit-scrollbar-thumb {
+  background: transparent;
+  transition: background 0.3s ease;
+}
+
+.scrollbar-auto-hide:hover::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #6fd6ff 0%, #bff098 100%);
+}
+
+/* Overlay scrollbars (floating over content) */
+.scrollbar-overlay {
+  position: relative;
+}
+
+.scrollbar-overlay::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  position: absolute;
+  background: transparent;
+}
+
+.scrollbar-overlay::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-overlay::-webkit-scrollbar-thumb {
+  background: rgba(111, 214, 255, 0.6);
+  border-radius: 4px;
+  border: none;
+}
+
+.scrollbar-overlay::-webkit-scrollbar-thumb:hover {
+  background: rgba(111, 214, 255, 0.8);
+}

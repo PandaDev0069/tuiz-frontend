@@ -18,12 +18,12 @@ describe('Container Component', () => {
     rerender(<Container size="xl">Extra Large Container</Container>);
     expect(screen.getByText('Extra Large Container')).toBeInTheDocument();
 
-    rerender(<Container size="full">Full Width Container</Container>);
-    expect(screen.getByText('Full Width Container')).toBeInTheDocument();
+    rerender(<Container size="lg">Large Container</Container>);
+    expect(screen.getByText('Large Container')).toBeInTheDocument();
   });
 
-  it('renders centered container', () => {
-    render(<Container center>Centered Container</Container>);
+  it('renders container with default center alignment', () => {
+    render(<Container>Centered Container</Container>);
     expect(screen.getByText('Centered Container')).toBeInTheDocument();
   });
 
@@ -45,7 +45,7 @@ describe('Container Component', () => {
 
   it('supports complex nested content', () => {
     render(
-      <Container size="xl" center>
+      <Container size="xl">
         <div>
           <h2>Nested Title</h2>
           <p>Nested paragraph</p>

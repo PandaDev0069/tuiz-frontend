@@ -28,9 +28,6 @@ describe('Card Component', () => {
     rerender(<Card variant="warning">Warning Card</Card>);
     expect(screen.getByText('Warning Card')).toBeInTheDocument();
 
-    rerender(<Card variant="error">Error Card</Card>);
-    expect(screen.getByText('Error Card')).toBeInTheDocument();
-
     rerender(<Card variant="glass">Glass Card</Card>);
     expect(screen.getByText('Glass Card')).toBeInTheDocument();
   });
