@@ -1,6 +1,6 @@
 import '../styles/globals.css';
 import type { Metadata } from 'next';
-import { SocketProvider } from './SocketProvider';
+import { SocketProvider } from '../components/providers/SocketProvider';
 import { AnimationProvider } from './AnimationController';
 
 export const metadata: Metadata = {
