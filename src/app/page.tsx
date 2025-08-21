@@ -1,8 +1,8 @@
 import * as React from 'react';
 import Image from 'next/image';
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { Header, Main, Footer, Container } from '@/components/ui/layout';
+import { Button } from '@/ui';
+import { Card, CardHeader, CardContent } from '@/ui';
+import { Header, Main, Footer, Container } from '@/ui';
 import { AiFillDashboard } from 'react-icons/ai';
 import { IoLogoGameControllerB } from 'react-icons/io';
 import { FaBolt } from 'react-icons/fa6';

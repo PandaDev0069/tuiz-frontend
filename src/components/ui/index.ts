@@ -1,8 +1,32 @@
-export { Button } from './button';
-export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './card';
-export { Input } from './input';
-export { Heading, Text } from './typography';
-export { Badge } from './badge';
-export { Flex } from './flex';
-export { ScrollArea, ScrollIndicator } from './scroll-area';
-export { Header, Main, Footer, Container } from './layout';
+// Core components
+export {
+  Button,
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  Flex,
+  Header,
+  Main,
+  Footer,
+  Container,
+  Heading,
+  Text,
+} from './core';
+
+// Form components
+export { Input } from './forms';
+
+// Data display components
+export { Badge } from './data-display';
+
+// Feedback components
+export { ScrollArea, ScrollIndicator, ScrollDemo } from './feedback';
+
+// Navigation components (placeholder for future)
+// export {} from './navigation';
+
+// Overlay components (placeholder for future)
+// export {} from './overlays';
