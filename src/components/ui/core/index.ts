@@ -3,3 +3,5 @@ export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
 export { Flex } from './flex';
 export { Header, Main, Footer, Container } from './layout';
 export { Heading, Text } from './typography';
+export { AnimatedHeading } from './animated-heading';
+export { PageContainer } from './page-container';

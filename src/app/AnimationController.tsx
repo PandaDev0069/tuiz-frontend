@@ -25,14 +25,16 @@ async function measureLatency(endpoint: string): Promise<number | null> {
 function deriveTuning(
   latencyMs: number | null,
 ): Pick<AnimationTuning, 'duration' | 'easing' | 'scale'> {
-  // Fallbacks
-  if (latencyMs == null) return { duration: 250, easing: 'ease', scale: 1 };
+  // Fallbacks - use durations similar to the float animation (3s = 3000ms)
+  if (latencyMs == null) return { duration: 3000, easing: 'ease', scale: 1 };
 
   // Map latency to animation scale: lower latency → snappier; higher → smoother/slower
-  if (latencyMs < 80) return { duration: 200, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', scale: 1 };
-  if (latencyMs < 160) return { duration: 250, easing: 'ease-out', scale: 1.1 };
-  if (latencyMs < 300) return { duration: 300, easing: 'ease-out', scale: 1.2 };
-  return { duration: 350, easing: 'ease-in-out', scale: 1.35 };
+  // Base durations are now aligned with the pleasant 3-second float speed
+  if (latencyMs < 80)
+    return { duration: 2000, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', scale: 0.7 };
+  if (latencyMs < 160) return { duration: 3000, easing: 'ease-out', scale: 0.8 };
+  if (latencyMs < 300) return { duration: 4000, easing: 'ease-out', scale: 1 };
+  return { duration: 5000, easing: 'ease-in-out', scale: 1.2 };
 }
 
 export function AnimationProvider({ children }: { children: React.ReactNode }) {

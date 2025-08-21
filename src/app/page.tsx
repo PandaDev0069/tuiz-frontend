@@ -1,8 +1,18 @@
 import * as React from 'react';
 import Image from 'next/image';
-import { Button } from '@/ui';
-import { Card, CardHeader, CardContent } from '@/ui';
-import { Header, Main, Footer, Container } from '@/ui';
+import Link from 'next/link';
+import {
+  Button,
+  AnimatedHeading,
+  PageContainer,
+  Card,
+  CardHeader,
+  CardContent,
+  Header,
+  Main,
+  Footer,
+  Container,
+} from '@/ui';
 import { AiFillDashboard } from 'react-icons/ai';
 import { IoLogoGameControllerB } from 'react-icons/io';
 import { FaBolt } from 'react-icons/fa6';
@@ -10,7 +20,7 @@ import { MdSchool, MdColorLens } from 'react-icons/md';
 
 export default function Page() {
   return (
-    <div className="min-h-screen flex flex-col">
+    <PageContainer entrance="fadeIn" className="min-h-screen flex flex-col">
       <Header>
         <Container size="sm">
           <div className="flex justify-center items-center mb-6">
@@ -22,9 +32,9 @@ export default function Page() {
               className="animate-float rounded-full"
             />
           </div>
-          <h1 className="text-6xl font-black mb-6 gradient-text tracking-tight leading-tight">
+          <AnimatedHeading size="2xl" animation="float" className="mb-6">
             TUIZ情報王
-          </h1>
+          </AnimatedHeading>
         </Container>
       </Header>
 
@@ -44,9 +54,11 @@ export default function Page() {
                     <h3 className="text-xl font-semibold text-gray-800">ホストとしてログイン</h3>
                   </CardHeader>
                   <p className="text-gray-600 mb-6">クイズを作成・管理し、クイズを開始、ホスト</p>
-                  <Button variant="gradient" size="tall" className="mx-auto px-12">
-                    ログイン
-                  </Button>
+                  <Link href="/auth/login">
+                    <Button variant="gradient" size="tall" className="mx-auto px-12">
+                      ログイン
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
 
@@ -123,6 +135,6 @@ export default function Page() {
           </div>
         </Container>
       </Footer>
-    </div>
+    </PageContainer>
   );
 }

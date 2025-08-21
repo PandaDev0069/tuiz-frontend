@@ -1,12 +1,13 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect } from 'vitest';
+import { renderWithProviders } from '../setupTests';
 import HomePage from '@/app/page';
 
 describe('HomePage Integration Tests', () => {
   describe('Layout and Structure', () => {
     it('renders the complete page structure', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       // Check main sections exist
       expect(screen.getByRole('banner')).toBeInTheDocument();
@@ -18,7 +19,7 @@ describe('HomePage Integration Tests', () => {
     });
 
     it('displays logo with correct attributes', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       const logo = screen.getByRole('img', { name: /logo/i });
       expect(logo).toBeInTheDocument();
@@ -29,7 +30,7 @@ describe('HomePage Integration Tests', () => {
 
   describe('Main Action Cards', () => {
     it('renders host login card with correct content', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       const hostCard = screen.getByRole('heading', { name: /ホストとしてログイン/i });
       expect(hostCard).toBeInTheDocument();
@@ -44,7 +45,7 @@ describe('HomePage Integration Tests', () => {
     });
 
     it('renders join game card with correct content', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       const joinCard = screen.getByRole('heading', { name: /ゲームに参加/i });
       expect(joinCard).toBeInTheDocument();
@@ -61,7 +62,7 @@ describe('HomePage Integration Tests', () => {
 
   describe('Feature Cards', () => {
     it('renders all three feature cards', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       // Real-time feature
       expect(screen.getByRole('heading', { name: /リアルタイム/i })).toBeInTheDocument();
@@ -77,7 +78,7 @@ describe('HomePage Integration Tests', () => {
     });
 
     it('feature cards have correct variants', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       // We can't easily test CSS classes directly, but we can test structure
       const featureHeadings = [
@@ -94,7 +95,7 @@ describe('HomePage Integration Tests', () => {
 
   describe('Footer', () => {
     it('renders footer with copyright and tech stack info', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       const footer = screen.getByRole('contentinfo');
       expect(footer).toBeInTheDocument();
@@ -108,7 +109,7 @@ describe('HomePage Integration Tests', () => {
 
   describe('Responsive Design Elements', () => {
     it('applies correct grid classes for responsive layout', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       // Main cards section should exist (we can't test CSS grid directly in JSDOM)
       const mainSection = screen.getByRole('main').querySelector('section');
@@ -117,30 +118,47 @@ describe('HomePage Integration Tests', () => {
   });
 
   describe('Interactive Elements', () => {
-    it('buttons are clickable', async () => {
+    it('login button navigates to auth page', async () => {
       const user = userEvent.setup();
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       const loginButton = screen.getByRole('button', { name: /ログイン/i });
+
+      // Test button is interactive
+      expect(loginButton).not.toBeDisabled();
+
+      // Check that the login button is wrapped in a Link to /auth/login
+      const loginLink = loginButton.closest('a');
+      expect(loginLink).toBeInTheDocument();
+      expect(loginLink).toHaveAttribute('href', '/auth/login');
+
+      // Test clicking the button
+      await user.click(loginButton);
+
+      // The button should still be present after clicking (since we're not actually navigating in tests)
+      expect(loginButton).toBeInTheDocument();
+    });
+
+    it('join game button is clickable', async () => {
+      const user = userEvent.setup();
+      renderWithProviders(<HomePage />);
+
       const joinButton = screen.getByRole('button', { name: /ゲーム参加/i });
 
-      // Test buttons are interactive (they should not be disabled)
-      expect(loginButton).not.toBeDisabled();
+      // Test button is interactive
       expect(joinButton).not.toBeDisabled();
 
-      // Test clicking (no handlers attached yet, so just testing clickability)
-      await user.click(loginButton);
+      // Test clicking (no navigation handler yet, so just testing clickability)
       await user.click(joinButton);
 
-      // If we had click handlers, we could test their behavior here
-      expect(loginButton).toBeInTheDocument();
+      // Button should still be present after clicking
       expect(joinButton).toBeInTheDocument();
     });
   });
 
   describe('Accessibility', () => {
     it('has proper heading hierarchy', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       // Main heading (h1)
       const mainHeading = screen.getByRole('heading', { name: /TUIZ情報王/i });
@@ -156,14 +174,14 @@ describe('HomePage Integration Tests', () => {
     });
 
     it('images have alt text', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       const logo = screen.getByRole('img');
       expect(logo).toHaveAttribute('alt', 'logo');
     });
 
     it('buttons have accessible names', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       expect(screen.getByRole('button', { name: /ログイン/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /ゲーム参加/i })).toBeInTheDocument();
@@ -172,7 +190,7 @@ describe('HomePage Integration Tests', () => {
 
   describe('Content Validation', () => {
     it('contains expected Japanese text content', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
 
       // Main title (using heading selector to avoid footer copyright)
       const mainHeading = screen.getByRole('heading', { name: /TUIZ情報王/i });
@@ -189,7 +207,7 @@ describe('HomePage Integration Tests', () => {
       expect(screen.getByText(/魅力的な体験/i)).toBeInTheDocument();
     });
     it('displays current year in copyright', () => {
-      render(<HomePage />);
+      renderWithProviders(<HomePage />);
       expect(screen.getByText(/2025/)).toBeInTheDocument();
     });
   });
