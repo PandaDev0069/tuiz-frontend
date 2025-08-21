@@ -1,7 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/state/useAuthStore';
+import { useUiStore } from '@/state/useUiStore';
+import { credentialsService } from '@/lib/credentials';
 import {
   AuthCard,
   InputField,
@@ -23,14 +27,29 @@ import {
  */
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { login, loading } = useAuthStore();
+  const { setToast } = useUiStore();
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
   const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [isLoading, setIsLoading] = useState(false);
   const [generalError, setGeneralError] = useState('');
+
+  // Load saved credentials on component mount
+  useEffect(() => {
+    const savedCredentials = credentialsService.getSavedCredentials();
+    if (savedCredentials) {
+      setFormData({
+        email: savedCredentials.email,
+        password: savedCredentials.password,
+      });
+      setRememberMe(true); // Auto-check remember me if credentials were saved
+    }
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -69,19 +88,30 @@ export default function LoginPage() {
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      // TODO: Implement actual login logic here
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API call
-      console.log('Login attempt:', { ...formData, rememberMe });
+      // Save credentials if "Remember Me" is checked
+      if (rememberMe) {
+        credentialsService.saveCredentials(formData.email, formData.password);
+      } else {
+        // Clear any previously saved credentials if user unchecks remember me
+        credentialsService.clearCredentials();
+      }
 
-      // For demo - simulate error
-      setGeneralError('ログインに失敗しました。メールアドレスまたはパスワードをご確認ください。');
-    } catch {
-      setGeneralError('ログインに失敗しました。しばらく時間をおいて再度お試しください。');
-    } finally {
-      setIsLoading(false);
+      await login({
+        email: formData.email,
+        password: formData.password,
+        rememberMe: rememberMe,
+      });
+
+      // Success - redirect to dashboard
+      setToast('ログインしました');
+      router.push('/dashboard');
+    } catch (error) {
+      setGeneralError(
+        error instanceof Error
+          ? error.message
+          : 'ログインに失敗しました。メールアドレスまたはパスワードをご確認ください。',
+      );
     }
   };
 
@@ -135,7 +165,7 @@ export default function LoginPage() {
                   id="rememberMe"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  label="ログイン状態を保持する"
+                  label="次回からログイン情報を記憶する"
                   variant="accent"
                 />
               </div>
@@ -146,9 +176,9 @@ export default function LoginPage() {
                 variant="gradient"
                 size="lg"
                 className="w-full"
-                loading={isLoading}
+                loading={loading}
               >
-                {isLoading ? 'ログイン中...' : 'ログイン'}
+                {loading ? 'ログイン中...' : 'ログイン'}
               </Button>
 
               {/* Register Link */}

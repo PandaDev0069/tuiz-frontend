@@ -27,3 +27,4 @@ export { RedirectLink } from '../components/ui/navigation/redirect-link';
 export { Header } from '../components/ui/core/layout';
 export { Main } from '../components/ui/core/layout';
 export { Footer } from '../components/ui/core/layout';
+export { AuthProvider } from '../components/providers/AuthProvider';

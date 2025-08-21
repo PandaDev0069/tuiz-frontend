@@ -1,6 +1,9 @@
+'use client';
+
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useAuthStore } from '@/state/useAuthStore';
 import {
   Button,
   AnimatedHeading,
@@ -19,6 +22,8 @@ import { FaBolt } from 'react-icons/fa6';
 import { MdSchool, MdColorLens } from 'react-icons/md';
 
 export default function Page() {
+  const { user } = useAuthStore();
+
   return (
     <PageContainer entrance="fadeIn" className="min-h-screen flex flex-col">
       <Header>
@@ -29,6 +34,7 @@ export default function Page() {
               alt="logo"
               width={100}
               height={100}
+              priority
               className="animate-float rounded-full"
             />
           </div>
@@ -54,11 +60,19 @@ export default function Page() {
                     <h3 className="text-xl font-semibold text-gray-800">ホストとしてログイン</h3>
                   </CardHeader>
                   <p className="text-gray-600 mb-6">クイズを作成・管理し、クイズを開始、ホスト</p>
-                  <Link href="/auth/login">
-                    <Button variant="gradient" size="tall" className="mx-auto px-12">
-                      ログイン
-                    </Button>
-                  </Link>
+                  {user ? (
+                    <Link href="/dashboard">
+                      <Button variant="gradient" size="tall" className="mx-auto px-12">
+                        ダッシュボードへ
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Link href="/auth/login">
+                      <Button variant="gradient" size="tall" className="mx-auto px-12">
+                        ログイン
+                      </Button>
+                    </Link>
+                  )}
                 </CardContent>
               </Card>
 

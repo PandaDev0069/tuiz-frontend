@@ -2,6 +2,9 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/state/useAuthStore';
+import { useUiStore } from '@/state/useUiStore';
 import {
   AuthCard,
   InputField,
@@ -26,6 +29,10 @@ import {
  */
 
 export default function RegisterPage() {
+  const router = useRouter();
+  const { register, loading } = useAuthStore();
+  const { setToast } = useUiStore();
+
   const [formData, setFormData] = useState({
     email: '',
     username: '',
@@ -35,7 +42,6 @@ export default function RegisterPage() {
   });
   const [useUsernameAsDisplayName, setUseUsernameAsDisplayName] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [isLoading, setIsLoading] = useState(false);
   const [generalError, setGeneralError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -131,17 +137,20 @@ export default function RegisterPage() {
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      // For now, simulate API call since /api/auth/register doesn't exist yet
-      // This will be replaced with actual API call when backend is ready
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await register({
+        email: formData.email,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        username: formData.username || undefined,
+        displayName: formData.displayName || undefined,
+      });
 
-      // Simulate successful registration for now
-      setSuccessMessage('アカウントが正常に作成されました！ログインページに移動します...');
+      // Success - show message and redirect
+      setSuccessMessage('アカウントが正常に作成されました！ダッシュボードに移動します...');
+      setToast('アカウントを作成しました');
 
-      // Reset form on success
+      // Reset form
       setFormData({
         email: '',
         username: '',
@@ -152,15 +161,16 @@ export default function RegisterPage() {
       setUseUsernameAsDisplayName(false);
       setErrors({});
 
-      // Simulate redirect after success
+      // Redirect after success
       setTimeout(() => {
-        // TODO: Redirect to login or dashboard
-        console.log('Redirecting to login...');
+        router.push('/dashboard');
       }, 2000);
-    } catch {
-      setGeneralError('アカウント作成に失敗しました。しばらく時間をおいて再度お試しください。');
-    } finally {
-      setIsLoading(false);
+    } catch (error) {
+      setGeneralError(
+        error instanceof Error
+          ? error.message
+          : 'アカウント作成に失敗しました。しばらく時間をおいて再度お試しください。',
+      );
     }
   };
 
@@ -272,9 +282,9 @@ export default function RegisterPage() {
                 variant="gradient"
                 size="lg"
                 className="w-full"
-                loading={isLoading}
+                loading={loading}
               >
-                {isLoading ? '作成中...' : 'アカウント作成'}
+                {loading ? '作成中...' : 'アカウント作成'}
               </Button>
 
               {/* Login Link */}

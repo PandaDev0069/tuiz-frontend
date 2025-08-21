@@ -4,6 +4,23 @@ import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import LoginPage from '@/app/auth/login/page';
 
+// Mock the stores
+const mockLogin = vi.fn();
+const mockSetToast = vi.fn();
+
+vi.mock('@/state/useAuthStore', () => ({
+  useAuthStore: vi.fn(() => ({
+    login: mockLogin,
+    loading: false,
+  })),
+}));
+
+vi.mock('@/state/useUiStore', () => ({
+  useUiStore: vi.fn(() => ({
+    setToast: mockSetToast,
+  })),
+}));
+
 // Mock the AnimationController and providers
 vi.mock('@/app/AnimationController', () => ({
   useAnimation: () => ({
@@ -143,7 +160,8 @@ describe('LoginPage', () => {
     expect(submitButton).toBeDisabled();
   });
 
-  it('handles form submission and shows mock error', async () => {
+  it('calls login action when form is submitted with valid data', async () => {
+    mockLogin.mockResolvedValueOnce({});
     render(<LoginPage />);
 
     const emailInput = screen.getByLabelText(/メールアドレス/i);
@@ -155,25 +173,51 @@ describe('LoginPage', () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(
-        screen.getByText(
-          /ログインに失敗しました。メールアドレスまたはパスワードをご確認ください。/i,
-        ),
-      ).toBeInTheDocument();
+      expect(mockLogin).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        password: 'password123',
+      });
+    });
+  });
+
+  it('redirects to dashboard on successful login', async () => {
+    mockLogin.mockResolvedValueOnce({});
+    render(<LoginPage />);
+
+    const emailInput = screen.getByLabelText(/メールアドレス/i);
+    const passwordInput = screen.getByLabelText(/パスワード/i);
+    const submitButton = screen.getByRole('button', { name: /ログイン/i });
+
+    await user.type(emailInput, 'test@example.com');
+    await user.type(passwordInput, 'password123');
+    await user.click(submitButton);
+
+    await waitFor(() => {
+      expect(mockSetToast).toHaveBeenCalledWith('ログインしました');
+      expect(mockPush).toHaveBeenCalledWith('/dashboard');
+    });
+  });
+
+  it('shows error message on login failure', async () => {
+    const errorMessage = 'Invalid credentials';
+    mockLogin.mockRejectedValueOnce(new Error(errorMessage));
+    render(<LoginPage />);
+
+    const emailInput = screen.getByLabelText(/メールアドレス/i);
+    const passwordInput = screen.getByLabelText(/パスワード/i);
+    const submitButton = screen.getByRole('button', { name: /ログイン/i });
+
+    await user.type(emailInput, 'test@example.com');
+    await user.type(passwordInput, 'password123');
+    await user.click(submitButton);
+
+    await waitFor(() => {
+      expect(screen.getByText(errorMessage)).toBeInTheDocument();
     });
   });
 
   it('shows general error message on login failure', async () => {
-    // Mock failed API response
-    const mockFetch = vi.fn(() =>
-      Promise.resolve({
-        ok: false,
-        status: 401,
-        json: () => Promise.resolve({ message: 'Invalid credentials' }),
-      }),
-    );
-    global.fetch = mockFetch as unknown as typeof fetch;
-
+    mockLogin.mockRejectedValueOnce(new Error('Network error'));
     render(<LoginPage />);
 
     const emailInput = screen.getByLabelText(/メールアドレス/i);
@@ -185,7 +229,7 @@ describe('LoginPage', () => {
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/ログインに失敗しました/i)).toBeInTheDocument();
+      expect(screen.getByText(/Network error/i)).toBeInTheDocument();
     });
   });
 
