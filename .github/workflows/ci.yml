@@ -84,8 +84,22 @@ jobs:
           echo "Running: npm run e2e:ci"
           npm run e2e:ci || npm run e2e:ci-explicit
 
+      - name: Check Playwright Report
+        run: |
+          echo "=== Checking Playwright Report ==="
+          if [ -d "playwright-report" ]; then
+            echo "Playwright report directory found:"
+            ls -la playwright-report/
+          else
+            echo "No playwright-report directory found"
+            echo "Current directory contents:"
+            ls -la
+          fi
+
       - name: Upload Playwright Report
         uses: actions/upload-artifact@v4
+        if: always() # Upload even if tests fail
         with:
           name: playwright-report
           path: playwright-report
+          if-no-files-found: warn # Warn instead of failing

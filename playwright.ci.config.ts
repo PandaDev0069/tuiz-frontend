@@ -6,7 +6,10 @@ export default defineConfig({
   forbidOnly: true, // Always forbid only in CI
   retries: 1, // Minimal retries
   workers: 4, // Limited workers for CI
-  reporter: 'dot', // Fast dot reporter
+  reporter: [
+    ['dot'], // Fast console output
+    ['html', { outputFolder: 'playwright-report' }], // Generate HTML report for CI
+  ],
   timeout: 20000, // Shorter global timeout
 
   // CI: Only run lightweight smoke tests for faster execution
@@ -14,7 +17,7 @@ export default defineConfig({
   testMatch: '**/ci-smoke.spec.ts',
 
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:3001', // Use different port to avoid conflicts
     trace: 'off', // Disable tracing in CI for speed
     // Aggressive timeouts for CI
     actionTimeout: 8000,
@@ -30,9 +33,9 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: false,
+    command: 'npm run dev -- --port 3001', // Use port 3001
+    url: 'http://localhost:3001',
+    reuseExistingServer: true, // Allow reusing existing server
     timeout: 45000, // Faster timeout
   },
 });
