@@ -5,9 +5,14 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: true, // Always forbid only in CI
   retries: 1, // Minimal retries
-  workers: 2, // Limited workers for CI
+  workers: 4, // Limited workers for CI
   reporter: 'dot', // Fast dot reporter
   timeout: 20000, // Shorter global timeout
+
+  // CI: Only run lightweight smoke tests for faster execution
+  // This should match only ci-smoke.spec.ts in all environments
+  testMatch: '**/ci-smoke.spec.ts',
+
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'off', // Disable tracing in CI for speed
@@ -23,9 +28,6 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-
-  // Only run CI smoke tests
-  testMatch: '**/ci-smoke.spec.ts',
 
   webServer: {
     command: 'npm run dev',

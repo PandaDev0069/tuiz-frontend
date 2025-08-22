@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0, // Reduce retries in CI
-  workers: process.env.CI ? 2 : undefined, // Reduce workers in CI
+  workers: process.env.CI ? 4 : undefined, // Reduce workers in CI
   reporter: process.env.CI ? 'dot' : 'html', // Use dot reporter in CI for faster output
   timeout: 30000, // Global timeout
   use: {
