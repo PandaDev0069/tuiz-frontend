@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useAuthStore } from '@/state/useAuthStore';
-import { Container, Button, PageContainer } from '@/ui';
+import { Container, Button, PageContainer } from '@/components/ui';
 import Link from 'next/link';
 
 export default function DashboardPage() {

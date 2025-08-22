@@ -7,7 +7,7 @@ import { AnimationProvider } from '@/app/AnimationController';
 // Make React available globally for JSX
 global.React = React;
 
-import { server } from '@/test/msw/server';
+import { server } from '@/__tests__/msw/server';
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => server.resetHandlers());

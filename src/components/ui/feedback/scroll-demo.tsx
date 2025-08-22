@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { ScrollArea, ScrollIndicator } from './scroll-area';
-import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/ui';
+import { Card, CardHeader, CardTitle, CardContent, Badge, Button } from '@/components/ui';
 
 export const ScrollDemo: React.FC = () => {
   const scrollRef = React.useRef<HTMLDivElement>(null);

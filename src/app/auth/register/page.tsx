@@ -18,7 +18,7 @@ import {
   ValidationMessage,
   AnimatedHeading,
   PageContainer,
-} from '@/ui';
+} from '@/components/ui';
 
 /**
  * Register page component

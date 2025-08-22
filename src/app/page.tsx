@@ -15,7 +15,7 @@ import {
   Main,
   Footer,
   Container,
-} from '@/ui';
+} from '@/components/ui';
 import { AiFillDashboard } from 'react-icons/ai';
 import { IoLogoGameControllerB } from 'react-icons/io';
 import { FaBolt } from 'react-icons/fa6';

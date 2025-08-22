@@ -2,7 +2,7 @@ import '../styles/globals.css';
 import type { Metadata } from 'next';
 import { SocketProvider } from '../components/providers/SocketProvider';
 import { AnimationProvider } from './AnimationController';
-import { AuthProvider } from '@/ui';
+import { AuthProvider } from '@/components/ui';
 
 export const metadata: Metadata = {
   title: 'TUIZ',

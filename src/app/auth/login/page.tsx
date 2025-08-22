@@ -17,7 +17,7 @@ import {
   Checkbox,
   AnimatedHeading,
   PageContainer,
-} from '@/ui';
+} from '@/components/ui';
 
 /**
  * Login page component

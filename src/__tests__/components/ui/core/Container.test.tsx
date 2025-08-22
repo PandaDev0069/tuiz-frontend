@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
-import { Container } from '@/ui';
+import { Container } from '@/components/ui';
 
 describe('Container Component', () => {
   it('renders container with content', () => {

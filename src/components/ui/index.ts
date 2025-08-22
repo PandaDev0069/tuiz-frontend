@@ -1,32 +1,23 @@
-// Core components
-export {
-  Button,
-  Card,
-  CardHeader,
-  CardFooter,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  Flex,
-  Header,
-  Main,
-  Footer,
-  Container,
-  Heading,
-  Text,
-} from './core';
-
-// Form components
-export { Input } from './forms';
-
-// Data display components
-export { Badge } from './data-display';
-
-// Feedback components
-export { ScrollArea, ScrollIndicator, ScrollDemo } from './feedback';
-
-// Navigation components (placeholder for future)
-// export {} from './navigation';
-
-// Overlay components (placeholder for future)
-// export {} from './overlays';
+export { Button } from './core/button';
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './core/card';
+export { Input } from './forms/input';
+export { InputField } from './forms/input-field';
+export { PasswordField } from './forms/password-field';
+export { Checkbox } from './forms/checkbox';
+export { Heading, Text } from './core/typography';
+export { AnimatedHeading } from './core/animated-heading';
+export { PageContainer } from './core/page-container';
+export { Badge } from './data-display/badge';
+export { AuthCard } from './data-display/auth-card';
+export { Container } from './core/layout';
+export { Flex } from './core/flex';
+export { ScrollArea, ScrollIndicator } from './feedback/scroll-area';
+export { FormError } from './feedback/form-error';
+export { FormSuccess } from './feedback/form-success';
+export { Loader, Spinner } from './feedback/loader';
+export { ValidationMessage } from './feedback/validation-message';
+export { RedirectLink } from './navigation/redirect-link';
+export { Header } from './core/layout';
+export { Main } from './core/layout';
+export { Footer } from './core/layout';
+export { AuthProvider } from '../providers/AuthProvider';

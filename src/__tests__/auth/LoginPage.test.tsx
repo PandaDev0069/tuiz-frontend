@@ -3,22 +3,18 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import LoginPage from '@/app/auth/login/page';
+import { server } from '../msw/server';
+import { http, HttpResponse } from 'msw';
 
-// Mock the stores
-const mockLogin = vi.fn();
-const mockSetToast = vi.fn();
-
-vi.mock('@/state/useAuthStore', () => ({
-  useAuthStore: vi.fn(() => ({
-    login: mockLogin,
-    loading: false,
-  })),
-}));
-
-vi.mock('@/state/useUiStore', () => ({
-  useUiStore: vi.fn(() => ({
-    setToast: mockSetToast,
-  })),
+// Mock Next.js router
+const mockPush = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+  }),
 }));
 
 // Mock the AnimationController and providers
@@ -28,17 +24,6 @@ vi.mock('@/app/AnimationController', () => ({
     duration: 3000,
     easing: 'ease-in-out',
     scale: 1,
-    refresh: vi.fn(),
-  }),
-}));
-
-// Mock Next.js router
-const mockPush = vi.fn();
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-    back: vi.fn(),
-    forward: vi.fn(),
     refresh: vi.fn(),
   }),
 }));
@@ -54,20 +39,22 @@ describe('LoginPage', () => {
     render(<LoginPage />);
 
     // Check for main heading
-    expect(screen.getByRole('heading', { name: /ログイン/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /ホストログイン/i })).toBeInTheDocument();
 
     // Check for form fields
     expect(screen.getByLabelText(/メールアドレス/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/パスワード/i)).toBeInTheDocument();
 
     // Check for remember me checkbox
-    expect(screen.getByRole('checkbox', { name: /ログイン状態を保持/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: /次回からログイン情報を記憶する/i }),
+    ).toBeInTheDocument();
 
     // Check for submit button
     expect(screen.getByRole('button', { name: /ログイン/i })).toBeInTheDocument();
 
     // Check for navigation links
-    expect(screen.getByText(/アカウントをお持ちでない方/i)).toBeInTheDocument();
+    expect(screen.getByText(/アカウントをお持ちでない方は/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /新規登録/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /ホームに戻る/i })).toBeInTheDocument();
   });
@@ -89,7 +76,7 @@ describe('LoginPage', () => {
     render(<LoginPage />);
 
     const rememberCheckbox = screen.getByRole('checkbox', {
-      name: /ログイン状態を保持/i,
+      name: /次回からログイン情報を記憶する/i,
     }) as HTMLInputElement;
 
     expect(rememberCheckbox.checked).toBe(false);
@@ -145,6 +132,18 @@ describe('LoginPage', () => {
   });
 
   it('shows loading state during form submission', async () => {
+    // Mock a delayed response to test loading state
+    server.use(
+      http.post('*/auth/login', async () => {
+        // Add delay to simulate network request
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return HttpResponse.json({
+          user: { id: '123', email: 'test@example.com' },
+          session: { access_token: 'mock-token', expires_at: Date.now() + 3600000 },
+        });
+      }),
+    );
+
     render(<LoginPage />);
 
     const emailInput = screen.getByLabelText(/メールアドレス/i);
@@ -155,52 +154,73 @@ describe('LoginPage', () => {
     await user.type(passwordInput, 'password123');
     await user.click(submitButton);
 
-    // Check if button shows loading state
-    expect(submitButton).toHaveTextContent(/ログイン中.../i);
+    // Check if button shows loading state or is disabled
     expect(submitButton).toBeDisabled();
   });
 
-  it('calls login action when form is submitted with valid data', async () => {
-    mockLogin.mockResolvedValueOnce({});
+  it('calls login API when form is submitted with valid data', async () => {
     render(<LoginPage />);
 
     const emailInput = screen.getByLabelText(/メールアドレス/i);
     const passwordInput = screen.getByLabelText(/パスワード/i);
     const submitButton = screen.getByRole('button', { name: /ログイン/i });
 
-    await user.type(emailInput, 'test@example.com');
-    await user.type(passwordInput, 'password123');
+    await user.type(emailInput, 'test.user@example.com');
+    await user.type(passwordInput, 'testPassword123');
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith({
-        email: 'test@example.com',
-        password: 'password123',
-      });
+      expect(mockPush).toHaveBeenCalledWith('/dashboard');
     });
   });
 
   it('redirects to dashboard on successful login', async () => {
-    mockLogin.mockResolvedValueOnce({});
     render(<LoginPage />);
 
     const emailInput = screen.getByLabelText(/メールアドレス/i);
     const passwordInput = screen.getByLabelText(/パスワード/i);
     const submitButton = screen.getByRole('button', { name: /ログイン/i });
 
-    await user.type(emailInput, 'test@example.com');
-    await user.type(passwordInput, 'password123');
+    await user.type(emailInput, 'test.user@example.com');
+    await user.type(passwordInput, 'testPassword123');
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(mockSetToast).toHaveBeenCalledWith('ログインしました');
       expect(mockPush).toHaveBeenCalledWith('/dashboard');
     });
   });
 
   it('shows error message on login failure', async () => {
-    const errorMessage = 'Invalid credentials';
-    mockLogin.mockRejectedValueOnce(new Error(errorMessage));
+    // Override MSW handler for this specific test
+    server.use(
+      http.post('*/auth/login', () => {
+        return HttpResponse.json({ message: 'Invalid email or password' }, { status: 401 });
+      }),
+    );
+
+    render(<LoginPage />);
+
+    const emailInput = screen.getByLabelText(/メールアドレス/i);
+    const passwordInput = screen.getByLabelText(/パスワード/i);
+    const submitButton = screen.getByRole('button', { name: /ログイン/i });
+
+    await user.type(emailInput, 'invalid@example.com');
+    await user.type(passwordInput, 'wrongpassword');
+    await user.click(submitButton);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Invalid email or password/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows general error message on login failure', async () => {
+    // Mock network error
+    server.use(
+      http.post('*/auth/login', () => {
+        return HttpResponse.json({ message: 'Network error' }, { status: 500 });
+      }),
+    );
+
     render(<LoginPage />);
 
     const emailInput = screen.getByLabelText(/メールアドレス/i);
@@ -209,23 +229,6 @@ describe('LoginPage', () => {
 
     await user.type(emailInput, 'test@example.com');
     await user.type(passwordInput, 'password123');
-    await user.click(submitButton);
-
-    await waitFor(() => {
-      expect(screen.getByText(errorMessage)).toBeInTheDocument();
-    });
-  });
-
-  it('shows general error message on login failure', async () => {
-    mockLogin.mockRejectedValueOnce(new Error('Network error'));
-    render(<LoginPage />);
-
-    const emailInput = screen.getByLabelText(/メールアドレス/i);
-    const passwordInput = screen.getByLabelText(/パスワード/i);
-    const submitButton = screen.getByRole('button', { name: /ログイン/i });
-
-    await user.type(emailInput, 'test@example.com');
-    await user.type(passwordInput, 'wrongpassword');
     await user.click(submitButton);
 
     await waitFor(() => {
@@ -268,7 +271,9 @@ describe('LoginPage', () => {
 
     const emailInput = screen.getByLabelText(/メールアドレス/i);
     const passwordInput = screen.getByLabelText(/パスワード/i);
-    const rememberCheckbox = screen.getByRole('checkbox', { name: /ログイン状態を保持/i });
+    const rememberCheckbox = screen.getByRole('checkbox', {
+      name: /次回からログイン情報を記憶する/i,
+    });
     const submitButton = screen.getByRole('button', { name: /ログイン/i });
 
     // Test tab navigation

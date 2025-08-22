@@ -20,24 +20,37 @@
 
 ```
 src/__tests__/                    # Component and unit tests
-├── Badge.test.tsx               # UI component tests
-├── button.test.tsx              # Button variant tests
-├── Card.test.tsx                # Card component tests
-├── Container.test.tsx           # Layout container tests
-├── Flex.test.tsx                # Flex layout tests
-├── Home.test.tsx                # Home page component tests
-├── HomePage.integration.test.tsx # Integration tests
-├── Input.test.tsx               # Input component tests
-├── page.test.tsx                # Page-level tests
-├── Typography.test.tsx          # Typography component tests
-└── setupTests.ts                # Global test configuration
+├── auth/                        # Authentication test suites
+│   ├── LoginPage.test.tsx       # Login form and validation
+│   └── RegisterPage.test.tsx    # Registration flow and validation
+├── components/                  # UI component tests
+│   ├── Badge.test.tsx           # Badge component variants
+│   ├── button.test.tsx          # Button interactions and variants
+│   ├── Card.test.tsx            # Card component layouts
+│   ├── Container.test.tsx       # Container responsive behavior
+│   ├── Flex.test.tsx            # Flex layout system
+│   └── Typography.test.tsx      # Typography variants and hierarchy
+├── integration/                 # Cross-component integration tests
+│   ├── auth-flow.test.ts        # Complete authentication flows
+│   ├── login-integration.test.tsx # Login page integration
+│   └── register-integration.test.tsx # Register page integration
+├── pages/                       # Page-level component tests
+│   ├── Home.test.tsx            # Homepage component
+│   └── HomePage.integration.test.tsx # Homepage integration
+├── helpers/                     # Test utilities and helpers
+│   ├── testDatabase.ts          # Database test helpers
+│   └── testUtils.tsx            # Common test utilities
+├── msw/                         # Mock Service Worker setup
+│   ├── auth-handlers.ts         # Authentication API mocks
+│   └── server.ts               # MSW server configuration
+└── setupTests.tsx               # Global test configuration
 
-src/test/msw/
-├── server.ts                    # MSW server setup
-└── handlers/                    # API mock handlers
-
-src/test/e2e/
-└── smoke.spec.ts               # Playwright E2E tests
+src/test/e2e/                    # End-to-end tests
+├── auth-smoke.spec.ts           # Authentication smoke tests
+├── auth-login.spec.ts           # Comprehensive login tests
+├── auth-register.spec.ts        # Comprehensive register tests
+├── auth-integration.spec.ts     # Auth flow integration tests
+└── smoke.spec.ts               # Basic smoke tests
 ```
 
 ## Running
@@ -46,7 +59,7 @@ src/test/e2e/
 npm test              # Vitest run mode (CI-friendly, --run flag)
 npm run test:ui       # Vitest UI mode for interactive debugging
 npm run test:coverage # Test coverage report
-npm run e2e          # Playwright E2E tests
+npm run e2e          # Playwright E2E tests (runs locally or in CI)
 npm run typecheck    # TypeScript type checking
 npm run lint         # ESLint validation
 npm run build        # Production build validation
@@ -170,11 +183,28 @@ test('homepage loads and displays main elements', async ({ page }) => {
 
 ## Current Test Coverage
 
-- **80+ tests** across all component and integration suites
-- **Component tests**: Button, Card, Typography, Layout, Flex, Badge, Input
-- **Page tests**: Homepage with Japanese content, integration flows
-- **Accessibility tests**: ARIA labels, keyboard navigation, semantic HTML
-- **Responsive design**: Grid layouts, mobile-first approach
+### Unit Tests (117 tests)
+
+- **Components**: All UI components with variant testing (Button, Card, Typography, Layout, Flex, Badge, Input)
+- **State Management**: Zustand stores and React hooks
+- **Utilities**: Helper functions and custom logic
+- **Authentication**: Login/register form validation
+
+### Integration Tests (22 tests)
+
+- **Authentication Flows**: Complete login/register workflows
+- **Page Components**: Multi-component interactions (Homepage with Japanese content)
+- **API Integration**: With MSW mocked backends
+- **State Persistence**: Cross-component state management
+
+### E2E Tests (13 smoke tests + 39 comprehensive)
+
+- **Authentication**: Login and registration user journeys
+- **Cross-browser**: Chrome, Firefox, Safari testing
+- **Responsive**: Mobile and desktop viewports
+- **Accessibility**: Keyboard navigation and ARIA compliance
+
+**Total Coverage**: 139 unit/integration tests + 52 E2E tests = 191 tests
 
 ## CI Pipeline
 
@@ -182,7 +212,10 @@ test('homepage loads and displays main elements', async ({ page }) => {
 # Complete CI validation
 npm run lint        # ESLint + Prettier validation
 npm run typecheck   # TypeScript strict mode checking
-npm test           # Vitest component and unit tests
+npm test           # Vitest component and unit tests (139 tests)
 npm run build      # Next.js production build validation
-npm run e2e        # Playwright E2E tests (when implemented)
+npm run e2e        # Playwright E2E tests (52 tests across browsers)
+
+Notes:
+- The GitHub Actions workflow runs a dedicated `e2e` job which installs Playwright browsers, runs `npm run e2e`, and uploads the generated `playwright-report` as a build artifact for review.
 ```

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
-import { Heading, Text } from '@/ui';
+import { Heading, Text } from '@/components/ui';
 
 describe('Typography Components', () => {
   describe('Heading Component', () => {
