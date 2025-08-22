@@ -14,9 +14,12 @@ const AnimationContext = React.createContext<AnimationTuning | undefined>(undefi
 
 async function measureLatency(endpoint: string): Promise<number | null> {
   try {
-    const start = performance.now();
+    const perf: Performance | undefined = (globalThis as unknown as { performance?: Performance })
+      .performance;
+    const now = typeof perf?.now === 'function' ? () => perf.now() : () => Date.now();
+    const start = now();
     await fetch(endpoint, { cache: 'no-store' });
-    return Math.max(0, Math.round(performance.now() - start));
+    return Math.max(0, Math.round(now() - start));
   } catch {
     return null;
   }
@@ -41,15 +44,29 @@ export function AnimationProvider({ children }: { children: React.ReactNode }) {
   const [latencyMs, setLatencyMs] = React.useState<number | null>(null);
   const tuning = React.useMemo(() => deriveTuning(latencyMs), [latencyMs]);
 
+  const mountedRef = React.useRef(true);
+
   const refresh = React.useCallback(async () => {
+    if (typeof window === 'undefined') return;
     const ms = await measureLatency('http://localhost:8080/health');
-    setLatencyMs(ms);
+    if (mountedRef.current) {
+      setLatencyMs(ms);
+    }
   }, []);
 
   React.useEffect(() => {
+    mountedRef.current = true;
+    if (typeof window === 'undefined')
+      return () => {
+        mountedRef.current = false;
+      };
+
     refresh();
     const id = setInterval(refresh, 20_000);
-    return () => clearInterval(id);
+    return () => {
+      mountedRef.current = false;
+      clearInterval(id);
+    };
   }, [refresh]);
 
   const value: AnimationTuning = React.useMemo(
