@@ -45,7 +45,7 @@ export default function LoginPage() {
     if (savedCredentials) {
       setFormData({
         email: savedCredentials.email,
-        password: savedCredentials.password,
+        password: '',
       });
       setRememberMe(true); // Auto-check remember me if credentials were saved
     }
@@ -89,9 +89,9 @@ export default function LoginPage() {
     }
 
     try {
-      // Save credentials if "Remember Me" is checked
+      // Save credentials (email only) if "Remember Me" is checked
       if (rememberMe) {
-        credentialsService.saveCredentials(formData.email, formData.password);
+        credentialsService.saveCredentials(formData.email);
       } else {
         // Clear any previously saved credentials if user unchecks remember me
         credentialsService.clearCredentials();

@@ -2,7 +2,6 @@
 
 interface SavedCredentials {
   email: string;
-  password: string; // Note: In production, consider more secure storage
   timestamp: number;
 }
 
@@ -10,11 +9,11 @@ class CredentialsService {
   private readonly STORAGE_KEY = 'tuiz_remembered_credentials';
   private readonly EXPIRY_DAYS = 30; // Credentials expire after 30 days
 
-  // Save credentials when "Remember Me" is checked
-  saveCredentials(email: string, password: string): void {
+  // Save only the email when "Remember Me" is checked. Passwords must not be stored in cleartext.
+  // In a production app prefer returning a short-lived remember token from the server instead.
+  saveCredentials(email: string): void {
     const credentials: SavedCredentials = {
       email,
-      password,
       timestamp: Date.now(),
     };
 
@@ -25,8 +24,8 @@ class CredentialsService {
     }
   }
 
-  // Get saved credentials if they exist and haven't expired
-  getSavedCredentials(): { email: string; password: string } | null {
+  // Get saved credentials (email only) if they exist and haven't expired
+  getSavedCredentials(): { email: string } | null {
     try {
       const savedData = localStorage.getItem(this.STORAGE_KEY);
       if (!savedData) {
@@ -44,7 +43,6 @@ class CredentialsService {
 
       return {
         email: credentials.email,
-        password: credentials.password,
       };
     } catch (error) {
       console.warn('Failed to retrieve credentials:', error);
