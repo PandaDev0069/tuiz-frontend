@@ -1,16 +1,31 @@
+'use client';
+
 import * as React from 'react';
 import Image from 'next/image';
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { Header, Main, Footer, Container } from '@/components/ui/layout';
+import Link from 'next/link';
+import { useAuthStore } from '@/state/useAuthStore';
+import {
+  Button,
+  AnimatedHeading,
+  PageContainer,
+  Card,
+  CardHeader,
+  CardContent,
+  Header,
+  Main,
+  Footer,
+  Container,
+} from '@/components/ui';
 import { AiFillDashboard } from 'react-icons/ai';
 import { IoLogoGameControllerB } from 'react-icons/io';
 import { FaBolt } from 'react-icons/fa6';
 import { MdSchool, MdColorLens } from 'react-icons/md';
 
 export default function Page() {
+  const { user } = useAuthStore();
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <PageContainer entrance="fadeIn" className="min-h-screen flex flex-col">
       <Header>
         <Container size="sm">
           <div className="flex justify-center items-center mb-6">
@@ -19,12 +34,13 @@ export default function Page() {
               alt="logo"
               width={100}
               height={100}
+              priority
               className="animate-float rounded-full"
             />
           </div>
-          <h1 className="text-6xl font-black mb-6 gradient-text tracking-tight leading-tight">
+          <AnimatedHeading size="2xl" animation="float" className="mb-6">
             TUIZ情報王
-          </h1>
+          </AnimatedHeading>
         </Container>
       </Header>
 
@@ -44,9 +60,19 @@ export default function Page() {
                     <h3 className="text-xl font-semibold text-gray-800">ホストとしてログイン</h3>
                   </CardHeader>
                   <p className="text-gray-600 mb-6">クイズを作成・管理し、クイズを開始、ホスト</p>
-                  <Button variant="gradient" size="tall" className="mx-auto px-12">
-                    ログイン
-                  </Button>
+                  {user ? (
+                    <Link href="/dashboard">
+                      <Button variant="gradient" size="tall" className="mx-auto px-12">
+                        ダッシュボードへ
+                      </Button>
+                    </Link>
+                  ) : (
+                    <Link href="/auth/login">
+                      <Button variant="gradient" size="tall" className="mx-auto px-12">
+                        ログイン
+                      </Button>
+                    </Link>
+                  )}
                 </CardContent>
               </Card>
 
@@ -123,6 +149,6 @@ export default function Page() {
           </div>
         </Container>
       </Footer>
-    </div>
+    </PageContainer>
   );
 }

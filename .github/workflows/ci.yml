@@ -4,15 +4,23 @@ name: ci
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Create .env.local from repository secrets
+        run: |
+          cat > .env.local <<'EOF'
+          NEXT_PUBLIC_API_BASE=http://localhost:8080
+          NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          EOF
 
       - name: Use Node 22
         uses: actions/setup-node@v4
@@ -34,3 +42,64 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  e2e:
+    name: Playwright E2E (CI Optimized)
+    runs-on: ubuntu-latest
+    needs: web
+    timeout-minutes: 10 # Add timeout to prevent hanging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env.local from repository secrets
+        run: |
+          cat > .env.local <<'EOF'
+          NEXT_PUBLIC_API_BASE=http://localhost:8080
+          NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          EOF
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright E2E (CI Optimized)
+        run: |
+          echo "=== Playwright CI Configuration Debug ==="
+          echo "Current directory: $(pwd)"
+          echo "Files in current directory:"
+          ls -la
+          echo "Files in test directory:"
+          ls -la src/test/e2e/
+          echo "Using Playwright CI config: playwright.ci.config.ts"
+          echo "Expected test count: 5 (ci-smoke.spec.ts only)"
+          echo "Running: npm run e2e:ci"
+          npm run e2e:ci || npm run e2e:ci-explicit
+
+      - name: Check Playwright Report
+        run: |
+          echo "=== Checking Playwright Report ==="
+          if [ -d "playwright-report" ]; then
+            echo "Playwright report directory found:"
+            ls -la playwright-report/
+          else
+            echo "No playwright-report directory found"
+            echo "Current directory contents:"
+            ls -la
+          fi
+
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
+        if: always() # Upload even if tests fail
+        with:
+          name: playwright-report
+          path: playwright-report
+          if-no-files-found: warn # Warn instead of failing
