@@ -88,9 +88,11 @@ export default function Page() {
                     <h3 className="text-xl font-semibold text-gray-800">ゲームに参加</h3>
                   </CardHeader>
                   <p className="text-gray-600 mb-6">ルームコードを入力してクイズゲームに参加</p>
-                  <Button variant="gradient" size="tall" className="mx-auto px-12">
-                    ゲーム参加
-                  </Button>
+                  <Link href="/join">
+                    <Button variant="gradient" size="tall" className="mx-auto px-12">
+                      ゲーム参加
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             </div>
