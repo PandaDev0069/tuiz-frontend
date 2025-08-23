@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { cfg } from '@/config/config';
 
 type AnimationTuning = {
   latencyMs: number | null;
@@ -48,7 +49,7 @@ export function AnimationProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = React.useCallback(async () => {
     if (typeof window === 'undefined') return;
-    const ms = await measureLatency('http://localhost:8080/health');
+    const ms = await measureLatency(`${cfg.apiBase}/health`);
     if (mountedRef.current) {
       setLatencyMs(ms);
     }
