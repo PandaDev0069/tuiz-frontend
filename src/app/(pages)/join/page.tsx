@@ -1,14 +1,27 @@
 'use client';
 
 import * as React from 'react';
-import { PageContainer, Header, Main, Footer, Container } from '@/components/ui';
+import Image from 'next/image';
+import { PageContainer, Header, Main, Footer, Container, AnimatedHeading } from '@/components/ui';
 
 export default function Page() {
   return (
     <PageContainer entrance="fadeIn" className="min-h-screen flex flex-col">
       <Header>
         <Container size="sm">
-          <h1 className="text-2xl font-semibold">Join Game</h1>
+          <div className="flex justify-center items-center mb-6">
+            <Image
+              src="/logo.png"
+              alt="logo"
+              width={80}
+              height={80}
+              priority
+              className="animate-float rounded-full"
+            />
+          </div>
+          <AnimatedHeading size="md" animation="float" className="mb-6">
+            TUIZ情報王
+          </AnimatedHeading>
         </Container>
       </Header>
 
