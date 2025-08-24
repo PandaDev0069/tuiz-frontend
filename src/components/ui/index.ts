@@ -9,6 +9,7 @@ export { AnimatedHeading } from './core/animated-heading';
 export { PageContainer } from './core/page-container';
 export { Badge } from './data-display/badge';
 export { AuthCard } from './data-display/auth-card';
+export { QuizCard } from './data-display/quiz-card';
 export { Container } from './core/layout';
 export { Flex } from './core/flex';
 export { ScrollArea, ScrollIndicator } from './feedback/scroll-area';
