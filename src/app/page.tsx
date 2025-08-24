@@ -53,7 +53,7 @@ export default function Page() {
                 className="text-center hover:shadow-xl transition-all duration-300"
               >
                 <CardContent className="pt-6">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r  from-green-400 to-blue-600 flex items-center justify-center shadow-lg">
                     <AiFillDashboard size={28} className="text-white" />
                   </div>
                   <CardHeader>

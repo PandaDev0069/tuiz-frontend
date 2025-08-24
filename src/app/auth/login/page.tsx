@@ -18,6 +18,7 @@ import {
   Checkbox,
   AnimatedHeading,
   PageContainer,
+  Footer,
 } from '@/components/ui';
 
 /**
@@ -214,6 +215,14 @@ export default function LoginPage() {
           </div>
         </Container>
       </main>
+      <Footer>
+        <Container size="lg">
+          <div className="text-gray-600">
+            <p>&copy; 2025 TUIZ情報王. All rights reserved.</p>
+            <p className="text-sm">Next.js + Socket.IO • Real-time Quiz Platform</p>
+          </div>
+        </Container>
+      </Footer>
     </PageContainer>
   );
 }
