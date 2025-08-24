@@ -46,7 +46,7 @@ export default function Page() {
 
   return (
     <PageContainer
-      entrance="fadeIn"
+      entrance="scaleIn"
       className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8"
     >
       <Header>
@@ -104,7 +104,7 @@ export default function Page() {
               />
 
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-400 to-blue-600 flex items-center justify-center shadow-lg">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center shadow-lg">
                   <MdPin size={28} className="text-white" />
                 </div>
                 <label htmlFor={`${codeId}-code`} className="text-sm font-medium">

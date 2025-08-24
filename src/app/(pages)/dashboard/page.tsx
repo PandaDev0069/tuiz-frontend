@@ -8,7 +8,7 @@ import { FilterState } from '@/components/ui/overlays/sidebar-filter';
 
 export default function DashboardPage() {
   const { logout, loading } = useAuthStore();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     status: [],
     difficulty: [],
