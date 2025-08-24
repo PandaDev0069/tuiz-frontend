@@ -38,6 +38,9 @@ describe('LoginPage', () => {
   it('renders login form correctly', () => {
     render(<LoginPage />);
 
+    // Logo should be present
+    expect(screen.getByAltText(/logo/i)).toBeInTheDocument();
+
     // Check for main heading
     expect(screen.getByRole('heading', { name: /ホストログイン/i })).toBeInTheDocument();
 
