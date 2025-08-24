@@ -6,7 +6,6 @@ import Link from 'next/link';
 import {
   PageContainer,
   Header,
-  Main,
   Footer,
   Container,
   AnimatedHeading,
@@ -74,87 +73,85 @@ export default function Page() {
         </Container>
       </Header>
 
-      <Main>
-        <main role="main">
-          <Container size="sm" className="w-full max-w-md mx-auto">
-            <AuthCard variant="success" className="shadow-2xl">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  // UI-only: no submission logic yet
-                  setTouched({ name: true, code: true });
-                }}
-                className="space-y-4"
-                noValidate
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-400 to-blue-600 flex items-center justify-center shadow-lg">
-                    <FaUser size={28} className="text-white" />
-                  </div>
-                  <label htmlFor={`${nameId}-name`} className="text-sm font-medium">
-                    名前
-                  </label>
+      <main role="main">
+        <Container size="sm" className="w-full max-w-md mx-auto">
+          <AuthCard variant="success" className="shadow-2xl">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                // UI-only: no submission logic yet
+                setTouched({ name: true, code: true });
+              }}
+              className="space-y-4"
+              noValidate
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-400 to-blue-600 flex items-center justify-center shadow-lg">
+                  <FaUser size={28} className="text-white" />
                 </div>
-                <InputField
-                  id={`${nameId}-name`}
-                  placeholder="あなたの名前"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onBlur={() => setTouched((s) => ({ ...s, name: true }))}
-                  error={nameError || undefined}
-                  required
-                />
+                <label htmlFor={`${nameId}-name`} className="text-sm font-medium">
+                  名前
+                </label>
+              </div>
+              <InputField
+                id={`${nameId}-name`}
+                placeholder="あなたの名前"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={() => setTouched((s) => ({ ...s, name: true }))}
+                error={nameError || undefined}
+                required
+              />
 
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-400 to-blue-600 flex items-center justify-center shadow-lg">
-                    <MdPin size={28} className="text-white" />
-                  </div>
-                  <label htmlFor={`${codeId}-code`} className="text-sm font-medium">
-                    ルームコード
-                  </label>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-400 to-blue-600 flex items-center justify-center shadow-lg">
+                  <MdPin size={28} className="text-white" />
                 </div>
-                <InputField
-                  id={`${codeId}-code`}
-                  placeholder="123456"
-                  value={code}
-                  onChange={(e) => {
-                    // allow only digits in state
-                    const digits = e.target.value.replace(/[^0-9]/g, '');
-                    setCode(digits.slice(0, 6));
-                  }}
-                  onBlur={() => setTouched((s) => ({ ...s, code: true }))}
-                  error={codeError || undefined}
-                  required
-                  // mobile numeric keyboard
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={6}
-                />
-                <div className="text-center">
-                  <Button
-                    type="submit"
-                    disabled={!isFormValid}
-                    variant="gradient"
-                    size="tall"
-                    className="mx-auto px-12"
-                  >
-                    参加する
-                  </Button>
-                </div>
-              </form>
-            </AuthCard>
-            {/* Back to Home Link */}
-            <div className="mt-8 text-center">
-              <Link
-                href="/"
-                className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                ← ホームに戻る
-              </Link>
-            </div>
-          </Container>
-        </main>
-      </Main>
+                <label htmlFor={`${codeId}-code`} className="text-sm font-medium">
+                  ルームコード
+                </label>
+              </div>
+              <InputField
+                id={`${codeId}-code`}
+                placeholder="123456"
+                value={code}
+                onChange={(e) => {
+                  // allow only digits in state
+                  const digits = e.target.value.replace(/[^0-9]/g, '');
+                  setCode(digits.slice(0, 6));
+                }}
+                onBlur={() => setTouched((s) => ({ ...s, code: true }))}
+                error={codeError || undefined}
+                required
+                // mobile numeric keyboard
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+              />
+              <div className="text-center">
+                <Button
+                  type="submit"
+                  disabled={!isFormValid}
+                  variant="gradient"
+                  size="tall"
+                  className="mx-auto px-12"
+                >
+                  参加する
+                </Button>
+              </div>
+            </form>
+          </AuthCard>
+          {/* Back to Home Link */}
+          <div className="mt-8 text-center">
+            <Link
+              href="/"
+              className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              ← ホームに戻る
+            </Link>
+          </div>
+        </Container>
+      </main>
 
       <Footer>
         <Container size="lg">
