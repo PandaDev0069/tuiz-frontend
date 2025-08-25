@@ -76,7 +76,7 @@ This document outlines the SEO optimizations implemented for the TUIZ情報王 p
 ### 1. Verify Ownership
 
 1. Go to [Google Search Console](https://search.google.com/search-console)
-2. Add your property: `https://tuiz-frontend.vercel.app`
+2. Add your property: `https://tuiz-info-king.vercel.app`
 3. Choose HTML tag verification method
 4. Copy the verification code and update `layout.tsx`:
 
@@ -89,7 +89,7 @@ verification: {
 ### 2. Submit Sitemap
 
 1. In Search Console, go to "Sitemaps"
-2. Submit: `https://tuiz-frontend.vercel.app/sitemap.xml`
+2. Submit: `https://tuiz-info-king.vercel.app/sitemap.xml`
 3. Monitor indexing status
 
 ### 3. Monitor Performance

@@ -7,12 +7,22 @@ test.describe('Authentication Flow Integration E2E Tests', () => {
     await expect(page.getByRole('heading', { name: /ホストログイン/i })).toBeVisible();
 
     // Navigate to register page
-    await page.getByRole('link', { name: '新規登録' }).click();
+    const registerLink = page.getByRole('link', { name: '新規登録' });
+    await expect(registerLink).toBeVisible();
+    await registerLink.click();
+
+    // Wait for navigation to complete
+    await page.waitForURL('/auth/register', { timeout: 10000 });
     await expect(page).toHaveURL('/auth/register');
     await expect(page.getByRole('heading', { name: /新規アカウント作成/i })).toBeVisible();
 
     // Navigate back to login page
-    await page.getByRole('link', { name: 'ログイン' }).click();
+    const loginLink = page.getByRole('link', { name: 'ログイン' });
+    await expect(loginLink).toBeVisible();
+    await loginLink.click();
+
+    // Wait for navigation to complete
+    await page.waitForURL('/auth/login', { timeout: 10000 });
     await expect(page).toHaveURL('/auth/login');
     await expect(page.getByRole('heading', { name: /ホストログイン/i })).toBeVisible();
   });
@@ -46,7 +56,10 @@ test.describe('Authentication Flow Integration E2E Tests', () => {
     // Start at home, navigate to login, then register
     await page.goto('/');
     await page.goto('/auth/login');
-    await page.getByRole('link', { name: '新規登録' }).click();
+    const registerLink = page.getByRole('link', { name: '新規登録' });
+    await expect(registerLink).toBeVisible();
+    await registerLink.click();
+    await page.waitForURL('/auth/register', { timeout: 10000 });
     await expect(page).toHaveURL('/auth/register');
 
     // Use browser back button
@@ -67,8 +80,15 @@ test.describe('Authentication Flow Integration E2E Tests', () => {
     await page.locator('input[name="password"]').fill('password123');
 
     // Navigate to register and back
-    await page.getByRole('link', { name: '新規登録' }).click();
-    await page.getByRole('link', { name: 'ログイン' }).click();
+    const registerLink = page.getByRole('link', { name: '新規登録' });
+    await expect(registerLink).toBeVisible();
+    await registerLink.click();
+    await page.waitForURL('/auth/register', { timeout: 10000 });
+
+    const loginLink = page.getByRole('link', { name: 'ログイン' });
+    await expect(loginLink).toBeVisible();
+    await loginLink.click();
+    await page.waitForURL('/auth/login', { timeout: 10000 });
 
     // Form should be empty (this is expected behavior for security)
     await expect(page.getByLabel('メールアドレス')).toHaveValue('');

@@ -112,8 +112,15 @@ test.describe('Login Page E2E Tests', () => {
     });
   });
   test('navigates to register page', async ({ page }) => {
+    // Wait for the register link to be visible and clickable
+    const registerLink = page.getByRole('link', { name: '新規登録' });
+    await expect(registerLink).toBeVisible();
+
     // Click on register link
-    await page.getByRole('link', { name: '新規登録' }).click();
+    await registerLink.click();
+
+    // Wait for navigation to complete
+    await page.waitForURL('/auth/register', { timeout: 10000 });
 
     // Should navigate to register page
     await expect(page).toHaveURL('/auth/register');

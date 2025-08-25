@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { SITE_CONFIG, SEO_CONFIG } from '@/config/constants';
 
 interface StructuredDataProps {
   type: 'website' | 'organization' | 'software';
@@ -13,22 +14,22 @@ export const StructuredData: React.FC<StructuredDataProps> = ({ type }) => {
         return {
           '@context': 'https://schema.org',
           '@type': 'WebSite',
-          name: 'TUIZ情報王',
+          name: SITE_CONFIG.SITE_NAME,
           alternateName: 'TUIZ',
-          description: 'リアルタイムでクイズを作成・参加できる革新的な学習プラットフォーム',
-          url: 'https://tuiz-frontend.vercel.app',
+          description: SITE_CONFIG.SITE_DESCRIPTION,
+          url: SITE_CONFIG.BASE_URL,
           potentialAction: {
             '@type': 'SearchAction',
             target: {
               '@type': 'EntryPoint',
-              urlTemplate: 'https://tuiz-frontend.vercel.app/search?q={search_term_string}',
+              urlTemplate: `${SITE_CONFIG.BASE_URL}/search?q={search_term_string}`,
             },
             'query-input': 'required name=search_term_string',
           },
           publisher: {
             '@type': 'Organization',
             name: 'TUIZ Team',
-            url: 'https://tuiz-frontend.vercel.app',
+            url: SITE_CONFIG.BASE_URL,
           },
           inLanguage: 'ja-JP',
           isAccessibleForFree: true,
@@ -41,10 +42,10 @@ export const StructuredData: React.FC<StructuredDataProps> = ({ type }) => {
           '@type': 'Organization',
           name: 'TUIZ Team',
           alternateName: 'TUIZ情報王',
-          url: 'https://tuiz-frontend.vercel.app',
+          url: SITE_CONFIG.BASE_URL,
           logo: {
             '@type': 'ImageObject',
-            url: 'https://tuiz-frontend.vercel.app/logo.png',
+            url: `${SITE_CONFIG.BASE_URL}${SEO_CONFIG.DEFAULT_IMAGE}`,
             width: 512,
             height: 512,
           },
@@ -67,13 +68,13 @@ export const StructuredData: React.FC<StructuredDataProps> = ({ type }) => {
           browserRequirements: 'Requires JavaScript. Requires HTML5.',
           softwareVersion: '1.0.0',
           releaseNotes: 'リアルタイムクイズプラットフォームの初回リリース',
-          description: 'リアルタイムでクイズを作成・参加できる革新的な学習プラットフォーム',
-          url: 'https://tuiz-frontend.vercel.app',
-          downloadUrl: 'https://tuiz-frontend.vercel.app',
-          installUrl: 'https://tuiz-frontend.vercel.app',
+          description: SITE_CONFIG.SITE_DESCRIPTION,
+          url: SITE_CONFIG.BASE_URL,
+          downloadUrl: SITE_CONFIG.BASE_URL,
+          installUrl: SITE_CONFIG.BASE_URL,
           screenshot: {
             '@type': 'ImageObject',
-            url: 'https://tuiz-frontend.vercel.app/logo.png',
+            url: `${SITE_CONFIG.BASE_URL}${SEO_CONFIG.DEFAULT_IMAGE}`,
             width: 1280,
             height: 720,
           },

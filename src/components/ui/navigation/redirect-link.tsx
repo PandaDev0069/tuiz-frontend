@@ -58,7 +58,7 @@ const RedirectLink = React.forwardRef<HTMLAnchorElement, RedirectLinkProps>(
     const linkProps = external ? { href, target: '_blank', rel: 'noopener noreferrer' } : { href };
 
     return (
-      <p className="text-center text-sm text-gray-600">
+      <div className="text-center text-sm text-gray-600">
         {text && <span>{text} </span>}
         <LinkComponent
           ref={ref}
@@ -69,7 +69,7 @@ const RedirectLink = React.forwardRef<HTMLAnchorElement, RedirectLinkProps>(
           {linkText}
         </LinkComponent>
         {children}
-      </p>
+      </div>
     );
   },
 );

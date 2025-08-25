@@ -199,7 +199,7 @@ export default function RegisterPage() {
               TUIZ情報王
             </AnimatedHeading>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">新規アカウント作成</h2>
-            <p className="text-gray-600">クイズ作成・管理のためのアカウントを作成</p>
+            <p className="text-gray-600">クイズ作成・管理のためのアカウントを作成しましょう</p>
           </div>
 
           <AuthCard variant="success" className="shadow-2xl">
