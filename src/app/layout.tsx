@@ -36,6 +36,10 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://tuiz-frontend.vercel.app'),
   alternates: {
     canonical: '/',
+    languages: {
+      ja: '/',
+      en: '/en',
+    },
   },
   openGraph: {
     type: 'website',
@@ -79,7 +83,7 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/logo.png', sizes: 'any' },
-      { url: '/favicon.ico', sizes: '16x16 32x32' },
+      { url: '/logo.png', sizes: '16x16 32x32' },
     ],
     apple: [{ url: '/logo.png', sizes: '180x180' }],
   },
@@ -91,25 +95,18 @@ export const metadata: Metadata = {
     userScalable: false,
     viewportFit: 'cover',
   },
+  other: {
+    'theme-color': '#bff098',
+    'msapplication-TileColor': '#bff098',
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'default',
+    'apple-mobile-web-app-title': 'TUIZ情報王',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <head>
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
-        />
-        <meta name="theme-color" content="#bff098" />
-        <meta name="msapplication-TileColor" content="#bff098" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="TUIZ情報王" />
-        <link rel="canonical" href="https://tuiz-frontend.vercel.app" />
-        <link rel="alternate" hrefLang="ja" href="https://tuiz-frontend.vercel.app" />
-        <link rel="alternate" hrefLang="en" href="https://tuiz-frontend.vercel.app/en" />
-      </head>
       <body>
         <AuthProvider>
           <AnimationProvider>
