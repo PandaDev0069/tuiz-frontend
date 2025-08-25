@@ -52,12 +52,14 @@
   box-sizing: border-box;
 }
 
-/* HTML and body viewport handling */
+/* HTML and body viewport handling - consolidated */
 html {
   height: 100%;
   overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
   -ms-text-size-adjust: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: #6fd6ff rgba(255, 255, 255, 0.1);
 }
 
 body {
@@ -75,6 +77,21 @@ body {
   /* Prevent horizontal scroll on mobile */
   width: 100%;
   max-width: 100vw;
+}
+
+/* Global overflow prevention for all devices */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+  position: relative;
+}
+
+/* Ensure all content respects viewport boundaries */
+body > * {
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 /* Mobile-specific overflow handling */
@@ -166,27 +183,6 @@ body {
     width: 100vw;
     max-width: 100vw;
   }
-
-  /* Fix for iOS Safari viewport issues */
-  html {
-    overflow-x: hidden;
-    position: relative;
-  }
-}
-
-/* Global overflow prevention for all devices */
-html,
-body {
-  overflow-x: hidden;
-  max-width: 100vw;
-  width: 100%;
-  position: relative;
-}
-
-/* Ensure all content respects viewport boundaries */
-body > * {
-  max-width: 100vw;
-  overflow-x: hidden;
 }
 
 /* Improved focus styles */
@@ -496,10 +492,7 @@ select {
 }
 
 /* Firefox scrollbar */
-html {
-  scrollbar-width: thin;
-  scrollbar-color: #6fd6ff rgba(255, 255, 255, 0.1);
-}
+/* Note: html selector moved to mobile.css to avoid duplication */
 
 /* Custom scrollbar variants */
 .scrollbar-thin::-webkit-scrollbar {

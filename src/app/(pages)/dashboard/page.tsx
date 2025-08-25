@@ -55,12 +55,14 @@ export default function DashboardPage() {
   const handleSearch = (query: string) => {
     console.log('Search query:', query);
     console.log('Active filters:', filters);
-    // TODO: Implement search functionality with filters
+    // Search functionality will be implemented when backend API is ready
+    // For now, log the search parameters
   };
 
   const handleClearSearch = () => {
     console.log('Search cleared');
-    // TODO: Implement clear search functionality
+    // Clear search functionality will be implemented when backend API is ready
+    // For now, just log the action
   };
 
   const handleFilterToggle = () => {
@@ -70,12 +72,14 @@ export default function DashboardPage() {
   const handleFiltersChange = (newFilters: FilterState) => {
     setFilters(newFilters);
     console.log('Filters updated:', newFilters);
-    // TODO: Apply filters to search results
+    // Filter application will be implemented when backend API is ready
+    // For now, just log the filter changes
   };
 
   const handleProfileSave = (updatedProfile: ProfileData) => {
     console.log('Profile updated:', updatedProfile);
-    // TODO: Implement API call to save profile
+    // Profile save API call will be implemented when backend is ready
+    // For now, just close the modal
     setProfileModalOpen(false);
   };
 
