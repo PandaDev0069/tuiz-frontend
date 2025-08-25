@@ -42,7 +42,11 @@ const Container = React.forwardRef<
   return (
     <div
       ref={ref}
-      className={cn('mx-auto w-full px-4 sm:px-6 lg:px-8', sizes[size], className)}
+      className={cn('mx-auto w-full px-4 sm:px-6 lg:px-8 overflow-hidden', sizes[size], className)}
+      style={{
+        maxWidth: '100vw',
+        boxSizing: 'border-box',
+      }}
       {...props}
     />
   );

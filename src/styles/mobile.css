@@ -1,0 +1,164 @@
+/* Mobile-specific CSS to prevent overflow issues */
+
+/* Base mobile viewport constraints */
+@media (max-width: 768px) {
+  /* Ensure all elements respect viewport boundaries */
+  * {
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Prevent horizontal scroll on all elements */
+  html,
+  body,
+  div,
+  section,
+  main,
+  header,
+  footer,
+  article,
+  aside,
+  nav {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+    width: 100% !important;
+  }
+
+  /* Ensure images don't overflow */
+  img {
+    max-width: 100% !important;
+    height: auto !important;
+    object-fit: contain;
+  }
+
+  /* Ensure buttons and interactive elements don't overflow */
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  label {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Ensure cards and containers don't overflow */
+  .card,
+  .container,
+  .wrapper,
+  [class*='card'],
+  [class*='container'] {
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Prevent text overflow */
+  p,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  span,
+  div {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+  body {
+    min-height: 100vh;
+    height: auto;
+    overflow: hidden;
+  }
+
+  /* Allow vertical scroll when needed */
+  body > * {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  /* Ensure proper spacing on small screens */
+  .container,
+  .card,
+  .wrapper {
+    padding: 1rem;
+    margin: 0;
+  }
+}
+
+/* iOS Safari specific fixes */
+@supports (-webkit-touch-callout: none) {
+  body {
+    overflow-x: hidden;
+    position: relative;
+    width: 100vw;
+    max-width: 100vw;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  html {
+    overflow-x: hidden;
+    position: relative;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Fix for iOS Safari viewport issues */
+  body > * {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}
+
+/* Android Chrome specific fixes */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  body {
+    overflow-x: hidden;
+    position: relative;
+    width: 100vw;
+    max-width: 100vw;
+  }
+}
+
+/* Prevent horizontal scroll on all devices */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+  position: relative;
+}
+
+/* Ensure all content respects viewport boundaries */
+body > * {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Utility classes for mobile overflow prevention */
+.mobile-safe {
+  overflow-x: hidden;
+  max-width: 100vw;
+  width: 100%;
+}
+
+.mobile-container {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  position: relative;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.mobile-no-overflow {
+  overflow: hidden;
+  max-width: 100vw;
+  width: 100%;
+}
