@@ -1,4 +1,5 @@
 import { MetadataRoute } from 'next';
+import { SITE_CONFIG } from '@/config/constants';
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -19,7 +20,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/_next/', '/test/', '/__tests__/'],
       },
     ],
-    sitemap: 'https://tuiz-frontend.vercel.app/sitemap.xml',
-    host: 'https://tuiz-frontend.vercel.app',
+    sitemap: `${SITE_CONFIG.BASE_URL}/sitemap.xml`,
+    host: SITE_CONFIG.BASE_URL,
   };
 }

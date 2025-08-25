@@ -1,7 +1,8 @@
 import { MetadataRoute } from 'next';
+import { SITE_CONFIG } from '@/config/constants';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://tuiz-frontend.vercel.app';
+  const baseUrl = SITE_CONFIG.BASE_URL;
   const currentDate = new Date().toISOString();
 
   return [
@@ -23,17 +24,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.8,
     },
-    {
-      url: `${baseUrl}/dashboard`,
-      lastModified: currentDate,
-      changeFrequency: 'weekly',
-      priority: 0.9,
-    },
+
     {
       url: `${baseUrl}/join`,
       lastModified: currentDate,
       changeFrequency: 'monthly',
-      priority: 0.7,
+      priority: 0.8,
     },
     // Future pages (uncomment when implemented)
     /*

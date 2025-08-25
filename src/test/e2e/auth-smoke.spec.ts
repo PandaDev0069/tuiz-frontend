@@ -58,12 +58,18 @@ test.describe('Auth E2E Smoke Tests', () => {
     await expect(page.getByRole('heading', { name: /ホストログイン/i })).toBeVisible();
 
     // Navigate to register page
-    await page.getByRole('link', { name: '新規登録' }).click();
+    const registerLink = page.getByRole('link', { name: '新規登録' });
+    await expect(registerLink).toBeVisible();
+    await registerLink.click();
+    await page.waitForURL('/auth/register', { timeout: 10000 });
     await expect(page).toHaveURL('/auth/register');
     await expect(page.getByRole('heading', { name: /新規アカウント作成/i })).toBeVisible();
 
     // Navigate back to login page
-    await page.getByRole('link', { name: 'ログイン' }).click();
+    const loginLink = page.getByRole('link', { name: 'ログイン' });
+    await expect(loginLink).toBeVisible();
+    await loginLink.click();
+    await page.waitForURL('/auth/login', { timeout: 10000 });
     await expect(page).toHaveURL('/auth/login');
     await expect(page.getByRole('heading', { name: /ホストログイン/i })).toBeVisible();
   });

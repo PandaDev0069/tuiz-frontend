@@ -3,37 +3,24 @@ import type { Metadata, Viewport } from 'next';
 import { SocketProvider } from '../components/providers/SocketProvider';
 import { AnimationProvider } from './AnimationController';
 import { AuthProvider } from '@/components/ui';
+import { SITE_CONFIG, SEO_CONFIG } from '@/config/constants';
 
 export const metadata: Metadata = {
   title: {
-    default: 'TUIZ情報王 - リアルタイムクイズプラットフォーム',
-    template: '%s | TUIZ情報王',
+    default: SEO_CONFIG.DEFAULT_TITLE,
+    template: `%s | ${SITE_CONFIG.SITE_NAME}`,
   },
-  description:
-    'TUIZ情報王は、リアルタイムでクイズを作成・参加できる革新的な学習プラットフォームです。教育機関、企業研修、イベントなど様々なシーンで活用できます。',
-  keywords: [
-    'クイズ',
-    'リアルタイム',
-    '学習',
-    '教育',
-    '研修',
-    'イベント',
-    'ゲーム',
-    'インタラクティブ',
-    'オンライン',
-    'プラットフォーム',
-    'TUIZ',
-    '情報王',
-  ],
+  description: SEO_CONFIG.DEFAULT_DESCRIPTION,
+  keywords: SEO_CONFIG.KEYWORDS,
   authors: [{ name: 'TUIZ Team' }],
   creator: 'TUIZ Team',
-  publisher: 'TUIZ情報王',
+  publisher: SITE_CONFIG.SITE_NAME,
   formatDetection: {
     email: false,
     address: false,
     telephone: false,
   },
-  metadataBase: new URL('https://tuiz-frontend.vercel.app'),
+  metadataBase: new URL(SITE_CONFIG.BASE_URL),
   alternates: {
     canonical: '/',
     languages: {
@@ -43,26 +30,26 @@ export const metadata: Metadata = {
   },
   openGraph: {
     type: 'website',
-    locale: 'ja_JP',
-    url: 'https://tuiz-frontend.vercel.app',
-    siteName: 'TUIZ情報王',
-    title: 'TUIZ情報王 - リアルタイムクイズプラットフォーム',
-    description: 'リアルタイムでクイズを作成・参加できる革新的な学習プラットフォーム',
+    locale: SITE_CONFIG.LOCALE,
+    url: SITE_CONFIG.BASE_URL,
+    siteName: SITE_CONFIG.SITE_NAME,
+    title: SEO_CONFIG.DEFAULT_TITLE,
+    description: SEO_CONFIG.DEFAULT_DESCRIPTION,
     images: [
       {
-        url: '/logo.png',
+        url: SEO_CONFIG.DEFAULT_IMAGE,
         width: 1200,
         height: 630,
-        alt: 'TUIZ情報王 - リアルタイムクイズプラットフォーム',
+        alt: `${SITE_CONFIG.SITE_NAME} - ${SITE_CONFIG.SITE_DESCRIPTION}`,
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'TUIZ情報王 - リアルタイムクイズプラットフォーム',
-    description: 'リアルタイムでクイズを作成・参加できる革新的な学習プラットフォーム',
-    images: ['/logo.png'],
-    creator: '@tuiz_official',
+    title: SEO_CONFIG.DEFAULT_TITLE,
+    description: SEO_CONFIG.DEFAULT_DESCRIPTION,
+    images: [SEO_CONFIG.DEFAULT_IMAGE],
+    creator: SITE_CONFIG.TWITTER_HANDLE,
   },
   robots: {
     index: true,

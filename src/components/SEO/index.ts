@@ -1,2 +1,2 @@
-export { default as StructuredData } from './StructuredData';
-export { StructuredData as default } from './StructuredData';
+export { StructuredData } from './StructuredData';
+export { default as SEOHead } from './SEOHead';
