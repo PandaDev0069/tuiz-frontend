@@ -330,7 +330,7 @@ select {
 }
 
 .animate-page-scale-in {
-  animation: page-scale-in var(--page-animation-duration, 0.9s)
+  animation: page-scale-in var(--page-animation-duration, 0.8s)
     var(--page-animation-easing, ease-out);
 }
 
