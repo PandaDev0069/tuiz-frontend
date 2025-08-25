@@ -2,13 +2,23 @@
 
 import React, { useState } from 'react';
 import { useAuthStore } from '@/state/useAuthStore';
-import { Container, Button, PageContainer, SearchBar, SidebarFilter } from '@/components/ui';
+import {
+  Container,
+  Button,
+  PageContainer,
+  SearchBar,
+  SidebarFilter,
+  ProfileSettingsModal,
+} from '@/components/ui';
 import Link from 'next/link';
 import { FilterState } from '@/components/ui/overlays/sidebar-filter';
+import { ProfileData } from '@/components/ui/overlays/profile-settings-modal';
+import { User } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { logout, loading } = useAuthStore();
+  const { logout, loading, user } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     status: [],
     difficulty: [],
@@ -20,6 +30,15 @@ export default function DashboardPage() {
     playCount: 'all',
     tags: [],
   });
+
+  // Mock profile data - in real app this would come from API
+  const mockProfile: ProfileData = {
+    username: user?.username || 'user123',
+    displayName: user?.displayName || 'Quiz Master',
+    email: user?.email || 'user@example.com',
+    bio: 'Passionate quiz creator and lifelong learner. I love creating engaging educational content that challenges and inspires.',
+    avatarUrl: undefined,
+  };
 
   const handleLogout = async () => {
     try {
@@ -54,6 +73,12 @@ export default function DashboardPage() {
     // TODO: Apply filters to search results
   };
 
+  const handleProfileSave = (updatedProfile: ProfileData) => {
+    console.log('Profile updated:', updatedProfile);
+    // TODO: Implement API call to save profile
+    setProfileModalOpen(false);
+  };
+
   return (
     <PageContainer className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
       <main role="main">
@@ -66,6 +91,15 @@ export default function DashboardPage() {
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => setProfileModalOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <User className="h-4 w-4" />
+              Profile Settings
+            </Button>
             <Link href="/">
               <Button variant="outline" size="lg">
                 ホームに戻る
@@ -126,6 +160,14 @@ export default function DashboardPage() {
           </div>
         </Container>
       </main>
+
+      {/* Profile Settings Modal */}
+      <ProfileSettingsModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        profile={mockProfile}
+        onSave={handleProfileSave}
+      />
     </PageContainer>
   );
 }

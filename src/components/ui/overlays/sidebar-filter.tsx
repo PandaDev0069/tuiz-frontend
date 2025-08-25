@@ -129,11 +129,11 @@ export const SidebarFilter: React.FC<SidebarFilterProps> = ({
         {/* Header - YouTube Style */}
         <div className="p-6 border-b bg-gradient-to-b from-purple-500 to-blue-500 rounded-t-lg">
           <div className="flex items-center justify-between">
-            <h3 className="text-xl font-medium text-gray-900">Search filters</h3>
+            <h3 className="text-xl font-medium text-gray-900">検索フィルター</h3>
             <button
               onClick={onToggle}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              aria-label="Close filters"
+              aria-label="フィルターを閉じる"
             >
               <X className="h-6 w-6 text-gray-500" />
             </button>
@@ -145,7 +145,7 @@ export const SidebarFilter: React.FC<SidebarFilterProps> = ({
           <div className="grid grid-cols-4 gap-6">
             {/* Upload Date */}
             <div className="space-y-3">
-              <h4 className="text-sm font-medium text-gray-900">Upload date</h4>
+              <h4 className="text-sm font-medium text-gray-900">アップロード日</h4>
               <div className="space-y-2">
                 {DATE_RANGE_OPTIONS.map((option) => (
                   <button
@@ -171,7 +171,7 @@ export const SidebarFilter: React.FC<SidebarFilterProps> = ({
 
             {/* Difficulty */}
             <div className="space-y-3">
-              <h4 className="text-sm font-medium text-gray-900">Difficulty</h4>
+              <h4 className="text-sm font-medium text-gray-900">難易度</h4>
               <div className="space-y-2">
                 {DIFFICULTY_OPTIONS.map((option) => (
                   <button
@@ -192,7 +192,7 @@ export const SidebarFilter: React.FC<SidebarFilterProps> = ({
 
             {/* Sort By */}
             <div className="space-y-3">
-              <h4 className="text-sm font-medium text-gray-900">Sort by</h4>
+              <h4 className="text-sm font-medium text-gray-900">並び順</h4>
               <div className="space-y-2">
                 {SORT_OPTIONS.map((option) => (
                   <button
@@ -213,7 +213,7 @@ export const SidebarFilter: React.FC<SidebarFilterProps> = ({
 
             {/* Status */}
             <div className="space-y-3">
-              <h4 className="text-sm font-medium text-gray-900">Status</h4>
+              <h4 className="text-sm font-medium text-gray-900">ステータス</h4>
               <div className="space-y-2">
                 {STATUS_OPTIONS.map((option) => (
                   <button
@@ -240,7 +240,7 @@ export const SidebarFilter: React.FC<SidebarFilterProps> = ({
             <div className="text-sm text-gray-600">
               {hasActiveFilters() && (
                 <span className="font-medium">
-                  {Object.values(filters).flat().filter(Boolean).length} active filters
+                  {Object.values(filters).flat().filter(Boolean).length} 個のアクティブフィルター
                 </span>
               )}
             </div>
@@ -250,14 +250,14 @@ export const SidebarFilter: React.FC<SidebarFilterProps> = ({
                   onClick={clearAllFilters}
                   className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md transition-colors"
                 >
-                  Clear all
+                  すべてクリア
                 </button>
               )}
               <button
                 onClick={onToggle}
                 className="px-4 py-2 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
               >
-                Apply filters
+                フィルターを適用
               </button>
             </div>
           </div>
