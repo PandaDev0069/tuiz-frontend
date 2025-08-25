@@ -53,7 +53,7 @@ export default function Page() {
                 className="text-center hover:shadow-xl transition-all duration-300"
               >
                 <CardContent className="pt-6">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r  from-green-400 to-blue-600 flex items-center justify-center shadow-lg">
                     <AiFillDashboard size={28} className="text-white" />
                   </div>
                   <CardHeader>
@@ -88,9 +88,11 @@ export default function Page() {
                     <h3 className="text-xl font-semibold text-gray-800">ゲームに参加</h3>
                   </CardHeader>
                   <p className="text-gray-600 mb-6">ルームコードを入力してクイズゲームに参加</p>
-                  <Button variant="gradient" size="tall" className="mx-auto px-12">
-                    ゲーム参加
-                  </Button>
+                  <Link href="/join">
+                    <Button variant="gradient" size="tall" className="mx-auto px-12">
+                      ゲーム参加
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             </div>

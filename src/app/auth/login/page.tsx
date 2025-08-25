@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/state/useAuthStore';
@@ -17,6 +18,7 @@ import {
   Checkbox,
   AnimatedHeading,
   PageContainer,
+  Footer,
 } from '@/components/ui';
 
 /**
@@ -124,6 +126,16 @@ export default function LoginPage() {
         <Container size="sm" className="w-full max-w-md mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
+            <div className="flex justify-center items-center mb-4">
+              <Image
+                src="/logo.png"
+                alt="logo"
+                width={80}
+                height={80}
+                className="animate-float rounded-full"
+                priority
+              />
+            </div>
             <AnimatedHeading size="lg" animation="float" className="mb-2">
               TUIZ情報王
             </AnimatedHeading>
@@ -203,6 +215,14 @@ export default function LoginPage() {
           </div>
         </Container>
       </main>
+      <Footer>
+        <Container size="lg">
+          <div className="text-gray-600">
+            <p>&copy; 2025 TUIZ情報王. All rights reserved.</p>
+            <p className="text-sm">Next.js + Socket.IO • Real-time Quiz Platform</p>
+          </div>
+        </Container>
+      </Footer>
     </PageContainer>
   );
 }

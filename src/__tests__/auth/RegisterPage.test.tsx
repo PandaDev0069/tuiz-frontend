@@ -36,6 +36,9 @@ describe('RegisterPage', () => {
   it('renders registration form correctly', () => {
     render(<RegisterPage />);
 
+    // Logo should be present
+    expect(screen.getByAltText(/logo/i)).toBeInTheDocument();
+
     // Check for main heading
     expect(screen.getByRole('heading', { name: /新規アカウント作成/i })).toBeInTheDocument();
 
