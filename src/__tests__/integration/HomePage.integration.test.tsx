@@ -21,9 +21,9 @@ describe('HomePage Integration Tests', () => {
     it('displays logo with correct attributes', () => {
       renderWithProviders(<HomePage />);
 
-      const logo = screen.getByRole('img', { name: /logo/i });
+      const logo = screen.getByRole('img', { name: /TUIZ情報王 ロゴ/i });
       expect(logo).toBeInTheDocument();
-      expect(logo).toHaveAttribute('alt', 'logo');
+      expect(logo).toHaveAttribute('alt', 'TUIZ情報王 ロゴ');
       expect(logo).toHaveClass('animate-float', 'rounded-full');
     });
   });
@@ -177,7 +177,7 @@ describe('HomePage Integration Tests', () => {
       renderWithProviders(<HomePage />);
 
       const logo = screen.getByRole('img');
-      expect(logo).toHaveAttribute('alt', 'logo');
+      expect(logo).toHaveAttribute('alt', 'TUIZ情報王 ロゴ');
     });
 
     it('buttons have accessible names', () => {
