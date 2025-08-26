@@ -5,7 +5,7 @@
 
 type Cfg = Readonly<{
   appName: string;
-  apiBase: string;                 // your backend URL (Render/local)
+  apiBase: string; // your backend URL (Render/local)
   supabaseUrl: string;
   supabaseAnonKey: string;
   isDev: boolean;
@@ -16,7 +16,11 @@ function must(key: string, val: string | undefined): string {
   return val;
 }
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8080';
+// Use local backend for development, production backend for production
+const apiBase =
+  process.env.NODE_ENV === 'development'
+    ? 'http://localhost:8080'
+    : (process.env.NEXT_PUBLIC_API_BASE ?? 'https://tuiz-info-king-backend.onrender.com');
 
 export const cfg: Cfg = Object.freeze({
   appName: 'TUIZ',
