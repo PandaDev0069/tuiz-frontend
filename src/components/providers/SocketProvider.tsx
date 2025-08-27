@@ -103,6 +103,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             zIndex: 9999,
             backgroundColor: isConnected ? '#10b981' : '#ef4444',
             color: 'white',
+            opacity: 0.3,
           }}
         >
           Socket.IO: {isConnected ? 'Connected' : 'Disconnected'}
