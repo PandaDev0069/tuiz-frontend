@@ -1,6 +1,8 @@
 @import 'tailwindcss';
-@import './scrollbar.css';
 @import './mobile.css';
+@import './tokens.css';
+@import './utilities.css';
+@import './scrollbar.css';
 
 :root {
   --background: 0 0% 100%;
@@ -107,7 +109,14 @@ body > * {
   }
 
   /* Ensure all content stays within viewport */
-  * {
+  div,
+  section,
+  main,
+  header,
+  footer,
+  article,
+  aside,
+  nav {
     max-width: 100%;
     box-sizing: border-box;
   }
@@ -155,12 +164,6 @@ body > * {
   footer {
     overflow-x: hidden !important;
     max-width: 100vw !important;
-  }
-
-  /* Ensure images don't overflow */
-  img {
-    max-width: 100% !important;
-    height: auto !important;
   }
 
   /* Ensure buttons and interactive elements don't overflow */
@@ -531,4 +534,21 @@ select {
 
 .dark ::-webkit-scrollbar-corner {
   background: rgba(0, 0, 0, 0.2);
+}
+
+/* Override Tailwind's rounded-full to fix Next.js Image issues */
+.rounded-full,
+[class*='rounded-full'] {
+  border-radius: 50% !important;
+  -webkit-border-radius: 50% !important;
+  -moz-border-radius: 50% !important;
+  overflow: hidden !important;
+}
+
+/* Ensure images inside rounded containers inherit the border-radius */
+.rounded-full img,
+[class*='rounded-full'] img {
+  border-radius: inherit !important;
+  -webkit-border-radius: inherit !important;
+  -moz-border-radius: inherit !important;
 }

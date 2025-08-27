@@ -272,9 +272,6 @@
 .rounded-xl {
   border-radius: var(--radius-4);
 }
-.rounded-full {
-  border-radius: var(--radius-full);
-}
 
 /* Shadow utilities */
 .shadow-sm {
