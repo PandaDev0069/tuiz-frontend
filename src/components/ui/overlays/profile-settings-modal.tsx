@@ -191,7 +191,7 @@ export function ProfileSettingsModal({
                       value={formData.username}
                       onChange={(e) => handleInputChange('username', e.target.value)}
                       placeholder="ユーザー名を入力"
-                      className="border-2 border-blue-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-300 bg-gradient-to-r from-blue-100 to-cyan-100 text-gray-800 placeholder:text-blue-500 transition-all duration-200 shadow-md"
+                      className="border-2 border-blue-400 bg-gradient-to-r from-blue-100 to-cyan-100 text-gray-800 placeholder:text-blue-500 transition-all duration-200 shadow-md"
                     />
                   ) : (
                     <div className="p-3 bg-gradient-to-r from-blue-100 to-cyan-150 rounded-lg border-2 border-blue-300 shadow-md">
@@ -210,7 +210,7 @@ export function ProfileSettingsModal({
                       value={formData.displayName}
                       onChange={(e) => handleInputChange('displayName', e.target.value)}
                       placeholder="表示名を入力"
-                      className="border-2 border-green-400 focus:border-green-600 focus:ring-2 focus:ring-green-300 bg-gradient-to-r from-green-100 to-emerald-100 text-gray-800 placeholder:text-green-500 transition-all duration-200 shadow-md"
+                      className="border-2 border-green-400 bg-gradient-to-r from-green-100 to-emerald-100 text-gray-800 placeholder:text-green-500 transition-all duration-200 shadow-md"
                     />
                   ) : (
                     <div className="p-3 bg-gradient-to-r from-green-100 to-emerald-150 rounded-lg border-2 border-green-300 shadow-md">

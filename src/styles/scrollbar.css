@@ -87,8 +87,7 @@
   transition: scrollbar-color 0.3s ease;
 }
 
-.scrollbar-auto-hide:hover,
-.scrollbar-auto-hide:focus-within {
+.scrollbar-auto-hide:hover {
   scrollbar-color: #6fd6ff rgba(255, 255, 255, 0.1);
 }
 
