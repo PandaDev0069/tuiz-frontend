@@ -11,9 +11,9 @@ import {
   ProfileSettingsModal,
   DashboardHeader,
 } from '@/components/ui';
-import Link from 'next/link';
 import { FilterState } from '@/components/ui/overlays/sidebar-filter';
 import { ProfileData } from '@/components/ui/overlays/profile-settings-modal';
+import { PenTool, Gamepad2, BarChart3, Library } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
@@ -77,19 +77,49 @@ export default function DashboardPage() {
       <PageContainer className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <main role="main">
           <Container size="lg" className="max-w-7xl mx-auto">
-            {/* Header Section */}
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-foreground mb-2">Dashboard</h1>
-              <p className="text-muted-foreground">Manage your quizzes and track your progress</p>
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-              <Link href="/">
-                <Button variant="outline" size="lg">
-                  ホームに戻る
+            {/* Quick Actions Section */}
+            <div className="mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-1 max-w-4xl mx-auto">
+                <Button className="group relative h-28 w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                  <PenTool
+                    className="!w-15 !h-15 !text-yellow-300 group-hover:scale-110 transition-transform duration-200"
+                    strokeWidth={2}
+                    size={60}
+                  />
+                  <span className="font-semibold text-sm">クイズ作成</span>
                 </Button>
-              </Link>
+
+                <Button className="group relative h-28 w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-600 hover:via-emerald-700 hover:to-teal-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                  <Gamepad2
+                    className="!w-15 !h-15 !text-pink-400 group-hover:scale-110 transition-transform duration-200"
+                    strokeWidth={2}
+                    size={60}
+                  />
+                  <span className="font-semibold text-sm">ゲーム参加</span>
+                </Button>
+
+                <Button className="group relative h-28 w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 hover:from-amber-600 hover:via-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                  <BarChart3
+                    className="!w-15 !h-15 !text-cyan-400 group-hover:scale-110 transition-transform duration-200"
+                    strokeWidth={2}
+                    size={60}
+                  />
+                  <span className="font-semibold text-sm">分析表示</span>
+                </Button>
+
+                <Button className="group relative h-28 w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 hover:from-violet-600 hover:via-purple-600 hover:to-fuchsia-600 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                  <Library
+                    className="!w-15 !h-15 !text-orange-400 group-hover:scale-110 transition-transform duration-200"
+                    strokeWidth={2}
+                    size={60}
+                  />
+                  <span className="font-semibold text-sm">クイズライブラリ</span>
+                </Button>
+              </div>
             </div>
 
             {/* Search and Filter Section */}
@@ -116,29 +146,6 @@ export default function DashboardPage() {
                 filters={filters}
                 onFiltersChange={handleFiltersChange}
               />
-            </div>
-
-            {/* Quick Actions Section */}
-            <div className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Button className="h-24 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white">
-                  <span className="text-2xl">📝</span>
-                  <span className="font-medium">クイズ作成</span>
-                </Button>
-                <Button className="h-24 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white">
-                  <span className="text-2xl">🎮</span>
-                  <span className="font-medium">ゲーム参加</span>
-                </Button>
-                <Button className="h-24 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white">
-                  <span className="text-2xl">📊</span>
-                  <span className="font-medium">分析表示</span>
-                </Button>
-                <Button className="h-24 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700 text-white">
-                  <span className="text-2xl">🌍</span>
-                  <span className="font-medium">グローバルライブラリ</span>
-                </Button>
-              </div>
             </div>
           </Container>
         </main>

@@ -71,7 +71,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             className={cn(
               'search-input-custom pl-12 pr-20 h-11 w-full text-base border border-gray-300 rounded-lg bg-white transition-all duration-200 shadow-sm',
               isFocused
-                ? 'border-purple-500 shadow-md ring-2 ring-purple-200 rounded-full'
+                ? 'border-purple-500 shadow-md ring-2 ring-purple-200'
                 : 'hover:border-gray-400 hover:shadow-md',
             )}
           />
