@@ -79,7 +79,7 @@ export default function DashboardPage() {
           <Container size="lg" className="max-w-7xl mx-auto">
             {/* Quick Actions Section */}
             <div className="mb-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-1 max-w-4xl mx-auto">
+              <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-1 max-w-4xl mx-auto">
                 <Button className="group relative h-28 w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden">
                   <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                   <PenTool
@@ -124,7 +124,7 @@ export default function DashboardPage() {
 
             {/* Search and Filter Section */}
             <div className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4">Search & Filter Quizzes</h2>
+              <h2 className="text-2xl font-semibold mb-4 px-auto">検索</h2>
 
               {/* Search Bar */}
               <div className="flex justify-center mb-6">
