@@ -2,32 +2,46 @@
 
 /* Base mobile viewport constraints */
 @media (max-width: 768px) {
-  /* Ensure all elements respect viewport boundaries */
+  /* Ensure proper box-sizing for all elements */
   * {
-    max-width: 100vw !important;
-    box-sizing: border-box !important;
+    box-sizing: border-box;
   }
 
-  /* Prevent horizontal scroll on all elements */
+  /* Prevent horizontal scroll on main layout elements only */
   html,
-  body,
-  div,
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+    width: 100%;
+  }
+
+  /* Prevent horizontal scroll on layout containers only */
+  div[class*='container'],
   section,
   main,
-  header,
   footer,
   article,
   aside,
   nav {
-    overflow-x: hidden !important;
-    max-width: 100vw !important;
-    width: 100% !important;
+    overflow-x: hidden;
+    max-width: 100vw;
+    width: 100%;
+  }
+
+  /* Special handling for header to preserve logo animation */
+  header,
+  [class*='header'] {
+    overflow: visible !important;
+    width: 100%;
+    /* Ensure proper spacing for logo animation */
+    padding-top: 2rem;
+    padding-bottom: 2rem;
   }
 
   /* Ensure images don't overflow */
   img {
-    max-width: 100% !important;
-    height: auto !important;
+    max-width: 100%;
+    height: auto;
     object-fit: contain;
   }
 
@@ -38,20 +52,60 @@
   textarea,
   select,
   label {
-    max-width: 100% !important;
-    box-sizing: border-box !important;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
-  /* Ensure cards and containers don't overflow */
+  /* Ensure cards and containers don't overflow - but preserve icon containers */
   .card,
   .container,
   .wrapper,
-  [class*='card'],
-  [class*='container'] {
-    max-width: 100vw !important;
-    overflow-x: hidden !important;
+  [class*='card']:not([class*='icon']),
+  [class*='container']:not([class*='icon']) {
+    max-width: 100vw;
+    overflow-x: hidden;
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
+  }
+
+  /* Exception for quiz scroll containers - allow horizontal scrolling */
+  .quiz-scroll-container,
+  [class*='quiz-scroll-container'] {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    max-width: none !important;
+    width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    white-space: nowrap;
+    padding-bottom: 1rem;
+    gap: 1rem;
+  }
+
+  /* Exception for quiz card containers - allow horizontal scrolling */
+  .quiz-card-mobile,
+  .quiz-card-tablet,
+  .quiz-card-desktop {
+    overflow: visible !important;
+    max-width: none !important;
+  }
+
+  /* Preserve icon container styling */
+  [class*='icon'],
+  div[class*='w-16'],
+  div[class*='h-16'] {
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  /* Preserve logo animation and ensure it's not clipped */
+  .animate-float,
+  [class*='animate-float'],
+  img[class*='animate-float'] {
+    overflow: visible !important;
+    /* Ensure logo has space to float */
+    margin: 1rem 0;
   }
 
   /* Prevent text overflow */
@@ -62,8 +116,7 @@
   h4,
   h5,
   h6,
-  span,
-  div {
+  span {
     overflow-wrap: break-word;
     word-wrap: break-word;
     word-break: break-word;
@@ -75,7 +128,7 @@
   body {
     min-height: 100vh;
     height: auto;
-    overflow: hidden;
+    overflow-x: hidden;
   }
 
   /* Allow vertical scroll when needed */
@@ -90,6 +143,31 @@
   .wrapper {
     padding: 1rem;
     margin: 0;
+  }
+
+  /* Preserve icon container styling on small screens */
+  [class*='icon'],
+  div[class*='w-16'],
+  div[class*='h-16'] {
+    max-width: none !important;
+    overflow: visible !important;
+    width: 4rem !important;
+    height: 4rem !important;
+  }
+
+  /* Ensure header has proper spacing on small screens */
+  header,
+  [class*='header'] {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+    overflow: visible !important;
+  }
+
+  /* Ensure logo animation works on small screens */
+  .animate-float,
+  [class*='animate-float'],
+  img[class*='animate-float'] {
+    margin: 0.75rem 0;
   }
 }
 
@@ -108,6 +186,30 @@
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
   }
+
+  /* Preserve icon styling on iOS */
+  [class*='icon'],
+  div[class*='w-16'],
+  div[class*='h-16'] {
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  /* Ensure header and logo animation work on iOS */
+  header,
+  [class*='header'] {
+    overflow: visible !important;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+
+  .animate-float,
+  [class*='animate-float'],
+  img[class*='animate-float'] {
+    overflow: visible !important;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
 }
 
 /* Android Chrome specific fixes */
@@ -117,6 +219,26 @@
     position: relative;
     width: 100vw;
     max-width: 100vw;
+  }
+
+  /* Preserve icon styling on Android */
+  [class*='icon'],
+  div[class*='w-16'],
+  div[class*='h-16'] {
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  /* Ensure header and logo animation work on Android */
+  header,
+  [class*='header'] {
+    overflow: visible !important;
+  }
+
+  .animate-float,
+  [class*='animate-float'],
+  img[class*='animate-float'] {
+    overflow: visible !important;
   }
 }
 
@@ -132,6 +254,56 @@ body {
 body > * {
   max-width: 100vw;
   overflow-x: hidden;
+}
+
+/* Preserve icon containers globally */
+[class*='icon'],
+div[class*='w-16'],
+div[class*='h-16'] {
+  max-width: none !important;
+  overflow: visible !important;
+}
+
+/* Preserve header and logo animation globally */
+header,
+[class*='header'] {
+  overflow: visible !important;
+}
+
+.animate-float,
+[class*='animate-float'],
+img[class*='animate-float'] {
+  overflow: visible !important;
+}
+
+/* Comprehensive fix for rounded-full with Next.js Image components - using higher specificity */
+html body .rounded-full,
+html body [class*='rounded-full'],
+body .rounded-full,
+body [class*='rounded-full'] {
+  border-radius: 50% !important;
+  -webkit-border-radius: 50% !important;
+  -moz-border-radius: 50% !important;
+  overflow: hidden !important;
+}
+
+/* Ensure images inside rounded containers inherit the border-radius */
+html body .rounded-full img,
+html body [class*='rounded-full'] img,
+body .rounded-full img,
+body [class*='rounded-full'] img {
+  border-radius: inherit !important;
+  -webkit-border-radius: inherit !important;
+  -moz-border-radius: inherit !important;
+}
+
+/* Force override for all rounded-full elements */
+.rounded-full,
+[class*='rounded-full'] {
+  border-radius: 50% !important;
+  -webkit-border-radius: 50% !important;
+  -moz-border-radius: 50% !important;
+  overflow: hidden !important;
 }
 
 /* Utility classes for mobile overflow prevention */
@@ -154,4 +326,123 @@ body > * {
   overflow: hidden;
   max-width: 100vw;
   width: 100%;
+}
+
+/* Icon-specific utility class to ensure icons are always visible */
+.icon-safe {
+  max-width: none !important;
+  overflow: visible !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+/* Header-specific utility class to ensure logo animation works */
+.header-safe {
+  overflow: visible !important;
+  width: 100% !important;
+}
+
+/* Horizontal scrolling quiz cards for mobile */
+@media (max-width: 768px) {
+  /* Individual quiz card sizing for mobile */
+  .quiz-card-mobile {
+    flex-shrink: 0;
+    width: 300px;
+    scroll-snap-align: start;
+    margin-right: 1rem;
+  }
+
+  /* Hide scroll indicators on mobile */
+  .scroll-indicator {
+    display: none !important;
+  }
+
+  /* Ensure proper spacing between cards on mobile */
+  .quiz-card-gap {
+    gap: 1rem;
+  }
+
+  /* Optimize touch scrolling */
+  .quiz-scroll-container::-webkit-scrollbar {
+    display: none;
+  }
+
+  .quiz-scroll-container {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  /* Mobile-specific card adjustments */
+  .quiz-card-mobile .card {
+    padding: 1rem;
+    margin: 0.5rem;
+  }
+
+  /* Better mobile spacing for card content */
+  .quiz-card-mobile .card-content {
+    padding: 0.75rem 0;
+  }
+
+  /* Mobile-optimized button layout */
+  .quiz-card-mobile .card-footer {
+    padding: 0.75rem 0 0;
+    gap: 0.5rem;
+  }
+
+  /* Ensure buttons don't get too small on mobile */
+  .quiz-card-mobile button {
+    min-height: 2.5rem;
+    font-size: 0.875rem;
+  }
+
+  /* Force horizontal scrolling on mobile */
+  .quiz-scroll-container > * {
+    flex-shrink: 0;
+    min-width: 300px;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+  .quiz-card-mobile {
+    width: 280px;
+  }
+
+  .quiz-card-mobile .card {
+    padding: 0.75rem;
+    margin: 0.25rem;
+  }
+
+  /* Stack buttons vertically on very small screens */
+  .quiz-card-mobile .card-footer {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .quiz-card-mobile button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Tablet-specific adjustments */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .quiz-card-tablet {
+    width: 340px;
+  }
+
+  .quiz-scroll-container {
+    gap: 1.5rem;
+  }
+}
+
+/* Large screen optimizations */
+@media (min-width: 1025px) {
+  .quiz-card-desktop {
+    width: 384px;
+  }
+
+  .quiz-scroll-container {
+    gap: 2rem;
+  }
 }

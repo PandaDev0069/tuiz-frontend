@@ -22,6 +22,7 @@ export { RedirectLink } from './navigation/redirect-link';
 export { Header } from './core/layout';
 export { Main } from './core/layout';
 export { Footer } from './core/layout';
+export { DashboardHeader } from './core/dashboard-header';
 export { SidebarFilter } from './overlays/sidebar-filter';
 export { ProfileSettingsModal } from './overlays/profile-settings-modal';
 export { AuthProvider } from '../providers/AuthProvider';

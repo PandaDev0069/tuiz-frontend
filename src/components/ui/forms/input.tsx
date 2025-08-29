@@ -10,11 +10,12 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, variant = 'default', inputSize = 'md', ...props }, ref) => {
     const variants = {
       default:
-        'border border-input bg-background ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-      filled: 'border-0 bg-muted focus:bg-background',
+        'border-2 border-gray-400 bg-background hover:border-gray-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 focus:outline-none transition-all duration-200',
+      filled:
+        'border-2 border-transparent bg-muted hover:bg-gray-50 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 focus:outline-none transition-all duration-200',
       flushed:
-        'border-0 border-b border-input bg-transparent rounded-none focus:border-primary px-0',
-      unstyled: 'border-0 bg-transparent shadow-none',
+        'border-0 border-b-2 border-gray-400 bg-transparent rounded-none px-0 hover:border-gray-500 focus:border-blue-600 focus:ring-0 focus:outline-none transition-all duration-200',
+      unstyled: 'border-0 bg-transparent shadow-none focus:outline-none',
     };
 
     const sizes = {
@@ -27,7 +28,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <input
         type={type}
         className={cn(
-          'flex w-full rounded-md font-medium transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+          'flex w-full rounded-md font-medium transition-all duration-200 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
           variants[variant],
           sizes[inputSize],
           className,

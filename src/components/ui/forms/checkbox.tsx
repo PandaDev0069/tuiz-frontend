@@ -4,7 +4,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const checkboxVariants = cva(
-  'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+  'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow disabled:cursor-not-allowed disabled:opacity-50',
   {
     variants: {
       variant: {
@@ -67,16 +67,18 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
           </div>
         </div>
         {(label || description) && (
-          <div className="flex flex-col">
+          <div className="flex flex-col min-h-[1.5rem] sm:min-h-[1.25rem]">
             {label && (
               <label
                 htmlFor={checkboxId}
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                className="text-sm font-medium leading-tight sm:leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
               >
                 {label}
               </label>
             )}
-            {description && <p className="text-xs text-muted-foreground mt-1">{description}</p>}
+            {description && (
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{description}</p>
+            )}
           </div>
         )}
       </div>
