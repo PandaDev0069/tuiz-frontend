@@ -318,3 +318,112 @@ body [class*='rounded-full'] img {
   overflow: visible !important;
   width: 100% !important;
 }
+
+/* Horizontal scrolling quiz cards for mobile */
+@media (max-width: 768px) {
+  /* Ensure horizontal scroll containers work properly on mobile */
+  .quiz-scroll-container {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 1rem;
+    gap: 1rem;
+  }
+
+  /* Individual quiz card sizing for mobile */
+  .quiz-card-mobile {
+    flex-shrink: 0;
+    width: 300px;
+    scroll-snap-align: start;
+    margin-right: 1rem;
+  }
+
+  /* Hide scroll indicators on mobile */
+  .scroll-indicator {
+    display: none !important;
+  }
+
+  /* Ensure proper spacing between cards on mobile */
+  .quiz-card-gap {
+    gap: 1rem;
+  }
+
+  /* Optimize touch scrolling */
+  .quiz-scroll-container::-webkit-scrollbar {
+    display: none;
+  }
+
+  .quiz-scroll-container {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  /* Mobile-specific card adjustments */
+  .quiz-card-mobile .card {
+    padding: 1rem;
+    margin: 0.5rem;
+  }
+
+  /* Better mobile spacing for card content */
+  .quiz-card-mobile .card-content {
+    padding: 0.75rem 0;
+  }
+
+  /* Mobile-optimized button layout */
+  .quiz-card-mobile .card-footer {
+    padding: 0.75rem 0 0 0;
+    gap: 0.5rem;
+  }
+
+  /* Ensure buttons don't get too small on mobile */
+  .quiz-card-mobile button {
+    min-height: 2.5rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* Small mobile devices */
+@media (max-width: 480px) {
+  .quiz-card-mobile {
+    width: 280px;
+  }
+
+  .quiz-card-mobile .card {
+    padding: 0.75rem;
+    margin: 0.25rem;
+  }
+
+  /* Stack buttons vertically on very small screens */
+  .quiz-card-mobile .card-footer {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .quiz-card-mobile button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Tablet-specific adjustments */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .quiz-card-tablet {
+    width: 340px;
+  }
+
+  .quiz-scroll-container {
+    gap: 1.5rem;
+  }
+}
+
+/* Large screen optimizations */
+@media (min-width: 1025px) {
+  .quiz-card-desktop {
+    width: 384px;
+  }
+
+  .quiz-scroll-container {
+    gap: 2rem;
+  }
+}

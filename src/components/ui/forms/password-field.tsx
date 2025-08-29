@@ -4,13 +4,15 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const passwordFieldVariants = cva(
-  'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
+  'flex w-full rounded-md border-2 bg-background px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2',
   {
     variants: {
       variant: {
-        default: 'border-gray-300',
-        error: 'border-red-500',
-        success: 'border-green-500',
+        default:
+          'border-gray-400 hover:border-gray-500 focus:border-blue-600 focus:ring-blue-600/20',
+        error: 'border-red-500 hover:border-red-600 focus:border-red-600 focus:ring-red-600/20',
+        success:
+          'border-green-500 hover:border-green-600 focus:border-green-600 focus:ring-green-600/20',
       },
       size: {
         default: 'h-10',

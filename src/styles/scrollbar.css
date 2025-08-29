@@ -1,6 +1,15 @@
 /* Scrollbar Utility Classes */
 
 /* Hide scrollbars completely */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbars completely */
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;
