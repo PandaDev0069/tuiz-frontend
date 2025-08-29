@@ -75,6 +75,12 @@
     overflow-y: hidden !important;
     max-width: none !important;
     width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    white-space: nowrap;
+    padding-bottom: 1rem;
+    gap: 1rem;
   }
 
   /* Exception for quiz card containers - allow horizontal scrolling */
@@ -338,16 +344,6 @@ body [class*='rounded-full'] img {
 
 /* Horizontal scrolling quiz cards for mobile */
 @media (max-width: 768px) {
-  /* Ensure horizontal scroll containers work properly on mobile */
-  .quiz-scroll-container {
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x mandatory;
-    padding-bottom: 1rem;
-    gap: 1rem;
-  }
-
   /* Individual quiz card sizing for mobile */
   .quiz-card-mobile {
     flex-shrink: 0;
@@ -403,12 +399,6 @@ body [class*='rounded-full'] img {
   .quiz-scroll-container > * {
     flex-shrink: 0;
     min-width: 300px;
-  }
-
-  /* Ensure proper scroll behavior */
-  .quiz-scroll-container {
-    scroll-behavior: smooth;
-    white-space: nowrap;
   }
 }
 
