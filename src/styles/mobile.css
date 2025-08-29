@@ -68,6 +68,23 @@
     padding-right: env(safe-area-inset-right);
   }
 
+  /* Exception for quiz scroll containers - allow horizontal scrolling */
+  .quiz-scroll-container,
+  [class*='quiz-scroll-container'] {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  /* Exception for quiz card containers - allow horizontal scrolling */
+  .quiz-card-mobile,
+  .quiz-card-tablet,
+  .quiz-card-desktop {
+    overflow: visible !important;
+    max-width: none !important;
+  }
+
   /* Preserve icon container styling */
   [class*='icon'],
   div[class*='w-16'],
@@ -380,6 +397,18 @@ body [class*='rounded-full'] img {
   .quiz-card-mobile button {
     min-height: 2.5rem;
     font-size: 0.875rem;
+  }
+
+  /* Force horizontal scrolling on mobile */
+  .quiz-scroll-container > * {
+    flex-shrink: 0;
+    min-width: 300px;
+  }
+
+  /* Ensure proper scroll behavior */
+  .quiz-scroll-container {
+    scroll-behavior: smooth;
+    white-space: nowrap;
   }
 }
 

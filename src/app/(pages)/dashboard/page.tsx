@@ -15,7 +15,7 @@ import { QuizCard } from '@/components/ui/data-display/quiz-card';
 import { FilterState } from '@/components/ui/overlays/sidebar-filter';
 import { ProfileData } from '@/components/ui/overlays/profile-settings-modal';
 import { QuizSet, QuizStatus, DifficultyLevel } from '@/types/dashboard';
-import { PenTool, Gamepad2, BarChart3, Library, Plus } from 'lucide-react';
+import { PenTool, Gamepad2, BarChart3, Library } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
@@ -432,22 +432,15 @@ export default function DashboardPage() {
 
             {/* Draft Quizzes Section */}
             <div className="mb-12">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-0 mb-6">
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">下書きのクイズ</h2>
-                <Button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg w-full sm:w-auto justify-center">
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">新規作成</span>
-                  <span className="sm:hidden">新規作成</span>
-                </Button>
-              </div>
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4 px-auto">下書きのクイズ</h2>
 
               {/* Horizontal Scrollable Draft Cards */}
-              <div className="relative">
-                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide quiz-scroll-container quiz-card-gap">
+              <div className="relative w-full">
+                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide quiz-scroll-container quiz-card-gap w-full">
                   {mockDraftQuizzes.map((quiz) => (
                     <div
                       key={quiz.id}
-                      className="flex-shrink-0 w-[300px] sm:w-[320px] md:w-[360px] lg:w-[384px] quiz-card-mobile quiz-card-tablet quiz-card-desktop"
+                      className="flex-shrink-0 w-[300px] sm:w-[320px] md:w-[320px] lg:w-[320px] quiz-card-mobile quiz-card-tablet quiz-card-desktop"
                     >
                       <QuizCard
                         quiz={quiz}
@@ -473,24 +466,15 @@ export default function DashboardPage() {
 
             {/* Published Quizzes Section */}
             <div className="mb-12">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-0 mb-6">
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">公開済みのクイズ</h2>
-                <Button
-                  variant="outline"
-                  className="text-gray-600 hover:text-gray-800 border-gray-300 hover:border-gray-400 px-4 py-2 rounded-lg w-full sm:w-auto justify-center"
-                >
-                  <span className="hidden sm:inline">すべて表示</span>
-                  <span className="sm:hidden">すべて表示</span>
-                </Button>
-              </div>
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4 px-auto">公開済みのクイズ</h2>
 
               {/* Horizontal Scrollable Published Cards */}
-              <div className="relative">
-                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide quiz-scroll-container quiz-card-gap">
+              <div className="relative w-full">
+                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide quiz-scroll-container quiz-card-gap w-full">
                   {mockPublishedQuizzes.map((quiz) => (
                     <div
                       key={quiz.id}
-                      className="flex-shrink-0 w-[300px] sm:w-[320px] md:w-[360px] lg:w-[384px] quiz-card-mobile quiz-card-tablet quiz-card-desktop"
+                      className="flex-shrink-0 w-[300px] sm:w-[320px] md:w-[360px] lg:w-[360px] quiz-card-mobile quiz-card-tablet quiz-card-desktop"
                     >
                       <QuizCard
                         quiz={quiz}
