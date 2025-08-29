@@ -1,0 +1,47 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /test/
+Disallow: /__tests__/
+Disallow: /_next/static/chunks/
+Disallow: /_next/static/css/
+Disallow: /_next/static/js/
+Disallow: /_next/static/media/
+Disallow: /_next/static/webpack/
+Disallow: /_next/static/development/
+Disallow: /_next/static/production/
+
+User-agent: Googlebot
+Allow: /
+Allow: /logo.png
+Allow: /home.png
+Allow: /manifest.json
+Disallow: /api/
+Disallow: /test/
+Disallow: /__tests__/
+Disallow: /_next/static/chunks/
+Disallow: /_next/static/css/
+Disallow: /_next/static/js/
+Disallow: /_next/static/media/
+Disallow: /_next/static/webpack/
+Disallow: /_next/static/development/
+Disallow: /_next/static/production/
+
+User-agent: Bingbot
+Allow: /
+Allow: /logo.png
+Allow: /home.png
+Allow: /manifest.json
+Disallow: /api/
+Disallow: /test/
+Disallow: /__tests__/
+Disallow: /_next/static/chunks/
+Disallow: /_next/static/css/
+Disallow: /_next/static/js/
+Disallow: /_next/static/media/
+Disallow: /_next/static/webpack/
+Disallow: /_next/static/development/
+Disallow: /_next/static/production/
+
+Sitemap: https://tuiz-info-king.vercel.app/sitemap.xml
+Host: https://tuiz-info-king.vercel.app

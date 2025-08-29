@@ -54,7 +54,7 @@ export default function Page() {
           <div className="flex justify-center items-center mb-6">
             <Image
               src="/logo.png"
-              alt="logo"
+              alt="TUIZ情報王 ロゴ - TUIZ参加・クイズゲーム参加"
               width={80}
               height={80}
               priority
@@ -136,7 +136,7 @@ export default function Page() {
                   size="tall"
                   className="mx-auto px-12"
                 >
-                  参加する
+                  TUIZ参加する
                 </Button>
               </div>
             </form>

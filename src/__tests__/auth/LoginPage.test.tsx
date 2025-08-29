@@ -39,7 +39,9 @@ describe('LoginPage', () => {
     render(<LoginPage />);
 
     // Logo should be present
-    expect(screen.getByAltText(/logo/i)).toBeInTheDocument();
+    expect(
+      screen.getByAltText(/TUIZ情報王 ロゴ - ログイン・リアルタイムクイズ作成・管理/i),
+    ).toBeInTheDocument();
 
     // Check for main heading
     expect(screen.getByRole('heading', { name: /ホストログイン/i })).toBeInTheDocument();

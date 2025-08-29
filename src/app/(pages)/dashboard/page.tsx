@@ -16,6 +16,7 @@ import { FilterState } from '@/components/ui/overlays/sidebar-filter';
 import { ProfileData } from '@/components/ui/overlays/profile-settings-modal';
 import { QuizSet, QuizStatus, DifficultyLevel } from '@/types/dashboard';
 import { PenTool, Gamepad2, BarChart3, Library } from 'lucide-react';
+import { StructuredData } from '@/components/SEO';
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
@@ -355,6 +356,10 @@ export default function DashboardPage() {
 
   return (
     <>
+      {/* Structured Data for SEO */}
+      <StructuredData type="quiz" />
+      <StructuredData type="software" />
+
       <DashboardHeader onProfileClick={() => setProfileModalOpen(true)} />
       <PageContainer className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <main role="main">
@@ -379,7 +384,7 @@ export default function DashboardPage() {
                     strokeWidth={2}
                     size={48}
                   />
-                  <span className="font-semibold text-xs sm:text-sm">ゲーム参加</span>
+                  <span className="font-semibold text-xs sm:text-sm">TUIZ参加</span>
                 </Button>
 
                 <Button className="group relative h-24 sm:h-28 w-full sm:w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 hover:from-amber-600 hover:via-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden">
@@ -389,7 +394,7 @@ export default function DashboardPage() {
                     strokeWidth={2}
                     size={48}
                   />
-                  <span className="font-semibold text-xs sm:text-sm">分析表示</span>
+                  <span className="text-xs sm:text-sm">分析表示</span>
                 </Button>
 
                 <Button className="group relative h-24 sm:h-28 w-full sm:w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 hover:from-violet-600 hover:via-purple-600 hover:to-fuchsia-600 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden">
@@ -399,7 +404,7 @@ export default function DashboardPage() {
                     strokeWidth={2}
                     size={48}
                   />
-                  <span className="font-semibold text-xs sm:text-sm">クイズライブラリ</span>
+                  <span className="text-xs sm:text-sm">クイズライブラリ</span>
                 </Button>
               </div>
             </div>

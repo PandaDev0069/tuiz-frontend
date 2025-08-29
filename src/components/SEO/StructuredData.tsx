@@ -4,7 +4,7 @@ import React from 'react';
 import { SITE_CONFIG, SEO_CONFIG } from '@/config/constants';
 
 interface StructuredDataProps {
-  type: 'website' | 'organization' | 'software';
+  type: 'website' | 'organization' | 'software' | 'quiz';
 }
 
 export const StructuredData: React.FC<StructuredDataProps> = ({ type }) => {
@@ -97,12 +97,63 @@ export const StructuredData: React.FC<StructuredDataProps> = ({ type }) => {
           },
           featureList: [
             'リアルタイムクイズ作成',
+            'TUIZ参加機能',
             'インタラクティブな参加体験',
             '教育機関向け機能',
             '企業研修対応',
             'イベント管理',
             '多言語対応',
             'モバイル最適化',
+          ],
+        };
+
+      case 'quiz':
+        return {
+          '@context': 'https://schema.org',
+          '@type': 'Quiz',
+          name: 'TUIZ情報王 - リアルタイムクイズプラットフォーム',
+          description: 'リアルタイムでクイズを作成・参加できる学習プラットフォーム',
+          url: SITE_CONFIG.BASE_URL,
+          educationalLevel: 'All Levels',
+          educationalUse: 'Learning, Assessment, Training',
+          learningResourceType: 'Interactive Quiz',
+          inLanguage: 'ja-JP',
+          author: {
+            '@type': 'Organization',
+            name: 'TUIZ Team',
+          },
+          publisher: {
+            '@type': 'Organization',
+            name: 'TUIZ情報王',
+            url: SITE_CONFIG.BASE_URL,
+          },
+          isAccessibleForFree: true,
+          offers: {
+            '@type': 'Offer',
+            price: '0',
+            priceCurrency: 'JPY',
+            availability: 'https://schema.org/InStock',
+          },
+          audience: {
+            '@type': 'Audience',
+            audienceType: 'Students, Teachers, Corporate Trainers, Event Organizers',
+          },
+          about: [
+            {
+              '@type': 'Thing',
+              name: 'Quiz',
+              description: 'インタラクティブな学習クイズ',
+            },
+            {
+              '@type': 'Thing',
+              name: 'TUIZ参加',
+              description: 'リアルタイムクイズ参加機能',
+            },
+            {
+              '@type': 'Thing',
+              name: 'TUIZ情報王',
+              description: 'リアルタイムクイズプラットフォーム',
+            },
           ],
         };
 

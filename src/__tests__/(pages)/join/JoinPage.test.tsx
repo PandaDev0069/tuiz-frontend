@@ -26,7 +26,9 @@ describe('JoinPage', () => {
     render(<JoinPage />);
 
     // Logo and explanatory text
-    expect(screen.getByAltText(/logo/i)).toBeInTheDocument();
+    expect(
+      screen.getByAltText(/TUIZ情報王 ロゴ - TUIZ参加・クイズゲーム参加/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/これは東京情報大学の学生が開発したウェブアプリ/i)).toBeInTheDocument();
 
     // Inputs and labels
@@ -34,7 +36,7 @@ describe('JoinPage', () => {
     expect(screen.getByLabelText(/ルームコード/i)).toBeInTheDocument();
 
     // Submit button should start disabled
-    expect(screen.getByRole('button', { name: /参加する/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /TUIZ参加する/i })).toBeDisabled();
 
     // Back link present
     expect(screen.getByRole('link', { name: /ホームに戻る/i })).toBeInTheDocument();
@@ -45,7 +47,7 @@ describe('JoinPage', () => {
 
     const nameInput = screen.getByLabelText(/名前/i) as HTMLInputElement;
     const codeInput = screen.getByLabelText(/ルームコード/i) as HTMLInputElement;
-    const submit = screen.getByRole('button', { name: /参加する/i });
+    const submit = screen.getByRole('button', { name: /TUIZ参加する/i });
 
     await user.type(nameInput, 'テストユーザー');
     await user.type(codeInput, '123456');

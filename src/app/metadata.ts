@@ -99,7 +99,7 @@ export const joinMetadata: Metadata = {
         url: '/logo.png',
         width: 1200,
         height: 630,
-        alt: `${SITE_CONFIG.SITE_NAME} - クイズゲーム参加`,
+        alt: `${SITE_CONFIG.SITE_NAME} - TUIZ参加・クイズゲーム参加`,
       },
     ],
     locale: SITE_CONFIG.LOCALE,
@@ -109,6 +109,34 @@ export const joinMetadata: Metadata = {
     card: 'summary_large_image',
     title: PAGE_METADATA.JOIN.title,
     description: PAGE_METADATA.JOIN.description,
+    images: ['/logo.png'],
+  },
+};
+
+export const dashboardMetadata: Metadata = {
+  title: PAGE_METADATA.DASHBOARD.title,
+  description: PAGE_METADATA.DASHBOARD.description,
+  keywords: PAGE_METADATA.DASHBOARD.keywords,
+  openGraph: {
+    title: PAGE_METADATA.DASHBOARD.title,
+    description: PAGE_METADATA.DASHBOARD.description,
+    url: `${SITE_CONFIG.BASE_URL}/dashboard`,
+    siteName: SITE_CONFIG.SITE_NAME,
+    images: [
+      {
+        url: '/logo.png',
+        width: 1200,
+        height: 630,
+        alt: `${SITE_CONFIG.SITE_NAME} - ダッシュボード・クイズ作成・管理`,
+      },
+    ],
+    locale: SITE_CONFIG.LOCALE,
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: PAGE_METADATA.DASHBOARD.title,
+    description: PAGE_METADATA.DASHBOARD.description,
     images: ['/logo.png'],
   },
 };
