@@ -106,7 +106,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className, onP
                       className="rounded-full object-cover w-full h-full"
                     />
                   ) : (
-                    <User className="h-5 w-5 text-primary" />
+                    <User className="h-5 w-5 text-primary" data-testid="user-icon" />
                   )}
                 </div>
               </Button>
@@ -190,7 +190,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className, onP
                       className="rounded-full object-cover w-full h-full"
                     />
                   ) : (
-                    <User className="h-6 w-6 text-primary" />
+                    <User className="h-6 w-6 text-primary" data-testid="user-icon" />
                   )}
                 </div>
                 <div className="flex flex-col items-start">
