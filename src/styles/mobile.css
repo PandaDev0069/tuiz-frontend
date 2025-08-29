@@ -385,7 +385,7 @@ body [class*='rounded-full'] img {
 
   /* Mobile-optimized button layout */
   .quiz-card-mobile .card-footer {
-    padding: 0.75rem 0 0 0;
+    padding: 0.75rem 0 0;
     gap: 0.5rem;
   }
 
