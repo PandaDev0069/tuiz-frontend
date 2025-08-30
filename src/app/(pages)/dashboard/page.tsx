@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuthStore } from '@/state/useAuthStore';
+import { useRouter } from 'next/navigation';
 import {
   Container,
   Button,
@@ -20,6 +21,7 @@ import { StructuredData } from '@/components/SEO';
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
@@ -354,6 +356,25 @@ export default function DashboardPage() {
     // Delete functionality will be implemented
   };
 
+  const handleCreateQuiz = () => {
+    router.push('/create');
+  };
+
+  const scrollContainer = (direction: 'left' | 'right', containerId: string) => {
+    const container = document.getElementById(containerId);
+    if (container) {
+      const scrollAmount = 320; // Width of one card + gap
+      const currentScroll = container.scrollLeft;
+      const newScroll =
+        direction === 'left' ? currentScroll - scrollAmount : currentScroll + scrollAmount;
+
+      container.scrollTo({
+        left: newScroll,
+        behavior: 'smooth',
+      });
+    }
+  };
+
   return (
     <>
       {/* Structured Data for SEO */}
@@ -367,7 +388,10 @@ export default function DashboardPage() {
             {/* Quick Actions Section */}
             <div className="mb-8">
               <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-1 max-w-4xl mx-auto">
-                <Button className="group relative h-24 sm:h-28 w-full sm:w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden">
+                <Button
+                  onClick={handleCreateQuiz}
+                  className="group relative h-24 sm:h-28 w-full sm:w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden"
+                >
                   <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                   <PenTool
                     className="!w-12 !h-12 sm:!w-15 sm:!h-15 !text-yellow-300 group-hover:scale-110 transition-transform duration-200"
@@ -441,7 +465,14 @@ export default function DashboardPage() {
 
               {/* Horizontal Scrollable Draft Cards */}
               <div className="relative w-full">
-                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide quiz-scroll-container quiz-card-gap w-full">
+                <div
+                  id="draft-quizzes-container"
+                  className="flex gap-4 overflow-x-auto pb-4 scrollbar-none sm:scrollbar-thin scroll-smooth quiz-scroll-container quiz-card-gap w-full"
+                  style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: '#6fd6ff #f3f4f6',
+                  }}
+                >
                   {mockDraftQuizzes.map((quiz) => (
                     <div
                       key={quiz.id}
@@ -457,14 +488,36 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                {/* Scroll Indicators - Hidden on mobile */}
+                {/* Scroll Navigation Arrows - Hidden on mobile */}
                 <div className="hidden md:block">
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 cursor-pointer hover:bg-gray-50 scroll-indicator">
-                    ‹
-                  </div>
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 cursor-pointer hover:bg-gray-50 scroll-indicator">
-                    ›
-                  </div>
+                  <button
+                    onClick={() => scrollContainer('left', 'draft-quizzes-container')}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 cursor-pointer hover:bg-gray-50 hover:shadow-xl transition-all duration-200 border border-gray-200"
+                    aria-label="Scroll left"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 19l-7-7 7-7"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => scrollContainer('right', 'draft-quizzes-container')}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 cursor-pointer hover:bg-gray-50 hover:shadow-xl transition-all duration-200 border border-gray-200"
+                    aria-label="Scroll right"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -475,11 +528,18 @@ export default function DashboardPage() {
 
               {/* Horizontal Scrollable Published Cards */}
               <div className="relative w-full">
-                <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide quiz-scroll-container quiz-card-gap w-full">
+                <div
+                  id="published-quizzes-container"
+                  className="flex gap-4 overflow-x-auto pb-4 scrollbar-none sm:scrollbar-thin scroll-smooth quiz-scroll-container quiz-card-gap w-full"
+                  style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: '#6fd6ff #f3f4f6',
+                  }}
+                >
                   {mockPublishedQuizzes.map((quiz) => (
                     <div
                       key={quiz.id}
-                      className="flex-shrink-0 w-[300px] sm:w-[320px] md:w-[360px] lg:w-[360px] quiz-card-mobile quiz-card-tablet quiz-card-desktop"
+                      className="flex-shrink-0 w-[300px] sm:w-[360px] md:w-[360px] lg:w-[360px] quiz-card-mobile quiz-card-tablet quiz-card-desktop"
                     >
                       <QuizCard
                         quiz={quiz}
@@ -489,16 +549,6 @@ export default function DashboardPage() {
                       />
                     </div>
                   ))}
-                </div>
-
-                {/* Scroll Indicators - Hidden on mobile */}
-                <div className="hidden md:block">
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 cursor-pointer hover:bg-gray-50 scroll-indicator">
-                    ‹
-                  </div>
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 cursor-pointer hover:bg-gray-50 scroll-indicator">
-                    ›
-                  </div>
                 </div>
               </div>
             </div>

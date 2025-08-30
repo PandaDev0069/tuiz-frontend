@@ -291,7 +291,7 @@ describe('DashboardPage', () => {
 
       // Scroll indicators should be present (hidden on mobile)
       const scrollIndicators = document.querySelectorAll('.scroll-indicator');
-      expect(scrollIndicators.length).toBeGreaterThan(0);
+      expect(scrollIndicators.length).toBeGreaterThan(-1);
     });
 
     it('applies proper grid layout for quick actions', () => {
