@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useAuthStore } from '@/state/useAuthStore';
+import { useRouter } from 'next/navigation';
 import {
   Container,
   Button,
@@ -20,6 +21,7 @@ import { StructuredData } from '@/components/SEO';
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
@@ -354,6 +356,10 @@ export default function DashboardPage() {
     // Delete functionality will be implemented
   };
 
+  const handleCreateQuiz = () => {
+    router.push('/dashboard/create');
+  };
+
   return (
     <>
       {/* Structured Data for SEO */}
@@ -367,7 +373,10 @@ export default function DashboardPage() {
             {/* Quick Actions Section */}
             <div className="mb-8">
               <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-1 max-w-4xl mx-auto">
-                <Button className="group relative h-24 sm:h-28 w-full sm:w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden">
+                <Button
+                  onClick={handleCreateQuiz}
+                  className="group relative h-24 sm:h-28 w-full sm:w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 hover:from-blue-600 hover:via-blue-700 hover:to-indigo-700 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden"
+                >
                   <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                   <PenTool
                     className="!w-12 !h-12 sm:!w-15 sm:!h-15 !text-yellow-300 group-hover:scale-110 transition-transform duration-200"
