@@ -29,7 +29,9 @@ describe('JoinPage', () => {
     expect(
       screen.getByAltText(/TUIZ情報王 ロゴ - TUIZ参加・クイズゲーム参加/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/これは東京情報大学の学生が開発したウェブアプリ/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/ルームに参加するには、以下に名前と6桁のルームコードを入力してください/i),
+    ).toBeInTheDocument();
 
     // Inputs and labels
     expect(screen.getByLabelText(/名前/i)).toBeInTheDocument();

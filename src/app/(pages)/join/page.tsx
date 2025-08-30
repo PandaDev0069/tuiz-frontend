@@ -68,7 +68,7 @@ export default function Page() {
             こんにちは！
           </Text>
           <Text weight="semibold" variant="accent" size="lg" className=" text-cyan-500">
-            これは東京情報大学の学生が開発したウェブアプリです。ルームに参加するには、以下に名前と6桁のルームコードを入力してください。
+            ルームに参加するには、以下に名前と6桁のルームコードを入力してください。
           </Text>
         </Container>
       </Header>
