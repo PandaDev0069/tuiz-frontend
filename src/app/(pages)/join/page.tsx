@@ -54,7 +54,7 @@ export default function Page() {
           <div className="flex justify-center items-center mb-6">
             <Image
               src="/logo.png"
-              alt="logo"
+              alt="TUIZ情報王 ロゴ - TUIZ参加・クイズゲーム参加"
               width={80}
               height={80}
               priority
@@ -68,7 +68,7 @@ export default function Page() {
             こんにちは！
           </Text>
           <Text weight="semibold" variant="accent" size="lg" className=" text-cyan-500">
-            これは東京情報大学の学生が開発したウェブアプリです。ルームに参加するには、以下に名前と6桁のルームコードを入力してください。
+            ルームに参加するには、以下に名前と6桁のルームコードを入力してください。
           </Text>
         </Container>
       </Header>
@@ -136,7 +136,7 @@ export default function Page() {
                   size="tall"
                   className="mx-auto px-12"
                 >
-                  参加する
+                  TUIZ参加する
                 </Button>
               </div>
             </form>

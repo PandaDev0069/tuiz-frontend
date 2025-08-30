@@ -4,7 +4,17 @@ import { test, expect } from '@playwright/test';
 test.describe('CI Smoke Tests', () => {
   test('home page loads', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: /TUIZ/i })).toBeVisible();
+
+    // Check main heading - use more specific selector to avoid conflict with h3
+    await expect(page.getByRole('heading', { name: 'TUIZ情報王', level: 1 })).toBeVisible();
+
+    // Check main action cards
+    await expect(page.getByRole('heading', { name: /ホストとしてログイン/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /TUIZ参加 - ゲームに参加/i })).toBeVisible();
+
+    // Check buttons
+    await expect(page.getByRole('button', { name: /ログイン/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /TUIZ参加/i })).toBeVisible();
   });
 
   test('login page loads', async ({ page }) => {

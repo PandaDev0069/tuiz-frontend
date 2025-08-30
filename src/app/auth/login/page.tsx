@@ -129,7 +129,7 @@ export default function LoginPage() {
             <div className="flex justify-center items-center mb-4">
               <Image
                 src="/logo.png"
-                alt="logo"
+                alt="TUIZ情報王 ロゴ - ログイン・リアルタイムクイズ作成・管理"
                 width={80}
                 height={80}
                 className="animate-float rounded-full"

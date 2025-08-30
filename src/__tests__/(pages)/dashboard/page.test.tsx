@@ -94,7 +94,7 @@ describe('DashboardPage', () => {
       renderWithProviders(<DashboardPage />);
 
       expect(screen.getByText('クイズ作成')).toBeInTheDocument();
-      expect(screen.getByText('ゲーム参加')).toBeInTheDocument();
+      expect(screen.getByText('TUIZ参加')).toBeInTheDocument();
       expect(screen.getByText('分析表示')).toBeInTheDocument();
       expect(screen.getByText('クイズライブラリ')).toBeInTheDocument();
     });
@@ -107,7 +107,7 @@ describe('DashboardPage', () => {
       const actionButtons = buttons.filter(
         (button) =>
           button.textContent?.includes('クイズ作成') ||
-          button.textContent?.includes('ゲーム参加') ||
+          button.textContent?.includes('TUIZ参加') ||
           button.textContent?.includes('分析表示') ||
           button.textContent?.includes('クイズライブラリ'),
       );
@@ -297,9 +297,9 @@ describe('DashboardPage', () => {
     it('applies proper grid layout for quick actions', () => {
       renderWithProviders(<DashboardPage />);
 
-      // Since the grid layout might be implemented differently, we'll just verify the buttons are present
+      // Since the grid layout might be implemented differently, we'll just verify that all buttons are present
       expect(screen.getByText('クイズ作成')).toBeInTheDocument();
-      expect(screen.getByText('ゲーム参加')).toBeInTheDocument();
+      expect(screen.getByText('TUIZ参加')).toBeInTheDocument();
       expect(screen.getByText('分析表示')).toBeInTheDocument();
       expect(screen.getByText('クイズライブラリ')).toBeInTheDocument();
     });
@@ -389,7 +389,7 @@ describe('DashboardPage', () => {
 
       // Check that buttons have hover classes
       const createButton = screen.getByText('クイズ作成').closest('button');
-      const joinButton = screen.getByText('ゲーム参加').closest('button');
+      const joinButton = screen.getByText('TUIZ参加').closest('button');
       const analyticsButton = screen.getByText('分析表示').closest('button');
       const libraryButton = screen.getByText('クイズライブラリ').closest('button');
 
@@ -452,7 +452,7 @@ describe('DashboardPage', () => {
 
       // Check that action buttons have proper text
       expect(screen.getByText('クイズ作成')).toBeInTheDocument();
-      expect(screen.getByText('ゲーム参加')).toBeInTheDocument();
+      expect(screen.getByText('TUIZ参加')).toBeInTheDocument();
       expect(screen.getByText('分析表示')).toBeInTheDocument();
       expect(screen.getByText('クイズライブラリ')).toBeInTheDocument();
     });
