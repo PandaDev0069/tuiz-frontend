@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useAuthStore } from '@/state/useAuthStore';
-import { Container, PageContainer, DashboardHeader } from '@/components/ui';
+import { Container, PageContainer } from '@/components/ui';
 import { StructuredData } from '@/components/SEO';
 
 export default function CreateQuizPage() {
@@ -13,8 +13,6 @@ export default function CreateQuizPage() {
       {/* Structured Data for SEO */}
       <StructuredData type="quiz" />
       <StructuredData type="software" />
-
-      <DashboardHeader />
       <PageContainer className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <main role="main">
           <Container size="lg" className="max-w-7xl mx-auto">
