@@ -11,6 +11,7 @@ import {
   SidebarFilter,
   ProfileSettingsModal,
   DashboardHeader,
+  DashboardMessage,
 } from '@/components/ui';
 import { QuizCard } from '@/components/ui/data-display/quiz-card';
 import { FilterState } from '@/components/ui/overlays/sidebar-filter';
@@ -310,6 +311,7 @@ export default function DashboardPage() {
       <StructuredData type="software" />
 
       <DashboardHeader onProfileClick={() => setProfileModalOpen(true)} />
+      <DashboardMessage className="bg-gradient-to-r from-emerald-50/50 via-purple-50/50 to-orange-50/50 border-b border-gray-200/50" />
       <PageContainer className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <main role="main">
           <Container size="lg" className="max-w-7xl mx-auto">
