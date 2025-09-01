@@ -10,7 +10,7 @@ export default defineConfig({
     ['dot'], // Fast console output
     ['html', { outputFolder: 'playwright-report' }], // Generate HTML report for CI
   ],
-  timeout: 20000, // Shorter global timeout
+  timeout: 15000, // Even shorter global timeout for CI
 
   // CI: Only run lightweight smoke tests for faster execution
   // This should match only ci-smoke.spec.ts in all environments
