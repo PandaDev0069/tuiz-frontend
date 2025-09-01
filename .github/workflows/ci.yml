@@ -68,8 +68,33 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      # Cache Playwright browsers to avoid re-downloading on every run
+      # This can save 2-3 minutes per CI run
+      - name: Cache Playwright browsers
+        id: cache-playwright
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/ms-playwright-github
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        run: |
+          # Only install chromium for faster CI
+          npx playwright install chromium
+          # Install system dependencies if needed
+          npx playwright install-deps chromium
+        if: steps.cache-playwright.outputs.cache-hit != 'true'
+
+      - name: Verify Playwright installation
+        run: |
+          echo "Cache hit: ${{ steps.cache-playwright.outputs.cache-hit }}"
+          echo "Playwright browsers installed:"
+          npx playwright --version
+          ls -la ~/.cache/ms-playwright/ || echo "No cached browsers found"
 
       - name: Run Playwright E2E (CI Optimized)
         run: |
