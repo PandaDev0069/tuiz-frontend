@@ -24,6 +24,7 @@ export { Main } from './core/layout';
 export { Footer } from './core/layout';
 export { DashboardHeader } from './core/dashboard-header';
 export { QuizCreationHeader } from './core/quiz-creation-header';
+export { StepIndicator } from './core/step-indicator';
 export { SidebarFilter } from './overlays/sidebar-filter';
 export { ProfileSettingsModal } from './overlays/profile-settings-modal';
 export { AuthProvider } from '../providers/AuthProvider';

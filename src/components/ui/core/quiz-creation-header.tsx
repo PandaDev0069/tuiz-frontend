@@ -36,13 +36,12 @@ export const QuizCreationHeader: React.FC<QuizCreationHeaderProps> = ({
       className={cn(
         'w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60',
         'border-b border-border/40',
-        'py-3 md:py-4',
         className,
       )}
     >
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="container mx-auto px-3 sm:px-6 lg:px-8">
         {/* Mobile Layout */}
-        <div className="flex flex-col space-y-4 md:!hidden">
+        <div className="flex flex-col space-y-3 md:!hidden">
           {/* Mobile Row 1 - Logo and App Name */}
           <div className="flex justify-center items-center">
             <div
@@ -80,10 +79,10 @@ export const QuizCreationHeader: React.FC<QuizCreationHeaderProps> = ({
           {/* Mobile Row 2 - Return to Dashboard, Current Step, and Save Draft */}
           <div className="flex items-center justify-between">
             <Button
-              variant="outline"
+              variant="gradient"
               size="sm"
               onClick={handleReturnToDashboard}
-              className="flex items-center space-x-2 px-3 py-2 h-10 rounded-xl border-2 border-primary/70 text-primary hover:bg-primary hover:text-white hover:border-primary transition-all duration-200"
+              className="flex items-center space-x-2 px-2 py-1.5 h-9 rounded-xl bg-gradient-to-r from-amber-400 to-blue-500 text-white hover:from-amber-500 hover:to-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="text-sm font-medium">ダッシュボード</span>
@@ -95,7 +94,7 @@ export const QuizCreationHeader: React.FC<QuizCreationHeaderProps> = ({
                 size="sm"
                 onClick={onSaveDraft}
                 disabled={isSaving}
-                className="flex items-center space-x-2 px-3 py-2 h-10 shadow-lg"
+                className="flex items-center space-x-2 px-2 py-1.5 h-9 shadow-lg"
               >
                 <Save className="h-4 w-4" />
                 <span className="text-sm font-medium">{isSaving ? '保存中...' : '一時保存'}</span>
@@ -140,10 +139,10 @@ export const QuizCreationHeader: React.FC<QuizCreationHeaderProps> = ({
           {/* Right side - Return to Dashboard, Save Draft, and Profile */}
           <div className="flex items-center space-x-4">
             <Button
-              variant="outline"
+              variant="gradient"
               size="sm"
               onClick={handleReturnToDashboard}
-              className="flex items-center space-x-2 px-4 py-2 h-11 rounded-xl border-2 border-primary/70 text-primary hover:bg-primary hover:text-white hover:border-primary transition-all duration-200"
+              className="flex items-center space-x-2 px-4 py-2 h-11 rounded-xl bg-gradient-to-r from-amber-400 to-blue-500 text-white hover:from-amber-500 hover:to-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="text-sm font-medium">ダッシュボード</span>
