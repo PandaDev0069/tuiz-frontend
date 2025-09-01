@@ -11,11 +11,12 @@ import {
   SidebarFilter,
   ProfileSettingsModal,
   DashboardHeader,
+  DashboardMessage,
 } from '@/components/ui';
 import { QuizCard } from '@/components/ui/data-display/quiz-card';
 import { FilterState } from '@/components/ui/overlays/sidebar-filter';
 import { ProfileData } from '@/components/ui/overlays/profile-settings-modal';
-import { QuizSet, QuizStatus, DifficultyLevel } from '@/types/dashboard';
+import { QuizSet, QuizStatus, DifficultyLevel } from '@/types/quiz';
 import { PenTool, Gamepad2, BarChart3, Library } from 'lucide-react';
 import { StructuredData } from '@/components/SEO';
 
@@ -56,15 +57,7 @@ export default function DashboardPage() {
       tags: ['JavaScript', '基礎', '初心者'],
       completion_rate: 0,
       play_settings: {
-        shuffle_questions: true,
-        shuffle_answers: true,
-        points_mode: 'standard',
-        show_explanations: true,
-        allow_retry: true,
-        show_correct_answers: true,
         show_score_immediately: true,
-        allow_skip: false,
-        navigation_mode: 'linear',
       },
     },
     {
@@ -85,15 +78,7 @@ export default function DashboardPage() {
       tags: ['世界史', '重要事件', '人物'],
       completion_rate: 0,
       play_settings: {
-        shuffle_questions: true,
-        shuffle_answers: true,
-        points_mode: 'standard',
-        show_explanations: true,
-        allow_retry: true,
-        show_correct_answers: true,
         show_score_immediately: true,
-        allow_skip: true,
-        navigation_mode: 'free',
       },
     },
     {
@@ -114,15 +99,7 @@ export default function DashboardPage() {
       tags: ['数学', 'パズル', '論理'],
       completion_rate: 0,
       play_settings: {
-        shuffle_questions: false,
-        shuffle_answers: true,
-        points_mode: 'difficulty_based',
-        show_explanations: true,
-        allow_retry: false,
-        show_correct_answers: false,
-        show_score_immediately: false,
-        allow_skip: false,
-        navigation_mode: 'linear',
+        show_score_immediately: true,
       },
     },
     {
@@ -142,15 +119,7 @@ export default function DashboardPage() {
       tags: ['科学', '実験', '化学', '物理'],
       completion_rate: 0,
       play_settings: {
-        shuffle_questions: true,
-        shuffle_answers: true,
-        points_mode: 'standard',
-        show_explanations: true,
-        allow_retry: true,
-        show_correct_answers: true,
         show_score_immediately: true,
-        allow_skip: true,
-        navigation_mode: 'free',
       },
     },
   ];
@@ -174,15 +143,7 @@ export default function DashboardPage() {
       tags: ['Python', '入門', '基礎'],
       completion_rate: 78,
       play_settings: {
-        shuffle_questions: true,
-        shuffle_answers: true,
-        points_mode: 'standard',
-        show_explanations: true,
-        allow_retry: true,
-        show_correct_answers: true,
         show_score_immediately: true,
-        allow_skip: false,
-        navigation_mode: 'linear',
       },
     },
     {
@@ -202,15 +163,7 @@ export default function DashboardPage() {
       tags: ['日本', '地理', '都道府県'],
       completion_rate: 82,
       play_settings: {
-        shuffle_questions: true,
-        shuffle_answers: true,
-        points_mode: 'standard',
-        show_explanations: true,
-        allow_retry: true,
-        show_correct_answers: true,
         show_score_immediately: true,
-        allow_skip: true,
-        navigation_mode: 'free',
       },
     },
     {
@@ -230,15 +183,7 @@ export default function DashboardPage() {
       tags: ['英語', '文法', '中学', '高校'],
       completion_rate: 75,
       play_settings: {
-        shuffle_questions: true,
-        shuffle_answers: true,
-        points_mode: 'standard',
-        show_explanations: true,
-        allow_retry: true,
-        show_correct_answers: true,
         show_score_immediately: true,
-        allow_skip: true,
-        navigation_mode: 'free',
       },
     },
     {
@@ -259,15 +204,7 @@ export default function DashboardPage() {
       tags: ['音楽', '理論', '楽譜', '和音'],
       completion_rate: 68,
       play_settings: {
-        shuffle_questions: false,
-        shuffle_answers: true,
-        points_mode: 'difficulty_based',
-        show_explanations: true,
-        allow_retry: false,
-        show_correct_answers: false,
-        show_score_immediately: false,
-        allow_skip: false,
-        navigation_mode: 'linear',
+        show_score_immediately: true,
       },
     },
     {
@@ -288,15 +225,7 @@ export default function DashboardPage() {
       tags: ['料理', '調理法', '食材', '栄養'],
       completion_rate: 85,
       play_settings: {
-        shuffle_questions: true,
-        shuffle_answers: true,
-        points_mode: 'standard',
-        show_explanations: true,
-        allow_retry: true,
-        show_correct_answers: true,
         show_score_immediately: true,
-        allow_skip: true,
-        navigation_mode: 'free',
       },
     },
   ];
@@ -382,6 +311,7 @@ export default function DashboardPage() {
       <StructuredData type="software" />
 
       <DashboardHeader onProfileClick={() => setProfileModalOpen(true)} />
+      <DashboardMessage className="bg-gradient-to-r from-emerald-50/50 via-purple-50/50 to-orange-50/50 border-b border-gray-200/50" />
       <PageContainer className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <main role="main">
           <Container size="lg" className="max-w-7xl mx-auto">

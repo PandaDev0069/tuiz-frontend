@@ -4,7 +4,7 @@ import { Button } from '../core/button';
 import { Text } from '../core/typography';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import { QuizSet, QuizStatus } from '@/types/dashboard';
+import { QuizSet, QuizStatus } from '@/types/quiz';
 import { Edit3, Play, Trash2, Flame, Globe, Lock } from 'lucide-react';
 
 export interface QuizCardProps {

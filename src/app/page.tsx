@@ -16,10 +16,10 @@ import {
   Footer,
   Container,
 } from '@/components/ui';
-import { StructuredData } from '@/components/SEO';
+import { StructuredData, SEOKeywords } from '@/components/SEO';
 import { AiFillDashboard } from 'react-icons/ai';
 import { IoLogoGameControllerB } from 'react-icons/io';
-import { FaBolt, FaGraduationCap, FaUsers, FaLightbulb } from 'react-icons/fa';
+import { FaBolt, FaGraduationCap, FaLightbulb } from 'react-icons/fa';
 import { MdSchool, MdColorLens } from 'react-icons/md';
 
 export default function Page() {
@@ -32,6 +32,22 @@ export default function Page() {
       <StructuredData type="organization" />
       <StructuredData type="software" />
       <StructuredData type="quiz" />
+
+      {/* SEO Keywords - Hidden from users but discoverable by search engines */}
+      <SEOKeywords
+        keywords={[
+          'Quiz',
+          'TUIZ',
+          'TUIZ情報王',
+          'TUIZ参加',
+          'リアルタイムクイズ',
+          'クイズ作成',
+          'クイズ参加',
+          '学習クイズアプリ',
+          'インタラクティブクイズ',
+        ]}
+        description="対応機能"
+      />
 
       <PageContainer entrance="fadeIn" className="min-h-screen flex flex-col">
         <Header>
@@ -206,39 +222,8 @@ export default function Page() {
                     </Card>
                   </div>
 
-                  {/* Right Column - Feature Tags and Use Cases */}
+                  {/* Right Column - Use Cases and Benefits */}
                   <div className="space-y-6">
-                    <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-purple-100">
-                      <CardContent className="p-6">
-                        <div className="flex items-center mb-4">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-600 flex items-center justify-center mr-4">
-                            <FaUsers className="text-white text-xl" />
-                          </div>
-                          <h3 className="text-xl font-semibold text-gray-800">対応機能</h3>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          {[
-                            'Quiz',
-                            'TUIZ',
-                            'TUIZ情報王',
-                            'TUIZ参加',
-                            'リアルタイムクイズ',
-                            'クイズ作成',
-                            'クイズ参加',
-                            '学習クイズアプリ',
-                            'インタラクティブクイズ',
-                          ].map((keyword) => (
-                            <span
-                              key={keyword}
-                              className="px-3 py-2 bg-white rounded-lg text-sm font-medium text-gray-700 border border-gray-200 shadow-sm hover:shadow-md transition-shadow text-center"
-                            >
-                              {keyword}
-                            </span>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-
                     <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-100">
                       <CardContent className="p-6">
                         <div className="flex items-center mb-4">
@@ -263,6 +248,37 @@ export default function Page() {
                           <li className="flex items-center">
                             <span className="w-2 h-2 bg-amber-500 rounded-full mr-3"></span>
                             友達との楽しい学習時間
+                          </li>
+                        </ul>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-100">
+                      <CardContent className="p-6">
+                        <div className="flex items-center mb-4">
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-violet-600 flex items-center justify-center mr-4">
+                            <FaLightbulb className="text-white text-xl" />
+                          </div>
+                          <h3 className="text-xl font-semibold text-gray-800">
+                            プラットフォームの利点
+                          </h3>
+                        </div>
+                        <ul className="text-gray-700 space-y-2">
+                          <li className="flex items-center">
+                            <span className="w-2 h-2 bg-purple-500 rounded-full mr-3"></span>
+                            無料で利用可能
+                          </li>
+                          <li className="flex items-center">
+                            <span className="w-2 h-2 bg-purple-500 rounded-full mr-3"></span>
+                            簡単セットアップ
+                          </li>
+                          <li className="flex items-center">
+                            <span className="w-2 h-2 bg-purple-500 rounded-full mr-3"></span>
+                            モバイル対応
+                          </li>
+                          <li className="flex items-center">
+                            <span className="w-2 h-2 bg-purple-500 rounded-full mr-3"></span>
+                            リアルタイム同期
                           </li>
                         </ul>
                       </CardContent>
