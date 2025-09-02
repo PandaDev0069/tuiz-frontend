@@ -17,14 +17,14 @@ export const Textarea: React.FC<TextareaProps> = ({
   ...props
 }) => {
   const baseClasses =
-    'w-full border rounded-md shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1';
+    'w-full border rounded-md shadow-sm transition-all duration-200 focus:outline-none';
 
   const variantClasses = {
-    default: 'border-2 border-blue-500 focus:ring-blue-500 focus:border-blue-600',
-    primary: 'border-2 border-blue-500 focus:ring-blue-500 focus:border-blue-600',
-    success: 'border-2 border-green-500 focus:ring-green-500 focus:border-green-600',
-    warning: 'border-2 border-yellow-500 focus:ring-yellow-500 focus:border-yellow-600',
-    error: 'border-2 border-red-500 focus:ring-red-500 focus:border-red-600',
+    default: 'border-2 border-blue-500 bg-background hover:border-blue-600',
+    primary: 'border-2 border-blue-500 bg-background hover:border-blue-600',
+    success: 'border-2 border-green-500 bg-background hover:border-green-600',
+    warning: 'border-2 border-yellow-500 bg-background hover:border-yellow-600',
+    error: 'border-2 border-red-500 bg-background hover:border-red-600',
   };
 
   const sizeClasses = {

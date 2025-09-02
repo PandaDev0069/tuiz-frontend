@@ -209,10 +209,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
                     handleInputChange('description', e.target.value)
                   }
                   variant={errors.description ? 'error' : 'primary'}
-                  className={cn(
-                    'min-h-[100px] border-2 border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-300',
-                    errors.description && 'border-red-500',
-                  )}
+                  className={cn('min-h-[100px]', errors.description && 'border-red-500')}
                 />
                 {errors.description && <p className="text-sm text-red-600">{errors.description}</p>}
               </div>
@@ -455,8 +452,9 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-end pt-4 md:pt-6 border-t">
+      <div className="flex justify-end pt-4 md:pt-6 border-gray-500">
         <Button
+          variant="gradient2"
           onClick={onNext}
           disabled={!isFormValid()}
           className="px-6 md:px-8 text-sm md:text-base"

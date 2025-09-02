@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { Container, PageContainer, QuizCreationHeader, StepIndicator } from '@/components/ui';
 import { StructuredData } from '@/components/SEO';
-import { BasicInfoStep } from '@/components/quiz-creation';
-import { CreateQuizSetForm, DifficultyLevel, FormErrors } from '@/types/quiz';
+import { BasicInfoStep, QuestionCreationStep } from '@/components/quiz-creation';
+import { CreateQuizSetForm, CreateQuestionForm, DifficultyLevel, FormErrors } from '@/types/quiz';
 
 export default function CreateQuizPage() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -20,7 +20,9 @@ export default function CreateQuizPage() {
       show_score_immediately: false,
     },
   });
+  const [questions, setQuestions] = useState<CreateQuestionForm[]>([]);
   const [formErrors, setFormErrors] = useState<FormErrors<CreateQuizSetForm>>({});
+  const [questionErrors, setQuestionErrors] = useState<FormErrors<CreateQuestionForm>[]>([]);
 
   const handleSaveDraft = async () => {
     setIsSaving(true);
@@ -38,6 +40,12 @@ export default function CreateQuizPage() {
     setFormData((prev) => ({ ...prev, ...data }));
     // Clear errors when user makes changes
     setFormErrors({});
+  };
+
+  const handleQuestionsChange = (newQuestions: CreateQuestionForm[]) => {
+    setQuestions(newQuestions);
+    // Clear errors when user makes changes
+    setQuestionErrors([]);
   };
 
   const handleNext = () => {
@@ -118,7 +126,17 @@ export default function CreateQuizPage() {
                 />
               )}
 
-              {currentStep > 1 && (
+              {currentStep === 2 && (
+                <QuestionCreationStep
+                  questions={questions}
+                  onQuestionsChange={handleQuestionsChange}
+                  onNext={handleNext}
+                  onPrevious={handlePrevious}
+                  errors={questionErrors}
+                />
+              )}
+
+              {currentStep > 2 && (
                 <div className="text-center py-12">
                   <div className="text-6xl text-gray-300 mb-4">📝</div>
                   <h3 className="text-xl font-semibold text-gray-700 mb-2">
