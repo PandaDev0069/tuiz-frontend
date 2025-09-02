@@ -64,15 +64,19 @@ export default function CreateQuizPage() {
 
     setCurrentStep((prev) => Math.min(4, prev + 1));
 
-    // Scroll to top when moving to next step
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll to top when moving to next step (works on both mobile and PC)
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
   };
 
   const handlePrevious = () => {
     setCurrentStep((prev) => Math.max(1, prev - 1));
 
-    // Scroll to top when moving to previous step
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll to top when moving to previous step (works on both mobile and PC)
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
   };
 
   return (
