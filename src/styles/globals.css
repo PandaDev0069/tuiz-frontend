@@ -196,6 +196,108 @@ input,
 textarea,
 select {
   font: inherit;
+  border-color: #65a30d !important; /* Override global border color for form elements - lime-600 */
+}
+
+/* Specific form element border overrides */
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='search'],
+input[type='url'],
+input[type='tel'],
+input[type='number'],
+textarea,
+select {
+  border-color: #65a30d !important; /* lime-600 */
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #4d7c0f !important; /* lime-700 */
+  box-shadow: 0 0 0 2px rgba(101, 163, 13, 0.2) !important; /* lime-600 with opacity */
+}
+
+/* Select component specific overrides */
+[role='combobox'],
+[data-radix-select-trigger],
+[data-state='open'],
+[data-state='closed'] {
+  border-color: #65a30d !important; /* lime-600 */
+}
+
+[role='combobox']:focus,
+[data-radix-select-trigger]:focus,
+[data-radix-select-trigger][data-state='open'] {
+  border-color: #4d7c0f !important; /* lime-700 */
+  box-shadow: 0 0 0 2px rgba(101, 163, 13, 0.2) !important; /* lime-600 with opacity */
+}
+
+/* Select content/dropdown styling */
+[data-radix-select-content] {
+  border: 2px solid #65a30d !important; /* lime-600 */
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Select item hover states */
+[data-radix-select-item]:hover {
+  background-color: rgba(101, 163, 13, 0.1) !important; /* lime-600 with opacity */
+}
+
+[data-radix-select-item][data-highlighted] {
+  background-color: rgba(101, 163, 13, 0.2) !important; /* lime-600 with opacity */
+}
+
+/* Custom Select component overrides (for our custom Select implementation) */
+.relative button[type='button'] {
+  border-color: #65a30d !important; /* lime-600 */
+}
+
+.relative button[type='button']:focus {
+  border-color: #4d7c0f !important; /* lime-700 */
+  box-shadow: 0 0 0 2px rgba(101, 163, 13, 0.2) !important; /* lime-600 with opacity */
+}
+
+/* Select dropdown content */
+.absolute.z-50.bg-white {
+  border-color: #65a30d !important; /* lime-600 */
+  border-width: 2px !important;
+}
+
+/* Override any gray borders in select components */
+.border-gray-300 {
+  border-color: #65a30d !important; /* lime-600 */
+}
+
+/* Specific overrides for select button elements */
+button[type='button'].border {
+  border-color: #65a30d !important; /* lime-600 */
+}
+
+button[type='button'].border:focus {
+  border-color: #4d7c0f !important; /* lime-700 */
+  box-shadow: 0 0 0 2px rgba(101, 163, 13, 0.2) !important; /* lime-600 with opacity */
+}
+
+/* File upload section overrides */
+.border-dashed {
+  border-color: #65a30d !important; /* lime-600 */
+}
+
+.border-dashed:hover {
+  border-color: #4d7c0f !important; /* lime-700 */
+}
+
+/* Override any blue borders in upload sections */
+.border-blue-500 {
+  border-color: #65a30d !important; /* lime-600 */
+}
+
+.border-blue-600 {
+  border-color: #4d7c0f !important; /* lime-700 */
 }
 
 /* Selection styling */

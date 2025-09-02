@@ -99,7 +99,8 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, class
         active:
           'bg-gradient-to-br from-orange-50 to-orange-100 text-orange-600 border-orange-500 shadow-orange-200',
         completed: 'bg-gradient-to-br from-orange-500 to-orange-600 text-white border-orange-500',
-        inactive: 'bg-gradient-to-br from-gray-50 to-gray-100 text-gray-400 border-gray-300',
+        inactive:
+          'bg-gradient-to-br from-orange-50 to-orange-100 text-orange-400 border-orange-300 shadow-orange-100',
         text: {
           active: 'text-orange-600',
           completed: 'text-orange-600',

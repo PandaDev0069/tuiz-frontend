@@ -10,11 +10,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, variant = 'default', inputSize = 'md', ...props }, ref) => {
     const variants = {
       default:
-        'border-2 border-gray-400 bg-background hover:border-gray-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 focus:outline-none transition-all duration-200',
+        'border-2 border-blue-500 bg-background hover:border-blue-600 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 focus:outline-none transition-all duration-200',
       filled:
         'border-2 border-transparent bg-muted hover:bg-gray-50 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 focus:outline-none transition-all duration-200',
       flushed:
-        'border-0 border-b-2 border-gray-400 bg-transparent rounded-none px-0 hover:border-gray-500 focus:border-blue-600 focus:ring-0 focus:outline-none transition-all duration-200',
+        'border-0 border-b-2 border-blue-500 bg-transparent rounded-none px-0 hover:border-blue-600 focus:border-blue-600 focus:ring-0 focus:outline-none transition-all duration-200',
       unstyled: 'border-0 bg-transparent shadow-none focus:outline-none',
     };
 
