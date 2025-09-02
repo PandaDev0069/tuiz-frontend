@@ -11,6 +11,7 @@ interface SelectOption {
 }
 
 interface SelectProps {
+  id?: string;
   value?: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
@@ -22,6 +23,7 @@ interface SelectProps {
 }
 
 export const Select: React.FC<SelectProps> = ({
+  id,
   value,
   onValueChange,
   placeholder = 'Select an option',
@@ -67,6 +69,7 @@ export const Select: React.FC<SelectProps> = ({
   return (
     <div ref={selectRef} className="relative">
       <button
+        id={id}
         type="button"
         className={cn(
           baseClasses,

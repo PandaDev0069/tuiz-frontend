@@ -233,6 +233,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
                   難易度
                 </Label>
                 <Select
+                  id="difficulty_level"
                   value={formData.difficulty_level || ''}
                   onValueChange={(value) =>
                     handleInputChange('difficulty_level', value as DifficultyLevel)
@@ -266,6 +267,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
                   カテゴリ
                 </Label>
                 <Select
+                  id="category"
                   value={formData.category || ''}
                   onValueChange={(value) => handleInputChange('category', value)}
                   placeholder="カテゴリを選択してください"
