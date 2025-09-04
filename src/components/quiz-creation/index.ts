@@ -1,5 +1,11 @@
 export { BasicInfoStep } from './BasicInfoStep';
 export { QuestionCreationStep } from './QuestionCreationStep';
+export { ExplanationModal } from './QuestionCreationStep/ExplanationModal';
+export { QuestionControlPanel } from './QuestionCreationStep/QuestionControlPanel';
+export { QuestionHeader } from './QuestionCreationStep/QuestionHeader';
+export { QuestionList } from './QuestionCreationStep/QuestionList';
+export { QuestionForm } from './QuestionCreationStep/QuestionForm';
+export { QuestionNavigation } from './QuestionCreationStep/QuestionNavigation';
 export { FormHeader } from './BasicInfoStep/FormHeader';
 export { TitleDescriptionForm } from './BasicInfoStep/TitleDescriptionForm';
 export { DifficultyCategoryForm } from './BasicInfoStep/DifficultyCategoryForm';

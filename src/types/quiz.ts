@@ -63,6 +63,7 @@ export interface Question {
   explanation_title?: string;
   explanation_text?: string;
   explanation_image_url?: string;
+  show_explanation_time: number;
 }
 
 export interface Answer {
@@ -125,13 +126,15 @@ export interface CreateQuestionForm {
   question_text: string;
   question_type: QuestionType;
   image_url?: string;
-  time_limit?: number;
+  show_question_time: number;
+  answering_time: number;
   points: number;
   difficulty: DifficultyLevel;
   order_index: number;
   explanation_title?: string;
   explanation_text?: string;
   explanation_image_url?: string;
+  show_explanation_time: number;
   answers: CreateAnswerForm[];
 }
 
