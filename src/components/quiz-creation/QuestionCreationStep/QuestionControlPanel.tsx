@@ -84,11 +84,10 @@ export const QuestionControlPanel: React.FC<QuestionControlPanelProps> = ({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
               onClick={() => setIsExpanded(!isExpanded)}
-              className="p-1 h-6 w-6"
+              className="p-2 h-10 w-10 min-h-10 min-w-10"
             >
-              <span className="text-xs">{isExpanded ? '−' : '+'}</span>
+              <span className="text-2xl font-bold leading-none">{isExpanded ? '−' : '+'}</span>
             </Button>
           </CardTitle>
         </CardHeader>

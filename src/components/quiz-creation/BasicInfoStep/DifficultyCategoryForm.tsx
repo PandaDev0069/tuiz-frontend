@@ -33,7 +33,7 @@ export const DifficultyCategoryForm: React.FC<DifficultyCategoryFormProps> = ({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
       {/* Difficulty */}
-      <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-lg">
+      <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-lg card-with-dropdown">
         <CardHeader className="pb-3 md:pb-6 px-3 md:px-6">
           <CardTitle className="text-sm md:text-base">難易度</CardTitle>
           <CardDescription className="text-xs md:text-sm">
@@ -68,7 +68,7 @@ export const DifficultyCategoryForm: React.FC<DifficultyCategoryFormProps> = ({
       </Card>
 
       {/* Category */}
-      <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-lg">
+      <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-lg card-with-dropdown">
         <CardHeader className="pb-3 md:pb-6 px-3 md:px-6">
           <CardTitle className="text-sm md:text-base">カテゴリ</CardTitle>
           <CardDescription className="text-xs md:text-sm">

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { ChevronDown, Check } from 'lucide-react';
 
@@ -34,18 +35,127 @@ export const Select: React.FC<SelectProps> = ({
   className,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const selectRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const updateDropdownPosition = useCallback(() => {
+    if (!triggerRef.current) return;
+
+    const rect = triggerRef.current.getBoundingClientRect();
+
+    // Calculate viewport dimensions
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+
+    // Estimate dropdown height
+    const dropdownHeight = Math.min(options.length * 44 + 8, 240); // 44px per item + padding
+    const dropdownWidth = rect.width;
+
+    // Default position: below the trigger
+    let top = rect.bottom + 4;
+    let left = rect.left;
+
+    // Check if dropdown fits below the trigger
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    // If not enough space below, position above
+    if (spaceBelow < dropdownHeight + 10 && spaceAbove > spaceBelow) {
+      top = rect.top - dropdownHeight - 4;
+    }
+
+    // Adjust horizontal position to fit within viewport
+    if (left + dropdownWidth > viewportWidth - 10) {
+      left = viewportWidth - dropdownWidth - 10;
+    }
+    if (left < 10) {
+      left = 10;
+    }
+
+    // Ensure dropdown stays within vertical bounds
+    if (top < 10) {
+      top = 10;
+    } else if (top + dropdownHeight > viewportHeight - 10) {
+      top = viewportHeight - dropdownHeight - 10;
+    }
+
+    setDropdownPosition({
+      top,
+      left,
+      width: dropdownWidth,
+    });
+  }, [options.length]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (selectRef.current && !selectRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+
+      // Don't close if clicking inside the select trigger or dropdown
+      if (selectRef.current && selectRef.current.contains(target)) {
+        return;
+      }
+
+      // Don't close if clicking inside the portal dropdown
+      if (dropdownRef.current && dropdownRef.current.contains(target)) {
+        return;
+      }
+
+      // Close if clicking anywhere else
+      setIsOpen(false);
+    };
+
+    const handleScroll = () => {
+      if (isOpen && triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+
+        // Close dropdown if trigger is scrolled too far out of view
+        if (rect.bottom < -50 || rect.top > viewportHeight + 50) {
+          setIsOpen(false);
+        } else {
+          // Update dropdown position while scrolling
+          updateDropdownPosition();
+        }
+      }
+    };
+
+    const handleResize = () => {
+      if (isOpen) {
         setIsOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    if (isOpen) {
+      // Use a small delay to avoid immediate closing when opening
+      const timeoutId = setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+      }, 10);
+
+      window.addEventListener('scroll', handleScroll, true);
+      window.addEventListener('resize', handleResize);
+
+      return () => {
+        clearTimeout(timeoutId);
+        document.removeEventListener('mousedown', handleClickOutside);
+        window.removeEventListener('scroll', handleScroll, true);
+        window.removeEventListener('resize', handleResize);
+      };
+    }
+  }, [isOpen, updateDropdownPosition]);
+
+  useEffect(() => {
+    if (isOpen) {
+      updateDropdownPosition();
+    } else {
+      setDropdownPosition(null);
+    }
+  }, [isOpen, updateDropdownPosition]);
 
   const baseClasses =
     'relative w-full border rounded-md shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1';
@@ -69,6 +179,7 @@ export const Select: React.FC<SelectProps> = ({
   return (
     <div ref={selectRef} className="relative">
       <button
+        ref={triggerRef}
         id={id}
         type="button"
         className={cn(
@@ -94,30 +205,71 @@ export const Select: React.FC<SelectProps> = ({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={cn(
-                'w-full px-3 py-2 text-left text-sm transition-colors duration-150 flex items-center justify-between',
-                'hover:bg-blue-50 focus:bg-blue-50 focus:outline-none',
-                option.disabled && 'opacity-50 cursor-not-allowed',
-                value === option.value && 'bg-blue-100 text-blue-900',
-              )}
-              onClick={() => {
-                if (!option.disabled) {
-                  onValueChange(option.value);
-                  setIsOpen(false);
-                }
-              }}
-              disabled={option.disabled}
-            >
-              <span>{option.label}</span>
-              {value === option.value && <Check className="h-4 w-4 text-blue-600" />}
-            </button>
-          ))}
-        </div>
+        <>
+          {dropdownPosition ? (
+            createPortal(
+              <div
+                ref={dropdownRef}
+                className="fixed z-[9999] bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                style={{
+                  top: `${dropdownPosition.top}px`,
+                  left: `${dropdownPosition.left}px`,
+                  width: `${dropdownPosition.width}px`,
+                }}
+              >
+                {options.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={cn(
+                      'w-full px-3 py-2 text-left text-sm transition-colors duration-150 flex items-center justify-between',
+                      'hover:bg-blue-50 focus:bg-blue-50 focus:outline-none',
+                      option.disabled && 'opacity-50 cursor-not-allowed',
+                      value === option.value && 'bg-blue-100 text-blue-900',
+                    )}
+                    onClick={() => {
+                      if (!option.disabled) {
+                        onValueChange(option.value);
+                        setIsOpen(false);
+                      }
+                    }}
+                    disabled={option.disabled}
+                  >
+                    <span>{option.label}</span>
+                    {value === option.value && <Check className="h-4 w-4 text-blue-600" />}
+                  </button>
+                ))}
+              </div>,
+              document.body,
+            )
+          ) : (
+            // Fallback to relative positioning if portal positioning fails
+            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+              {options.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={cn(
+                    'w-full px-3 py-2 text-left text-sm transition-colors duration-150 flex items-center justify-between',
+                    'hover:bg-blue-50 focus:bg-blue-50 focus:outline-none',
+                    option.disabled && 'opacity-50 cursor-not-allowed',
+                    value === option.value && 'bg-blue-100 text-blue-900',
+                  )}
+                  onClick={() => {
+                    if (!option.disabled) {
+                      onValueChange(option.value);
+                      setIsOpen(false);
+                    }
+                  }}
+                  disabled={option.disabled}
+                >
+                  <span>{option.label}</span>
+                  {value === option.value && <Check className="h-4 w-4 text-blue-600" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -114,7 +114,7 @@ export default function CreateQuizPage() {
           <Container size="lg" className="max-w-7xl mx-auto">
             {/* Quiz Creation Form */}
             <div
-              className="rounded-lg shadow-lg p-8 border overflow-hidden"
+              className="rounded-lg shadow-lg p-8 border"
               style={{ background: 'linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)' }}
             >
               {currentStep === 1 && (
