@@ -91,6 +91,12 @@
     max-width: none !important;
   }
 
+  /* Exception for cards containing dropdown selectors - prevent clipping of dropdown menus */
+  .card-with-dropdown,
+  [class*='card-with-dropdown'] {
+    overflow: visible !important;
+  }
+
   /* Preserve icon container styling */
   [class*='icon'],
   div[class*='w-16'],
