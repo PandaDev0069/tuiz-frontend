@@ -74,7 +74,7 @@ export const QuestionControlPanel: React.FC<QuestionControlPanelProps> = ({
 
   if (isMobile) {
     return (
-      <Card className="bg-gradient-to-br from-lime-400 to-lime-500 border-lime-600 shadow-md ring-1 ring-lime-400">
+      <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-sm hover:shadow-md">
         <CardHeader className="pb-3 px-4">
           <CardTitle className="flex items-center justify-between text-base text-gray-700">
             <div className="flex items-center gap-2">

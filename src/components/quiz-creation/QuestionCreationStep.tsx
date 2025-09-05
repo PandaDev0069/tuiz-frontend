@@ -13,6 +13,7 @@ import { QuestionHeader } from './QuestionCreationStep/QuestionHeader';
 import { QuestionList } from './QuestionCreationStep/QuestionList';
 import { QuestionForm } from './QuestionCreationStep/QuestionForm';
 import { QuestionNavigation } from './QuestionCreationStep/QuestionNavigation';
+import { QuizOverviewPanel } from './QuestionCreationStep/QuizOverviewPanel';
 
 interface QuestionCreationStepProps {
   questions: CreateQuestionForm[];
@@ -278,6 +279,9 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
           onAnswerImageUpload={handleAnswerImageUpload}
         />
       )}
+
+      {/* Quiz Overview Panel */}
+      <QuizOverviewPanel questions={localQuestions} isMobile={isMobile} />
 
       {/* Navigation */}
       <QuestionNavigation onPrevious={onPrevious} onNext={onNext} />

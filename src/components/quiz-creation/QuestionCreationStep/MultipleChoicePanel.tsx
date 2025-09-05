@@ -32,7 +32,7 @@ const AnswerOption: React.FC<AnswerOptionProps> = ({
   const optionLetter = String.fromCharCode(65 + index); // A, B, C, D
 
   return (
-    <div className={`${isMobile ? 'space-y-2' : 'h-full flex flex-col space-y-3'}`}>
+    <div className={`${isMobile ? 'space-y-2' : 'h-full flex flex-col space-y-2'}`}>
       {/* Option Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -56,8 +56,8 @@ const AnswerOption: React.FC<AnswerOptionProps> = ({
             onClick={() => onAnswerChange(index, 'is_correct', !answer.is_correct)}
             className={`${
               answer.is_correct
-                ? 'bg-green-100 border-green-500 text-green-700 hover:bg-green-200'
-                : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
+                ? 'bg-green-100 border-green-500 text-green-700'
+                : 'bg-gray-100 border-gray-300 text-gray-600'
             } ${isMobile ? 'px-2 py-1' : 'px-1 py-1'}`}
           >
             <CheckCircle className={`${isMobile ? 'w-3 h-3' : 'w-3 h-3'} mr-1`} />
@@ -71,7 +71,7 @@ const AnswerOption: React.FC<AnswerOptionProps> = ({
               variant="outline"
               size="sm"
               onClick={() => onRemove(index)}
-              className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-400 p-1"
+              className="text-red-600 border-red-300 p-1"
             >
               <Trash2 className={`${isMobile ? 'w-3 h-3' : 'w-3 h-3'}`} />
             </Button>
@@ -112,14 +112,14 @@ const AnswerOption: React.FC<AnswerOptionProps> = ({
               <button
                 type="button"
                 onClick={() => onRemoveImage(index)}
-                className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full"
               >
                 <X className="w-3 h-3" />
               </button>
             </div>
           ) : (
             <div
-              className="border-2 border-dashed border-blue-400 rounded-lg p-2 text-center cursor-pointer transition-colors hover:border-blue-500 hover:bg-blue-50 h-full flex flex-col items-center justify-center"
+              className="border-2 border-dashed border-blue-400 rounded-lg p-2 text-center cursor-pointer h-full flex flex-col items-center justify-center"
               onClick={() => {
                 if (!isUploading) {
                   document.getElementById(`answer_image_${index}`)?.click();
@@ -149,7 +149,7 @@ const AnswerOption: React.FC<AnswerOptionProps> = ({
                   }
                 }}
                 disabled={isUploading}
-                className="text-blue-600 border-blue-300 hover:bg-blue-100 text-xs px-2 py-1"
+                className="text-blue-600 border-blue-300 text-xs px-2 py-1"
               >
                 {isUploading ? 'アップロード中...' : '選択'}
               </Button>
@@ -226,9 +226,9 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
   };
 
   return (
-    <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-lg">
+    <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-sm">
       <CardHeader className={`${isMobile ? 'pb-4 px-4' : 'pb-6 px-6'}`}>
-        <CardTitle className={`flex items-center gap-2 ${isMobile ? 'text-lg' : 'text-xl'}`}>
+        <CardTitle className={`flex items-center gap-2 ${isMobile ? 'text-base' : 'text-lg'}`}>
           <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
             <CheckSquare className="w-4 h-4" />
           </div>
@@ -240,17 +240,17 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
       </CardHeader>
 
       <CardContent className={`${isMobile ? 'px-4' : 'px-6'}`}>
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Answer Options - 2x2 Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             {answers.map((answer, index) => (
               <div
                 key={index}
-                className={`p-4 rounded-lg border-2 aspect-[4/3] flex flex-col justify-between ${
+                className={`p-3 rounded-lg border-2 aspect-[4/3] flex flex-col justify-between ${
                   answer.is_correct
                     ? 'border-green-500 bg-green-200 shadow-md'
-                    : 'border-lime-400 bg-lime-100 hover:bg-lime-200'
-                } transition-all duration-200`}
+                    : 'border-lime-600 bg-lime-300'
+                }`}
               >
                 <AnswerOption
                   answer={answer}
@@ -274,12 +274,12 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
                 type="button"
                 variant="outline"
                 onClick={handleAddOption}
-                className={`border-2 border-dashed border-lime-500 text-lime-700 hover:border-lime-600 hover:bg-lime-100 ${
-                  isMobile ? 'w-full py-4' : 'px-6 py-3'
+                className={`border-2 border-dashed border-lime-600 text-lime-800 ${
+                  isMobile ? 'w-full py-3' : 'px-4 py-2'
                 }`}
               >
-                <Plus className={`${isMobile ? 'w-5 h-5' : 'w-4 h-4'} mr-2`} />
-                <span className={isMobile ? 'text-base' : 'text-sm'}>
+                <Plus className={`${isMobile ? 'w-4 h-4' : 'w-3 h-3'} mr-2`} />
+                <span className={isMobile ? 'text-sm' : 'text-xs'}>
                   選択肢を追加 ({answers.length}/4)
                 </span>
               </Button>
@@ -288,7 +288,7 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
 
           {/* Instructions */}
           <div
-            className={`${isMobile ? 'text-sm' : 'text-base'} text-gray-600 bg-lime-50 p-4 rounded-lg border border-lime-300`}
+            className={`${isMobile ? 'text-sm' : 'text-base'} text-gray-700 bg-lime-200 p-4 rounded-lg border border-lime-500`}
           >
             <div className="font-semibold mb-2">💡 ヒント:</div>
             <ul className="space-y-1">

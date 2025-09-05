@@ -38,21 +38,21 @@ export const TrueFalsePanel: React.FC<TrueFalsePanelProps> = ({
   const selectedAnswer = answers.find((answer) => answer.is_correct)?.answer_text || '';
 
   return (
-    <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-lg">
+    <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-sm hover:shadow-md">
       <CardHeader className={`${isMobile ? 'pb-4 px-4' : 'pb-6 px-6'}`}>
-        <CardTitle className={`flex items-center gap-2 ${isMobile ? 'text-lg' : 'text-xl'}`}>
+        <CardTitle className={`flex items-center gap-2 ${isMobile ? 'text-base' : 'text-lg'}`}>
           <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
             <XCircle className="w-4 h-4" />
           </div>
           正誤問題の選択肢
         </CardTitle>
         <p className={`${isMobile ? 'text-sm' : 'text-base'} text-gray-600`}>
-          True（正）またはFalse（誤）を選択してください
+          O（正）または X（誤）を選択してください
         </p>
       </CardHeader>
 
       <CardContent className={`${isMobile ? 'px-4' : 'px-6'}`}>
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* True/False Selection Buttons */}
           <div className={`${isMobile ? 'grid grid-cols-1 gap-4' : 'flex gap-8 justify-center'}`}>
             {/* True Button */}
@@ -63,15 +63,15 @@ export const TrueFalsePanel: React.FC<TrueFalsePanelProps> = ({
                   ? 'bg-green-100 border-green-500 text-green-700 shadow-lg'
                   : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
               } ${
-                isMobile ? 'w-full py-12 px-8 text-2xl font-bold' : 'w-64 h-40 text-4xl font-bold'
+                isMobile ? 'w-full py-8 px-6 text-lg font-bold' : 'w-56 h-32 text-xl font-bold'
               } border-2 rounded-lg cursor-pointer transition-all duration-200 flex items-center justify-center`}
             >
-              <div className="flex flex-col items-center gap-3">
+              <div className="flex flex-col items-center gap-2">
                 <div
-                  className={`${isMobile ? 'w-20 h-20' : 'w-35 h-35'} rounded-full border-4 border-green-500 flex items-center justify-center bg-white`}
+                  className={`${isMobile ? 'w-16 h-16' : 'w-20 h-20'} rounded-full border-4 border-green-500 flex items-center justify-center bg-white`}
                 >
                   <div
-                    className={`${isMobile ? 'w-8 h-8' : 'w-15 h-15'} rounded-full border-8 border-green-500`}
+                    className={`${isMobile ? 'w-6 h-6' : 'w-8 h-8'} rounded-full border-6 border-green-500`}
                   ></div>
                 </div>
               </div>
@@ -85,14 +85,14 @@ export const TrueFalsePanel: React.FC<TrueFalsePanelProps> = ({
                   ? 'bg-red-100 border-red-500 text-red-700 shadow-lg'
                   : 'bg-gray-100 border-gray-300 text-gray-600 hover:bg-gray-200'
               } ${
-                isMobile ? 'w-full py-12 px-8 text-2xl font-bold' : 'w-64 h-40 text-4xl font-bold'
+                isMobile ? 'w-full py-8 px-6 text-lg font-bold' : 'w-56 h-32 text-xl font-bold'
               } border-2 rounded-lg cursor-pointer transition-all duration-200 flex items-center justify-center`}
             >
-              <div className="flex flex-col items-center gap-3">
+              <div className="flex flex-col items-center gap-2">
                 <div
-                  className={`${isMobile ? 'w-20 h-20' : 'w-35 h-35'} rounded-full border-4 border-red-500 flex items-center justify-center bg-white`}
+                  className={`${isMobile ? 'w-16 h-16' : 'w-20 h-20'} rounded-full border-4 border-red-500 flex items-center justify-center bg-white`}
                 >
-                  <div className={`${isMobile ? 'w-8 h-8' : 'w-15 h-15'} relative`}>
+                  <div className={`${isMobile ? 'w-6 h-6' : 'w-8 h-8'} relative`}>
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="w-full h-2 bg-red-500 transform rotate-45 origin-center"></div>
                     </div>
@@ -107,7 +107,7 @@ export const TrueFalsePanel: React.FC<TrueFalsePanelProps> = ({
 
           {/* Instructions */}
           <div
-            className={`${isMobile ? 'text-sm' : 'text-base'} text-gray-600 bg-lime-50 p-4 rounded-lg border border-lime-300`}
+            className={`${isMobile ? 'text-sm' : 'text-base'} text-gray-700 bg-lime-200 p-4 rounded-lg border border-lime-500`}
           >
             <div className="font-semibold mb-2">💡 ヒント:</div>
             <ul className="space-y-1">

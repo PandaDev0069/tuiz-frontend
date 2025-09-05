@@ -35,7 +35,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
 }) => {
   return (
     <div className="space-y-4 md:space-y-6">
-      <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-lg">
+      <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-sm hover:shadow-md">
         <CardHeader className="pb-3 md:pb-6 px-3 md:px-6">
           <CardTitle className="flex items-center gap-2 text-base md:text-lg">
             <BookOpen className="w-4 h-4 md:w-5 md:h-5 text-primary" />
