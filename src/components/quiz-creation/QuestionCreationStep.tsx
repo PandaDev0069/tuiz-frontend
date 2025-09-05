@@ -148,7 +148,7 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
 
   const handleQuestionFieldChange = (
     field: keyof CreateQuestionForm,
-    value: string | number | boolean | undefined,
+    value: string | number | boolean | CreateAnswerForm[] | undefined,
   ) => {
     const updatedQuestions = [...localQuestions];
     updatedQuestions[selectedQuestionIndex] = {
@@ -172,6 +172,39 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
       handleQuestionFieldChange('image_url', mockUrl);
     } catch (error) {
       console.error('Upload failed:', error);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleAnswerImageUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      // TODO: Implement actual file upload logic
+      // For now, we'll simulate the upload
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const mockUrl = URL.createObjectURL(file);
+
+      const updatedQuestions = [...localQuestions];
+      const currentQuestion = updatedQuestions[selectedQuestionIndex];
+      const updatedAnswers = [...currentQuestion.answers];
+      updatedAnswers[index] = {
+        ...updatedAnswers[index],
+        image_url: mockUrl,
+      };
+
+      updatedQuestions[selectedQuestionIndex] = {
+        ...currentQuestion,
+        answers: updatedAnswers,
+      };
+
+      setLocalQuestions(updatedQuestions);
+      onQuestionsChange(updatedQuestions);
+    } catch (error) {
+      console.error('Answer image upload failed:', error);
     } finally {
       setIsUploading(false);
     }
@@ -223,6 +256,7 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
           onQuestionFieldChange={handleQuestionFieldChange}
           onImageUpload={handleImageUpload}
           onExplanationModalOpen={() => setIsExplanationModalOpen(true)}
+          onAnswerImageUpload={handleAnswerImageUpload}
         />
       )}
 

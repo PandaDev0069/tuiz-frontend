@@ -4,8 +4,9 @@ import React from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Label, Textarea } from '@/components/ui';
 import { Upload, X, BookOpen, Lightbulb } from 'lucide-react';
 import Image from 'next/image';
-import { CreateQuestionForm } from '@/types/quiz';
+import { CreateQuestionForm, CreateAnswerForm, QuestionType } from '@/types/quiz';
 import { QuestionControlPanel } from './QuestionControlPanel';
+import { MultipleChoicePanel } from './MultipleChoicePanel';
 
 interface QuestionFormProps {
   question: CreateQuestionForm;
@@ -14,10 +15,11 @@ interface QuestionFormProps {
   isMobile: boolean;
   onQuestionFieldChange: (
     field: keyof CreateQuestionForm,
-    value: string | number | boolean | undefined,
+    value: string | number | boolean | CreateAnswerForm[] | undefined,
   ) => void;
   onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onExplanationModalOpen: () => void;
+  onAnswerImageUpload: (index: number, e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 export const QuestionForm: React.FC<QuestionFormProps> = ({
@@ -28,6 +30,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
   onQuestionFieldChange,
   onImageUpload,
   onExplanationModalOpen,
+  onAnswerImageUpload,
 }) => {
   return (
     <div className="space-y-4 md:space-y-6">
@@ -160,6 +163,17 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
           </div>
         </CardContent>
       </Card>
+
+      {/* Multiple Choice Panel - Only show for multiple choice questions */}
+      {question?.question_type === QuestionType.MULTIPLE_CHOICE && (
+        <MultipleChoicePanel
+          answers={question.answers || []}
+          isMobile={isMobile}
+          isUploading={isUploading}
+          onAnswersChange={(answers) => onQuestionFieldChange('answers', answers)}
+          onImageUpload={onAnswerImageUpload}
+        />
+      )}
     </div>
   );
 };
