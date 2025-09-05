@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { CreateQuestionForm, CreateAnswerForm, QuestionType } from '@/types/quiz';
 import { QuestionControlPanel } from './QuestionControlPanel';
 import { MultipleChoicePanel } from './MultipleChoicePanel';
+import { TrueFalsePanel } from './TrueFalsePanel';
 
 interface QuestionFormProps {
   question: CreateQuestionForm;
@@ -172,6 +173,15 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
           isUploading={isUploading}
           onAnswersChange={(answers) => onQuestionFieldChange('answers', answers)}
           onImageUpload={onAnswerImageUpload}
+        />
+      )}
+
+      {/* True/False Panel - Only show for true/false questions */}
+      {question?.question_type === QuestionType.TRUE_FALSE && (
+        <TrueFalsePanel
+          answers={question.answers || []}
+          isMobile={isMobile}
+          onAnswersChange={(answers) => onQuestionFieldChange('answers', answers)}
         />
       )}
     </div>

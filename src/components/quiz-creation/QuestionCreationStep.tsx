@@ -60,16 +60,33 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
-  function createBlankQuestion(orderIndex: number): CreateQuestionForm {
-    return {
+  function createBlankQuestion(
+    orderIndex: number,
+    questionType: QuestionType = QuestionType.MULTIPLE_CHOICE,
+  ): CreateQuestionForm {
+    const baseQuestion = {
       question_text: '',
-      question_type: QuestionType.MULTIPLE_CHOICE,
+      question_type: questionType,
       show_question_time: 10,
       answering_time: 10,
       show_explanation_time: 30,
       points: 100,
       difficulty: DifficultyLevel.EASY,
       order_index: orderIndex,
+    };
+
+    if (questionType === QuestionType.TRUE_FALSE) {
+      return {
+        ...baseQuestion,
+        answers: [
+          { answer_text: 'True', is_correct: false, order_index: 1 },
+          { answer_text: 'False', is_correct: false, order_index: 2 },
+        ],
+      };
+    }
+
+    return {
+      ...baseQuestion,
       answers: [
         { answer_text: '', is_correct: true, order_index: 1 },
         { answer_text: '', is_correct: false, order_index: 2 },
@@ -78,7 +95,9 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
   }
 
   const handleAddQuestion = () => {
-    const newQuestion = createBlankQuestion(localQuestions.length + 1);
+    const currentQuestionType =
+      localQuestions[selectedQuestionIndex]?.question_type || QuestionType.MULTIPLE_CHOICE;
+    const newQuestion = createBlankQuestion(localQuestions.length + 1, currentQuestionType);
     const updatedQuestions = [...localQuestions, newQuestion];
     setLocalQuestions(updatedQuestions);
     setSelectedQuestionIndex(updatedQuestions.length - 1); // Select the new question
