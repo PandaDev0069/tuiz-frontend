@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Container, PageContainer, QuizCreationHeader, StepIndicator } from '@/components/ui';
 import { StructuredData } from '@/components/SEO';
-import { BasicInfoStep, QuestionCreationStep } from '@/components/quiz-creation';
+import { BasicInfoStep, QuestionCreationStep, SettingsStep } from '@/components/quiz-creation';
 import { CreateQuizSetForm, CreateQuestionForm, DifficultyLevel, FormErrors } from '@/types/quiz';
 
 export default function CreateQuizPage() {
@@ -17,7 +17,13 @@ export default function CreateQuizPage() {
     category: '',
     tags: [],
     play_settings: {
-      show_score_immediately: false,
+      code: 0,
+      show_question_only: true,
+      show_explanation: true,
+      time_bonus: true,
+      streak_bonus: true,
+      show_correct_answer: false,
+      max_players: 400,
     },
   });
   const [questions, setQuestions] = useState<CreateQuestionForm[]>([]);
@@ -136,7 +142,17 @@ export default function CreateQuizPage() {
                 />
               )}
 
-              {currentStep > 2 && (
+              {currentStep === 3 && (
+                <SettingsStep
+                  formData={formData}
+                  onFormDataChange={handleFormDataChange}
+                  onNext={handleNext}
+                  onPrevious={handlePrevious}
+                  errors={formErrors}
+                />
+              )}
+
+              {currentStep > 3 && (
                 <div className="text-center py-12">
                   <div className="text-6xl text-gray-300 mb-4">📝</div>
                   <h3 className="text-xl font-semibold text-gray-700 mb-2">

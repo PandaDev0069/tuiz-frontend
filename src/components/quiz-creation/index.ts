@@ -1,5 +1,6 @@
 export { BasicInfoStep } from './BasicInfoStep';
 export { QuestionCreationStep } from './QuestionCreationStep';
+export { SettingsStep } from './SettingsStep';
 export { ExplanationModal } from './QuestionCreationStep/ExplanationModal';
 export { QuestionControlPanel } from './QuestionCreationStep/QuestionControlPanel';
 export { QuestionHeader } from './QuestionCreationStep/QuestionHeader';

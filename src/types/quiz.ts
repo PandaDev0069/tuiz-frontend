@@ -98,8 +98,13 @@ export interface QuizSetComplete extends QuizSet {
 // ============================================================================
 
 export interface QuizPlaySettings {
-  // Will add later
-  show_score_immediately: boolean;
+  code: number; // 6 digits code for the quiz , can be randomly generated or manually set
+  show_question_only: boolean; // Show question only before answering
+  show_explanation: boolean; // Shows explanation after answering and if explanation is not present, shows leaderboard only
+  time_bonus: boolean;
+  streak_bonus: boolean;
+  show_correct_answer: boolean; // Show correct answer after answering in the answering section
+  max_players: number; // Max 400 players
 }
 
 // ============================================================================
