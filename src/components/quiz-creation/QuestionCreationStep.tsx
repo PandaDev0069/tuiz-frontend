@@ -23,6 +23,64 @@ interface QuestionCreationStepProps {
   errors?: FormErrors<CreateQuestionForm>[];
 }
 
+// Validation functions
+const validateQuestion = (question: CreateQuestionForm): { isValid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+
+  // 1. Check if question text is provided
+  if (!question.question_text || question.question_text.trim() === '') {
+    errors.push('問題文を入力してください');
+  }
+
+  // 2. For multiple choice questions, validate answers
+  if (question.question_type === QuestionType.MULTIPLE_CHOICE) {
+    // Check if all answers have text
+    const emptyAnswers = question.answers.filter(
+      (answer) => !answer.answer_text || answer.answer_text.trim() === '',
+    );
+    if (emptyAnswers.length > 0) {
+      errors.push('すべての選択肢にテキストを入力してください');
+    }
+
+    // Check if at least one answer is marked as correct
+    const hasCorrectAnswer = question.answers.some((answer) => answer.is_correct);
+    if (!hasCorrectAnswer) {
+      errors.push('正解の選択肢を選択してください');
+    }
+  }
+
+  // 3. For true/false questions, check if at least one answer is correct
+  if (question.question_type === QuestionType.TRUE_FALSE) {
+    const hasCorrectAnswer = question.answers.some((answer) => answer.is_correct);
+    if (!hasCorrectAnswer) {
+      errors.push('正解の選択肢を選択してください');
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+};
+
+const validateAllQuestions = (
+  questions: CreateQuestionForm[],
+): { isValid: boolean; errors: string[] } => {
+  const allErrors: string[] = [];
+
+  questions.forEach((question, index) => {
+    const validation = validateQuestion(question);
+    if (!validation.isValid) {
+      allErrors.push(`問題 ${index + 1}: ${validation.errors.join(', ')}`);
+    }
+  });
+
+  return {
+    isValid: allErrors.length === 0,
+    errors: allErrors,
+  };
+};
+
 export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
   questions,
   onQuestionsChange,
@@ -37,6 +95,8 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isExplanationModalOpen, setIsExplanationModalOpen] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
 
   // Update local state when questions prop changes
   React.useEffect(() => {
@@ -44,6 +104,12 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
       setLocalQuestions(questions);
     }
   }, [questions]);
+
+  // Validate questions whenever localQuestions changes
+  React.useEffect(() => {
+    const validation = validateAllQuestions(localQuestions);
+    setValidationErrors(validation.errors);
+  }, [localQuestions]);
 
   // Handle screen size detection
   React.useEffect(() => {
@@ -247,6 +313,18 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
     onQuestionsChange(updatedQuestions);
   };
 
+  const handleNext = () => {
+    const validation = validateAllQuestions(localQuestions);
+
+    if (!validation.isValid) {
+      setShowValidationErrors(true);
+      return;
+    }
+
+    setShowValidationErrors(false);
+    onNext();
+  };
+
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Header */}
@@ -283,8 +361,34 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
       {/* Quiz Overview Panel */}
       <QuizOverviewPanel questions={localQuestions} isMobile={isMobile} />
 
+      {/* Validation Errors */}
+      {showValidationErrors && validationErrors.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-start gap-2">
+            <div className="w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">
+              !
+            </div>
+            <div>
+              <h3 className="font-semibold text-red-800 mb-2">以下の問題を修正してください：</h3>
+              <ul className="space-y-1">
+                {validationErrors.map((error, index) => (
+                  <li key={index} className="text-red-700 text-sm">
+                    • {error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navigation */}
-      <QuestionNavigation onPrevious={onPrevious} onNext={onNext} />
+      <QuestionNavigation
+        onPrevious={onPrevious}
+        onNext={handleNext}
+        canProceed={validationErrors.length === 0}
+        validationErrors={validationErrors}
+      />
 
       {/* Explanation Modal */}
       <ExplanationModal
