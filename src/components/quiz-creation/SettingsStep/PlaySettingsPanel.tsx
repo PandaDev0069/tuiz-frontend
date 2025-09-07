@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Switch, Input, Label } from '@/components/ui';
 import { Settings, Users, Clock, Trophy, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { QuizPlaySettings } from '@/types/quiz';
@@ -20,6 +20,17 @@ export const PlaySettingsPanel: React.FC<PlaySettingsPanelProps> = ({
 }) => {
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [codeInput, setCodeInput] = useState(playSettings.code?.toString() || '');
+  const [hasUserEdited, setHasUserEdited] = useState(false);
+
+  // Auto-generate code when component mounts if no code is set or code is 0
+  // Only auto-generate if user hasn't manually edited the code
+  useEffect(() => {
+    if ((!playSettings.code || playSettings.code === 0) && !hasUserEdited) {
+      const randomCode = Math.floor(100000 + Math.random() * 900000);
+      setCodeInput(randomCode.toString());
+      onPlaySettingsChange({ code: randomCode });
+    }
+  }, [playSettings.code, onPlaySettingsChange, hasUserEdited]);
 
   const generateRandomCode = () => {
     setIsGeneratingCode(true);
@@ -27,6 +38,7 @@ export const PlaySettingsPanel: React.FC<PlaySettingsPanelProps> = ({
     setTimeout(() => {
       const randomCode = Math.floor(100000 + Math.random() * 900000);
       setCodeInput(randomCode.toString());
+      setHasUserEdited(false); // Reset flag since user explicitly requested new code
       onPlaySettingsChange({ code: randomCode });
       setIsGeneratingCode(false);
     }, 500);
@@ -37,6 +49,7 @@ export const PlaySettingsPanel: React.FC<PlaySettingsPanelProps> = ({
     // Only allow 6-digit numbers
     if (value.length <= 6 && /^\d*$/.test(value)) {
       setCodeInput(value);
+      setHasUserEdited(true); // Mark that user has started editing
       onPlaySettingsChange({ code: parseInt(value) || 0 });
     }
   };
