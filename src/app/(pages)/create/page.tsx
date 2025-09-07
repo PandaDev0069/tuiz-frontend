@@ -3,12 +3,18 @@
 import React, { useState } from 'react';
 import { Container, PageContainer, QuizCreationHeader, StepIndicator } from '@/components/ui';
 import { StructuredData } from '@/components/SEO';
-import { BasicInfoStep, QuestionCreationStep, SettingsStep } from '@/components/quiz-creation';
+import {
+  BasicInfoStep,
+  QuestionCreationStep,
+  SettingsStep,
+  FinalStep,
+} from '@/components/quiz-creation';
 import { CreateQuizSetForm, CreateQuestionForm, DifficultyLevel, FormErrors } from '@/types/quiz';
 
 export default function CreateQuizPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [formData, setFormData] = useState<Partial<CreateQuizSetForm>>({
     title: '',
     description: '',
@@ -30,6 +36,22 @@ export default function CreateQuizPage() {
   const [formErrors, setFormErrors] = useState<FormErrors<CreateQuizSetForm>>({});
   const [questionErrors, setQuestionErrors] = useState<FormErrors<CreateQuestionForm>[]>([]);
 
+  // Handle screen size detection
+  React.useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    // Check on mount
+    checkScreenSize();
+
+    // Add event listener
+    window.addEventListener('resize', checkScreenSize);
+
+    // Cleanup
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
   const handleSaveDraft = async () => {
     setIsSaving(true);
     // Simulate saving
@@ -40,6 +62,13 @@ export default function CreateQuizPage() {
 
   const handleProfileClick = () => {
     console.log('Profile clicked');
+  };
+
+  const handlePublish = () => {
+    console.log('Quiz published!', { formData, questions });
+    // TODO: Implement actual publishing logic with backend
+    // For now, just show success message
+    alert('クイズが公開されました！');
   };
 
   const handleFormDataChange = (data: Partial<CreateQuizSetForm>) => {
@@ -152,35 +181,14 @@ export default function CreateQuizPage() {
                 />
               )}
 
-              {currentStep > 3 && (
-                <div className="text-center py-12">
-                  <div className="text-6xl text-gray-300 mb-4">📝</div>
-                  <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                    ステップ {currentStep}: {getStepTitle(currentStep)}
-                  </h3>
-                  <p className="text-gray-500">ここにクイズ作成の詳細フォームが表示されます</p>
-                  <div className="mt-4 text-sm text-gray-400">
-                    現在のステップ: {currentStep} / 4
-                  </div>
-
-                  {/* Test Navigation Buttons */}
-                  <div className="mt-6 flex justify-center space-x-4">
-                    <button
-                      onClick={handlePrevious}
-                      disabled={currentStep === 1}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300 transition-colors"
-                    >
-                      前へ
-                    </button>
-                    <button
-                      onClick={handleNext}
-                      disabled={currentStep === 4}
-                      className="px-4 py-2 bg-primary text-black rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
-                    >
-                      次へ
-                    </button>
-                  </div>
-                </div>
+              {currentStep === 4 && (
+                <FinalStep
+                  formData={formData}
+                  questions={questions}
+                  onPrevious={handlePrevious}
+                  onPublish={handlePublish}
+                  isMobile={isMobile}
+                />
               )}
             </div>
           </Container>
@@ -188,19 +196,4 @@ export default function CreateQuizPage() {
       </PageContainer>
     </>
   );
-}
-
-function getStepTitle(step: number): string {
-  switch (step) {
-    case 1:
-      return '基本情報';
-    case 2:
-      return '問題作成';
-    case 3:
-      return '設定';
-    case 4:
-      return '確認・公開';
-    default:
-      return '不明';
-  }
 }
