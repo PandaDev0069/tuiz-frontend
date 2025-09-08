@@ -57,7 +57,13 @@ export default function DashboardPage() {
       tags: ['JavaScript', '基礎', '初心者'],
       completion_rate: 0,
       play_settings: {
-        show_score_immediately: true,
+        code: 123456,
+        show_question_only: false,
+        show_explanation: false,
+        time_bonus: false,
+        streak_bonus: false,
+        show_correct_answer: false,
+        max_players: 400,
       },
     },
     {
@@ -78,7 +84,13 @@ export default function DashboardPage() {
       tags: ['世界史', '重要事件', '人物'],
       completion_rate: 0,
       play_settings: {
-        show_score_immediately: true,
+        code: 123456,
+        show_question_only: false,
+        show_explanation: false,
+        time_bonus: false,
+        streak_bonus: false,
+        show_correct_answer: false,
+        max_players: 400,
       },
     },
     {
@@ -99,7 +111,13 @@ export default function DashboardPage() {
       tags: ['数学', 'パズル', '論理'],
       completion_rate: 0,
       play_settings: {
-        show_score_immediately: true,
+        code: 123456,
+        show_question_only: false,
+        show_explanation: false,
+        time_bonus: false,
+        streak_bonus: false,
+        show_correct_answer: false,
+        max_players: 400,
       },
     },
     {
@@ -119,7 +137,13 @@ export default function DashboardPage() {
       tags: ['科学', '実験', '化学', '物理'],
       completion_rate: 0,
       play_settings: {
-        show_score_immediately: true,
+        code: 123456,
+        show_question_only: false,
+        show_explanation: false,
+        time_bonus: false,
+        streak_bonus: false,
+        show_correct_answer: false,
+        max_players: 400,
       },
     },
   ];
@@ -143,7 +167,13 @@ export default function DashboardPage() {
       tags: ['Python', '入門', '基礎'],
       completion_rate: 78,
       play_settings: {
-        show_score_immediately: true,
+        code: 123456,
+        show_question_only: false,
+        show_explanation: false,
+        time_bonus: false,
+        streak_bonus: false,
+        show_correct_answer: false,
+        max_players: 400,
       },
     },
     {
@@ -163,7 +193,13 @@ export default function DashboardPage() {
       tags: ['日本', '地理', '都道府県'],
       completion_rate: 82,
       play_settings: {
-        show_score_immediately: true,
+        code: 123456,
+        show_question_only: false,
+        show_explanation: false,
+        time_bonus: false,
+        streak_bonus: false,
+        show_correct_answer: false,
+        max_players: 400,
       },
     },
     {
@@ -183,7 +219,13 @@ export default function DashboardPage() {
       tags: ['英語', '文法', '中学', '高校'],
       completion_rate: 75,
       play_settings: {
-        show_score_immediately: true,
+        code: 123456,
+        show_question_only: false,
+        show_explanation: false,
+        time_bonus: false,
+        streak_bonus: false,
+        show_correct_answer: false,
+        max_players: 400,
       },
     },
     {
@@ -204,7 +246,13 @@ export default function DashboardPage() {
       tags: ['音楽', '理論', '楽譜', '和音'],
       completion_rate: 68,
       play_settings: {
-        show_score_immediately: true,
+        code: 123456,
+        show_question_only: false,
+        show_explanation: false,
+        time_bonus: false,
+        streak_bonus: false,
+        show_correct_answer: false,
+        max_players: 400,
       },
     },
     {
@@ -225,7 +273,13 @@ export default function DashboardPage() {
       tags: ['料理', '調理法', '食材', '栄養'],
       completion_rate: 85,
       play_settings: {
-        show_score_immediately: true,
+        code: 123456,
+        show_question_only: false,
+        show_explanation: false,
+        time_bonus: false,
+        streak_bonus: false,
+        show_correct_answer: false,
+        max_players: 400,
       },
     },
   ];
