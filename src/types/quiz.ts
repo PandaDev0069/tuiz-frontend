@@ -41,9 +41,8 @@ export interface QuizSet {
   updated_at: string; // ISO date string
   status: QuizStatus;
   tags: string[];
-  completion_rate: number; // Percentage (0-100)
   last_played_at?: string; // ISO date string
-  play_settings: QuizPlaySettings;
+  play_settings: QuizPlaySettings; // Json object
   cloned_from?: string; // ID of original quiz if duplicated
 }
 
