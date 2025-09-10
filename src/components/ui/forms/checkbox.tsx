@@ -4,17 +4,18 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const checkboxVariants = cva(
-  'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow disabled:cursor-not-allowed disabled:opacity-50',
+  'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow-sm hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-1 sm:focus:ring-offset-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 active:scale-95',
   {
     variants: {
       variant: {
         default:
-          'border-gray-300 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground',
-        accent: 'border-blue-300 data-[state=checked]:bg-blue-600 data-[state=checked]:text-white',
+          'border-gray-400 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground focus:ring-blue-500 focus:border-blue-500',
+        accent:
+          'border-blue-400 data-[state=checked]:bg-blue-600 data-[state=checked]:text-white focus:ring-blue-500 focus:border-blue-500',
         success:
-          'border-green-300 data-[state=checked]:bg-green-600 data-[state=checked]:text-white',
+          'border-green-400 data-[state=checked]:bg-green-600 data-[state=checked]:text-white focus:ring-green-500 focus:border-green-500',
         warning:
-          'border-amber-300 data-[state=checked]:bg-amber-600 data-[state=checked]:text-white',
+          'border-amber-400 data-[state=checked]:bg-amber-600 data-[state=checked]:text-white focus:ring-amber-500 focus:border-amber-500',
       },
       size: {
         default: 'h-4 w-4',
@@ -59,8 +60,9 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
           <div
             className={cn(
               checkboxVariants({ variant, size }),
-              'flex items-center justify-center transition-colors',
+              'flex items-center justify-center transition-all duration-200',
               checked && 'bg-blue-600 border-blue-600 text-white',
+              !checked && 'bg-white hover:bg-gray-100 border-opacity-80 hover:border-opacity-100',
             )}
           >
             {checked && <Check className="h-3 w-3 stroke-[3]" />}

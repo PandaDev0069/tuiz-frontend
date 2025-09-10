@@ -113,7 +113,7 @@ export const SidebarFilter: React.FC<SidebarFilterProps> = ({
       {/* Backdrop - YouTube Style Modal */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-gradient-to-b bg-opacity-50 z-40 transition-opacity duration-300"
+          className="fixed inset-0 bg-gradient-to-b bg-opacity-50 z-[9998] transition-opacity duration-300"
           onClick={onToggle}
         />
       )}
@@ -121,7 +121,7 @@ export const SidebarFilter: React.FC<SidebarFilterProps> = ({
       {/* Filter Modal - YouTube Style */}
       <div
         className={cn(
-          'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl max-h-[90vh] bg-white rounded-lg shadow-2xl z-50 transition-all duration-300 ease-in-out',
+          'fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl max-h-[90vh] bg-white rounded-lg shadow-2xl z-[9999] transition-all duration-300 ease-in-out',
           isOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none',
           className,
         )}

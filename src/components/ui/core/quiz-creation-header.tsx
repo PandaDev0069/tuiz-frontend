@@ -77,12 +77,12 @@ export const QuizCreationHeader: React.FC<QuizCreationHeaderProps> = ({
           </div>
 
           {/* Mobile Row 2 - Return to Dashboard, Current Step, and Save Draft */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between px-2">
             <Button
               variant="gradient"
               size="sm"
               onClick={handleReturnToDashboard}
-              className="flex items-center space-x-2 px-2 py-1.5 h-9 rounded-xl bg-gradient-to-r from-amber-400 to-blue-500 text-white hover:from-amber-500 hover:to-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+              className="flex items-center space-x-2 px-3 py-1.5 h-9 rounded-xl bg-gradient-to-r from-amber-400 to-blue-500 text-white hover:from-amber-500 hover:to-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
             >
               <ArrowLeft className="h-4 w-4" />
               <span className="text-sm font-medium">ダッシュボード</span>
@@ -94,7 +94,7 @@ export const QuizCreationHeader: React.FC<QuizCreationHeaderProps> = ({
                 size="sm"
                 onClick={onSaveDraft}
                 disabled={isSaving}
-                className="flex items-center space-x-2 px-2 py-1.5 h-9 shadow-lg"
+                className="flex items-center space-x-2 px-3 py-1.5 h-9 shadow-lg"
               >
                 <Save className="h-4 w-4" />
                 <span className="text-sm font-medium">{isSaving ? '保存中...' : '一時保存'}</span>

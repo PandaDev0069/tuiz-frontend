@@ -3,10 +3,54 @@
 import React, { useState } from 'react';
 import { Container, PageContainer, QuizCreationHeader, StepIndicator } from '@/components/ui';
 import { StructuredData } from '@/components/SEO';
+import {
+  BasicInfoStep,
+  QuestionCreationStep,
+  SettingsStep,
+  FinalStep,
+} from '@/components/quiz-creation';
+import { CreateQuizSetForm, CreateQuestionForm, DifficultyLevel, FormErrors } from '@/types/quiz';
 
 export default function CreateQuizPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSaving, setIsSaving] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [formData, setFormData] = useState<Partial<CreateQuizSetForm>>({
+    title: '',
+    description: '',
+    is_public: false,
+    difficulty_level: DifficultyLevel.EASY,
+    category: '',
+    tags: [],
+    play_settings: {
+      code: 0,
+      show_question_only: true,
+      show_explanation: true,
+      time_bonus: true,
+      streak_bonus: true,
+      show_correct_answer: false,
+      max_players: 400,
+    },
+  });
+  const [questions, setQuestions] = useState<CreateQuestionForm[]>([]);
+  const [formErrors, setFormErrors] = useState<FormErrors<CreateQuizSetForm>>({});
+  const [questionErrors, setQuestionErrors] = useState<FormErrors<CreateQuestionForm>[]>([]);
+
+  // Handle screen size detection
+  React.useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    // Check on mount
+    checkScreenSize();
+
+    // Add event listener
+    window.addEventListener('resize', checkScreenSize);
+
+    // Cleanup
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   const handleSaveDraft = async () => {
     setIsSaving(true);
@@ -18,6 +62,64 @@ export default function CreateQuizPage() {
 
   const handleProfileClick = () => {
     console.log('Profile clicked');
+  };
+
+  const handlePublish = () => {
+    console.log('Quiz published!', { formData, questions });
+    // NOTE: Backend API integration required for actual publishing
+    // For now, just show success message
+    alert('クイズが公開されました！');
+  };
+
+  const handleFormDataChange = (data: Partial<CreateQuizSetForm>) => {
+    setFormData((prev) => ({ ...prev, ...data }));
+    // Clear errors when user makes changes
+    setFormErrors({});
+  };
+
+  const handleQuestionsChange = (newQuestions: CreateQuestionForm[]) => {
+    setQuestions(newQuestions);
+    // Clear errors when user makes changes
+    setQuestionErrors([]);
+  };
+
+  const handleNext = () => {
+    // Validate current step
+    const errors: FormErrors<CreateQuizSetForm> = {};
+
+    if (!formData.title?.trim()) {
+      errors.title = 'タイトルは必須です';
+    }
+    if (!formData.description?.trim()) {
+      errors.description = '説明は必須です';
+    }
+    if (!formData.difficulty_level) {
+      errors.difficulty_level = '難易度を選択してください';
+    }
+    if (!formData.category?.trim()) {
+      errors.category = 'カテゴリを選択してください';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+
+    setCurrentStep((prev) => Math.min(4, prev + 1));
+
+    // Scroll to top when moving to next step (works on both mobile and PC)
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
+  };
+
+  const handlePrevious = () => {
+    setCurrentStep((prev) => Math.max(1, prev - 1));
+
+    // Scroll to top when moving to previous step (works on both mobile and PC)
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
   };
 
   return (
@@ -42,56 +144,56 @@ export default function CreateQuizPage() {
         className="bg-gradient-to-r from-primary/10 via-primary/5 to-primary-light/10 border-b border-primary/30 shadow-sm"
       />
 
-      <PageContainer className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+      <PageContainer className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 overflow-hidden">
         <main role="main">
           <Container size="lg" className="max-w-7xl mx-auto">
-            {/* Quiz Creation Form Placeholder */}
-            <div className="bg-white rounded-lg shadow-lg p-8 border border-gray-200">
-              <div className="text-center py-12">
-                <div className="text-6xl text-gray-300 mb-4">📝</div>
-                <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                  ステップ {currentStep}: {getStepTitle(currentStep)}
-                </h3>
-                <p className="text-gray-500">ここにクイズ作成の詳細フォームが表示されます</p>
-                <div className="mt-4 text-sm text-gray-400">現在のステップ: {currentStep} / 4</div>
+            {/* Quiz Creation Form */}
+            <div
+              className="rounded-lg shadow-lg p-8 border"
+              style={{ background: 'linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)' }}
+            >
+              {currentStep === 1 && (
+                <BasicInfoStep
+                  formData={formData}
+                  onFormDataChange={handleFormDataChange}
+                  onNext={handleNext}
+                  errors={formErrors}
+                />
+              )}
 
-                {/* Test Navigation Buttons */}
-                <div className="mt-6 flex justify-center space-x-4">
-                  <button
-                    onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
-                    disabled={currentStep === 1}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300 transition-colors"
-                  >
-                    前へ
-                  </button>
-                  <button
-                    onClick={() => setCurrentStep(Math.min(4, currentStep + 1))}
-                    disabled={currentStep === 4}
-                    className="px-4 py-2 bg-primary text-black rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
-                  >
-                    次へ
-                  </button>
-                </div>
-              </div>
+              {currentStep === 2 && (
+                <QuestionCreationStep
+                  questions={questions}
+                  onQuestionsChange={handleQuestionsChange}
+                  onNext={handleNext}
+                  onPrevious={handlePrevious}
+                  errors={questionErrors}
+                />
+              )}
+
+              {currentStep === 3 && (
+                <SettingsStep
+                  formData={formData}
+                  onFormDataChange={handleFormDataChange}
+                  onNext={handleNext}
+                  onPrevious={handlePrevious}
+                  errors={formErrors}
+                />
+              )}
+
+              {currentStep === 4 && (
+                <FinalStep
+                  formData={formData}
+                  questions={questions}
+                  onPrevious={handlePrevious}
+                  onPublish={handlePublish}
+                  isMobile={isMobile}
+                />
+              )}
             </div>
           </Container>
         </main>
       </PageContainer>
     </>
   );
-}
-
-function getStepTitle(step: number): string {
-  switch (step) {
-    case 1:
-      return '基本情報';
-    case 2:
-      return '問題作成';
-    case 3:
-      return '設定';
-    case 4:
-      return '確認・公開';
-    default:
-      return '不明';
-  }
 }

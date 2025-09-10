@@ -4,7 +4,12 @@
 @import './utilities.css';
 @import './scrollbar.css';
 
+/* ============================================================================
+   CSS CUSTOM PROPERTIES (DESIGN TOKENS)
+   ============================================================================ */
+
 :root {
+  /* Light theme colors */
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
   --card: 0 0% 100%;
@@ -27,6 +32,7 @@
 }
 
 .dark {
+  /* Dark theme colors */
   --background: 222.2 84% 4.9%;
   --foreground: 210 40% 98%;
   --card: 222.2 84% 4.9%;
@@ -47,12 +53,13 @@
   --input: 217.2 32.6% 17.5%;
 }
 
+/* ============================================================================
+   BASE STYLES
+   ============================================================================ */
 * {
-  border-color: hsl(var(--border));
   box-sizing: border-box;
 }
 
-/* HTML and body viewport handling - consolidated */
 html {
   height: 100%;
   overflow-x: hidden;
@@ -69,44 +76,23 @@ body {
   font-family: var(--font-sans);
   line-height: 1.6;
   min-height: 100vh;
-  height: 100%;
-  padding: 0;
   margin: 0;
+  padding: 0;
   overflow-x: hidden;
-  position: relative;
-  /* Prevent horizontal scroll on mobile */
   width: 100%;
-  max-width: 100vw;
 }
 
-/* Global overflow prevention for all devices */
-html,
-body {
-  overflow-x: hidden;
-  max-width: 100vw;
-  width: 100%;
-  position: relative;
-}
+/* ============================================================================
+   MOBILE RESPONSIVENESS
+   ============================================================================ */
 
-/* Ensure all content respects viewport boundaries */
-body > * {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-/* Mobile-specific overflow handling */
 @media (max-width: 768px) {
   body {
-    overflow-x: hidden;
-    position: relative;
-    width: 100vw;
-    max-width: 100vw;
-    /* Prevent content from overflowing viewport */
     overflow-wrap: break-word;
     word-wrap: break-word;
   }
 
-  /* Ensure all content stays within viewport */
+  /* Ensure content stays within viewport */
   div,
   section,
   main,
@@ -118,93 +104,48 @@ body > * {
     max-width: 100%;
     box-sizing: border-box;
   }
-
-  /* Prevent horizontal scroll on mobile */
-  html,
-  body {
-    overflow-x: hidden;
-    position: relative;
-  }
 }
 
-/* Prevent content from overflowing on small screens */
-@media (max-width: 480px) {
-  body {
-    /* Ensure minimum height doesn't cause overflow */
-    min-height: 100vh;
-    height: auto;
-    /* Prevent any potential overflow */
-    overflow: hidden;
-  }
+/* ============================================================================
+   FORM ELEMENTS
+   ============================================================================ */
 
-  /* Allow vertical scroll when needed */
-  body > * {
-    max-width: 100vw;
-    overflow-x: hidden;
-  }
-}
-
-/* Additional mobile overflow prevention */
-@media (max-width: 768px) {
-  /* Ensure all elements respect viewport boundaries */
-  * {
-    max-width: 100vw !important;
-    box-sizing: border-box !important;
-  }
-
-  /* Prevent horizontal scroll on all elements */
-  html,
-  body,
-  div,
-  section,
-  main,
-  header,
-  footer {
-    overflow-x: hidden !important;
-    max-width: 100vw !important;
-  }
-
-  /* Ensure buttons and interactive elements don't overflow */
-  button,
-  a,
-  input,
-  textarea,
-  select {
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-  }
-}
-
-/* iOS Safari specific fixes */
-@supports (-webkit-touch-callout: none) {
-  body {
-    /* Prevent iOS Safari from allowing horizontal scroll */
-    overflow-x: hidden;
-    position: relative;
-    width: 100vw;
-    max-width: 100vw;
-  }
-}
-
-/* Button reset */
 button {
   font: inherit;
 }
 
-/* Form elements */
 input,
 textarea,
 select {
   font: inherit;
 }
 
-/* Selection styling */
-::selection {
-  background: rgba(28, 212, 184, 0.3);
-  color: var(--fg);
+/* Default form styling - let components handle their own styling */
+.form-input {
+  border-color: #65a30d; /* lime-600 */
 }
 
-/* Custom utilities */
+.form-input:focus {
+  border-color: #4d7c0f; /* lime-700 */
+  box-shadow: 0 0 0 2px rgba(101, 163, 13, 0.2);
+}
+
+/* Focus ring for textarea components - matches input field */
+textarea:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246) !important;
+  outline: none !important;
+}
+
+/* ============================================================================
+   UTILITY CLASSES
+   ============================================================================ */
+
+::selection {
+  background: rgba(28, 212, 184, 0.3);
+  color: var(--foreground);
+}
+
 .gradient-text {
   background: conic-gradient(#553c9a 30%, #ee4b2b 40%, #ee4b2b 70%, #00c2cb 80%, #553c9a);
   background-size: 100% 100%;
@@ -215,7 +156,7 @@ select {
   color: transparent;
 }
 
-/* Line clamp utilities for text truncation */
+/* Line clamp utilities */
 .line-clamp-1 {
   overflow: hidden;
   display: -webkit-box;
@@ -240,25 +181,20 @@ select {
   line-clamp: 3;
 }
 
-/* Float animation */
+/* ============================================================================
+   ANIMATIONS
+   ============================================================================ */
+
 @keyframes float {
-  0% {
+  0%,
+  100% {
     transform: translateY(0);
   }
   50% {
     transform: translateY(-6px);
   }
-  100% {
-    transform: translateY(0);
-  }
 }
 
-.animate-float {
-  animation: float var(--heading-animation-duration, 3s)
-    var(--heading-animation-easing, ease-in-out) infinite;
-}
-
-/* Glow animation */
 @keyframes glow {
   0%,
   100% {
@@ -275,60 +211,6 @@ select {
   }
 }
 
-.animate-glow {
-  animation: glow var(--heading-animation-duration, 2s) var(--heading-animation-easing, ease-in-out)
-    infinite;
-}
-
-/* Page Entrance Animations - for whole page containers */
-@keyframes page-fade-in {
-  0% {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-page-fade-in {
-  animation: page-fade-in var(--page-animation-duration, 0.8s)
-    var(--page-animation-easing, ease-out);
-}
-
-@keyframes page-slide-up {
-  0% {
-    opacity: 0;
-    transform: translateY(40px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-page-slide-up {
-  animation: page-slide-up var(--page-animation-duration, 1s) var(--page-animation-easing, ease-out);
-}
-
-@keyframes page-scale-in {
-  0% {
-    opacity: 0;
-    transform: scale(0.95) translateY(20px);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-
-.animate-page-scale-in {
-  animation: page-scale-in var(--page-animation-duration, 0.8s)
-    var(--page-animation-easing, ease-out);
-}
-
-/* Element Entrance Animations - for individual elements */
 @keyframes fade-in {
   0% {
     opacity: 0;
@@ -338,10 +220,6 @@ select {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.animate-fade-in {
-  animation: fade-in 1s ease-out;
 }
 
 @keyframes slide-up {
@@ -355,11 +233,6 @@ select {
   }
 }
 
-.animate-slide-up {
-  animation: slide-up 0.8s ease-out;
-}
-
-/* Static Animations - for continuous effects */
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
@@ -369,12 +242,6 @@ select {
   }
 }
 
-.animate-shimmer {
-  background: linear-gradient(90deg, transparent, rgba(191, 240, 152, 0.4), transparent);
-  background-size: 200% 100%;
-  animation: shimmer var(--heading-animation-duration, 1.5s) infinite;
-}
-
 @keyframes typewriter {
   from {
     width: 0;
@@ -382,6 +249,29 @@ select {
   to {
     width: 100%;
   }
+}
+
+/* Animation classes */
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 1s ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.8s ease-out;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(191, 240, 152, 0.4), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
 }
 
 .animate-typewriter {
@@ -390,69 +280,10 @@ select {
   animation: typewriter 2s steps(40, end);
 }
 
-/* Glow animation */
-@keyframes glow {
-  0%,
-  100% {
-    text-shadow:
-      0 0 5px rgba(191, 240, 152, 0.3),
-      0 0 10px rgba(191, 240, 152, 0.2),
-      0 0 15px rgba(111, 214, 255, 0.1);
-  }
-  50% {
-    text-shadow:
-      0 0 10px rgba(191, 240, 152, 0.5),
-      0 0 20px rgba(191, 240, 152, 0.3),
-      0 0 30px rgba(111, 214, 255, 0.2);
-  }
-}
+/* ============================================================================
+   SCROLLBAR STYLES
+   ============================================================================ */
 
-/* Fade in animation */
-@keyframes fade-in {
-  0% {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Slide up animation */
-@keyframes slide-up {
-  0% {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Shimmer animation */
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-/* Typewriter animation */
-@keyframes typewriter {
-  from {
-    width: 0;
-  }
-  to {
-    width: 100%;
-  }
-}
-
-/* Custom Scrollbar Styles */
-/* Webkit browsers (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
   width: 12px;
   height: 12px;
@@ -485,10 +316,7 @@ select {
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* Firefox scrollbar */
-/* Note: html selector moved to mobile.css to avoid duplication */
-
-/* Custom scrollbar variants */
+/* Scrollbar variants */
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -527,19 +355,22 @@ select {
   background: rgba(0, 0, 0, 0.2);
 }
 
-/* Override Tailwind's rounded-full to fix Next.js Image issues */
+/* ============================================================================
+   COMPONENT FIXES
+   ============================================================================ */
+
+/* Fix Next.js Image rounded-full issues */
 .rounded-full,
 [class*='rounded-full'] {
-  border-radius: 50% !important;
-  -webkit-border-radius: 50% !important;
-  -moz-border-radius: 50% !important;
-  overflow: hidden !important;
+  border-radius: 50%;
+  -webkit-border-radius: 50%;
+  -moz-border-radius: 50%;
+  overflow: hidden;
 }
 
-/* Ensure images inside rounded containers inherit the border-radius */
 .rounded-full img,
 [class*='rounded-full'] img {
-  border-radius: inherit !important;
-  -webkit-border-radius: inherit !important;
-  -moz-border-radius: inherit !important;
+  border-radius: inherit;
+  -webkit-border-radius: inherit;
+  -moz-border-radius: inherit;
 }

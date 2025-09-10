@@ -41,9 +41,8 @@ export interface QuizSet {
   updated_at: string; // ISO date string
   status: QuizStatus;
   tags: string[];
-  completion_rate: number; // Percentage (0-100)
   last_played_at?: string; // ISO date string
-  play_settings: QuizPlaySettings;
+  play_settings: QuizPlaySettings; // Json object
   cloned_from?: string; // ID of original quiz if duplicated
 }
 
@@ -63,6 +62,7 @@ export interface Question {
   explanation_title?: string;
   explanation_text?: string;
   explanation_image_url?: string;
+  show_explanation_time: number;
 }
 
 export interface Answer {
@@ -97,8 +97,13 @@ export interface QuizSetComplete extends QuizSet {
 // ============================================================================
 
 export interface QuizPlaySettings {
-  // Will add later
-  show_score_immediately: boolean;
+  code: number; // 6 digits code for the quiz , can be randomly generated or manually set
+  show_question_only: boolean; // Show question only before answering
+  show_explanation: boolean; // Shows explanation after answering and if explanation is not present, shows leaderboard only
+  time_bonus: boolean;
+  streak_bonus: boolean;
+  show_correct_answer: boolean; // Show correct answer after answering in the answering section
+  max_players: number; // Max 400 players
 }
 
 // ============================================================================
@@ -125,13 +130,15 @@ export interface CreateQuestionForm {
   question_text: string;
   question_type: QuestionType;
   image_url?: string;
-  time_limit?: number;
+  show_question_time: number;
+  answering_time: number;
   points: number;
   difficulty: DifficultyLevel;
   order_index: number;
   explanation_title?: string;
   explanation_text?: string;
   explanation_image_url?: string;
+  show_explanation_time: number;
   answers: CreateAnswerForm[];
 }
 
