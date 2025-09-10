@@ -66,7 +66,7 @@ export default function CreateQuizPage() {
 
   const handlePublish = () => {
     console.log('Quiz published!', { formData, questions });
-    // FIXME: Implement actual publishing logic with backend API integration
+    // NOTE: Backend API integration required for actual publishing
     // For now, just show success message
     alert('クイズが公開されました！');
   };
