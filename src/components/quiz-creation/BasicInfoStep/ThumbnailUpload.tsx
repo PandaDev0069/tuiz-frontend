@@ -25,7 +25,7 @@ export const ThumbnailUpload: React.FC<ThumbnailUploadProps> = ({ formData, onFo
 
     setIsUploading(true);
     try {
-      // TODO: Implement actual file upload logic
+      // NOTE: Placeholder implementation - replace with actual file upload service
       // For now, we'll simulate the upload
       await new Promise((resolve) => setTimeout(resolve, 1000));
       const mockUrl = URL.createObjectURL(file);

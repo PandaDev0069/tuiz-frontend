@@ -58,7 +58,7 @@ export const ExplanationModal: React.FC<ExplanationModalProps> = ({
 
     setIsUploading(true);
     try {
-      // TODO: Implement actual file upload logic
+      // NOTE: Placeholder implementation - replace with actual file upload service
       await new Promise((resolve) => setTimeout(resolve, 1000));
       const mockUrl = URL.createObjectURL(file);
       setLocalImageUrl(mockUrl);
