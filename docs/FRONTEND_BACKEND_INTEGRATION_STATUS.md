@@ -68,7 +68,7 @@
 **Timeline: 2-3 hours**
 
 1. **BasicInfoStep Integration**
-   - Auto-save draft functionality
+   - save draft functionality
    - Real-time validation
    - Error display from backend
 
