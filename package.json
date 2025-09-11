@@ -29,11 +29,13 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@supabase/supabase-js": "^2.55.0",
     "@tailwindcss/postcss": "^4.1.12",
+    "@tanstack/react-query": "^5.87.4",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.540.0",
     "next": "15.4.7",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-hot-toast": "^2.6.0",
     "react-icons": "^5.5.0",
     "socket.io-client": "^4.8.1",
     "zustand": "^5.0.7"
