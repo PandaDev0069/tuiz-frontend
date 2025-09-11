@@ -19,7 +19,13 @@ export class ApiClient {
   // Get auth token from store
   private getAuthToken(): string | null {
     const { session } = useAuthStore.getState();
-    return session?.access_token || null;
+    const token = session?.access_token || null;
+    console.log('ApiClient: Getting auth token', {
+      hasSession: !!session,
+      hasToken: !!token,
+      tokenLength: token?.length || 0,
+    });
+    return token;
   }
 
   // Check if token is expiring soon (within 5 minutes)

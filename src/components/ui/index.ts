@@ -33,3 +33,4 @@ export { DashboardMessage } from './core/dashboard-message';
 export { SidebarFilter } from './overlays/sidebar-filter';
 export { ProfileSettingsModal } from './overlays/profile-settings-modal';
 export { AuthProvider } from '../providers/AuthProvider';
+export { AuthGuard, withAuthGuard } from '../auth/AuthGuard';

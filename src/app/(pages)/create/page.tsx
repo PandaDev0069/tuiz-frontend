@@ -3,7 +3,13 @@
 import React, { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
-import { Container, PageContainer, QuizCreationHeader, StepIndicator } from '@/components/ui';
+import {
+  Container,
+  PageContainer,
+  QuizCreationHeader,
+  StepIndicator,
+  AuthGuard,
+} from '@/components/ui';
 import { StructuredData } from '@/components/SEO';
 import { QuizCreationDebug } from '@/components/debug';
 import {
@@ -215,11 +221,13 @@ function CreateQuizPageContent() {
   );
 }
 
-// Main component wrapped with QueryClientProvider
+// Main component wrapped with QueryClientProvider and AuthGuard
 export default function CreateQuizPage() {
   return (
     <QueryClientProvider client={queryClient}>
-      <CreateQuizPageContent />
+      <AuthGuard>
+        <CreateQuizPageContent />
+      </AuthGuard>
     </QueryClientProvider>
   );
 }

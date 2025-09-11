@@ -105,9 +105,18 @@ export default function LoginPage() {
         rememberMe: rememberMe,
       });
 
-      // Success - redirect to dashboard
+      // Success - redirect to intended page or dashboard
       setToast('ログインしました');
-      router.push('/dashboard');
+
+      // Check for redirect parameter in URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const redirectTo = urlParams.get('redirect');
+
+      if (redirectTo) {
+        router.push(decodeURIComponent(redirectTo));
+      } else {
+        router.push('/dashboard');
+      }
     } catch (error) {
       setGeneralError(
         error instanceof Error

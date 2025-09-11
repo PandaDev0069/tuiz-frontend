@@ -119,6 +119,8 @@ export interface CreateQuizSetForm {
   category: string;
   tags: string[];
   play_settings: Partial<QuizPlaySettings>;
+  // Temporary field to store file before quiz creation
+  _thumbnailFile?: File;
 }
 
 export interface UpdateQuizSetForm extends Partial<CreateQuizSetForm> {

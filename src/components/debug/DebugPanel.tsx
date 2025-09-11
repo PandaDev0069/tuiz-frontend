@@ -345,6 +345,42 @@ export const DebugPanel: React.FC<DebugPanelProps> = ({
                   ID: {(user as AuthUser).id}
                 </div>
               )}
+              {session && (
+                <>
+                  <div
+                    style={{
+                      marginTop: '8px',
+                      paddingTop: '8px',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                    }}
+                  >
+                    <div>
+                      Token:{' '}
+                      <span style={{ color: session.access_token ? '#10b981' : '#ef4444' }}>
+                        {session.access_token
+                          ? `${session.access_token.substring(0, 20)}...`
+                          : 'None'}
+                      </span>
+                    </div>
+                    <div>
+                      Expires:{' '}
+                      <span style={{ color: '#fbbf24' }}>
+                        {new Date(session.expires_at * 1000).toLocaleString()}
+                      </span>
+                    </div>
+                    <div>
+                      Is Expired:{' '}
+                      <span
+                        style={{
+                          color: Date.now() / 1000 > session.expires_at ? '#ef4444' : '#10b981',
+                        }}
+                      >
+                        {Date.now() / 1000 > session.expires_at ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

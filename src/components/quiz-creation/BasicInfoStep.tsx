@@ -10,6 +10,8 @@ import { ThumbnailUpload } from './BasicInfoStep/ThumbnailUpload';
 import { VisibilitySettings } from './BasicInfoStep/VisibilitySettings';
 import { TagsManager } from './BasicInfoStep/TagsManager';
 import { useCreateQuiz, useUpdateQuiz } from '@/hooks/useQuizMutation';
+import { useFileUpload } from '@/lib/uploadService';
+import { debugLog } from '@/components/debug';
 import { Loader2 } from 'lucide-react';
 
 interface BasicInfoStepProps {
@@ -32,6 +34,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const createQuizMutation = useCreateQuiz();
   const updateQuizMutation = useUpdateQuiz();
+  const { uploadQuizThumbnail } = useFileUpload();
 
   const isFormValid = () => {
     return (
@@ -48,35 +51,78 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
     }
 
     setIsSaving(true);
+    debugLog.info('Starting quiz save process', { quizId, hasFormData: !!formData });
 
     try {
       let resultQuizId: string;
 
       if (quizId) {
         // Quiz already exists, always update it
-        console.log('Updating existing quiz:', quizId);
+        debugLog.info('Updating existing quiz', { quizId });
         const updatedQuiz = await updateQuizMutation.mutateAsync({
           id: quizId,
           data: formData as CreateQuizSetForm,
         });
         resultQuizId = updatedQuiz.id;
+        debugLog.success('Quiz updated successfully', { quizId: resultQuizId });
       } else {
         // No quiz ID, create new quiz
-        console.log('Creating new quiz');
-        const newQuiz = await createQuizMutation.mutateAsync(formData as CreateQuizSetForm);
+        debugLog.info('Creating new quiz', { title: formData.title });
+        // Create a copy of form data without the temporary file and blob URL for API call
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _thumbnailFile, thumbnail_url, ...quizFormData } = formData;
+        const newQuiz = await createQuizMutation.mutateAsync(quizFormData as CreateQuizSetForm);
         resultQuizId = newQuiz.id;
+        debugLog.success('Quiz created successfully', { quizId: resultQuizId });
+
+        // If there's a pending thumbnail file, upload it now
+        if (_thumbnailFile) {
+          debugLog.info('Uploading pending thumbnail', {
+            fileName: _thumbnailFile.name,
+            size: _thumbnailFile.size,
+          });
+          const thumbnailUrl = await uploadQuizThumbnail(_thumbnailFile, resultQuizId);
+
+          if (thumbnailUrl) {
+            debugLog.success('Thumbnail uploaded successfully', { url: thumbnailUrl });
+
+            // Update the quiz with the actual thumbnail URL
+            try {
+              await updateQuizMutation.mutateAsync({
+                id: resultQuizId,
+                data: { thumbnail_url: thumbnailUrl } as CreateQuizSetForm,
+              });
+              debugLog.success('Quiz updated with thumbnail URL', { url: thumbnailUrl });
+            } catch (error) {
+              debugLog.error('Failed to update quiz with thumbnail URL', { error });
+            }
+
+            // Update local form data
+            onFormDataChange({
+              ...formData,
+              thumbnail_url: thumbnailUrl,
+              _thumbnailFile: undefined,
+            });
+          } else {
+            debugLog.warning('Thumbnail upload returned no URL');
+          }
+        }
       }
 
-      // Move to next step immediately with quiz ID
+      debugLog.success('Proceeding to next step', { quizId: resultQuizId });
+      // Move to next step with quiz ID
       onNext(resultQuizId);
     } catch (error) {
+      debugLog.error('Failed to save quiz', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       // Error is already handled by mutation hooks (toast notification)
       console.error('Failed to save quiz:', error);
 
       // If we have a quizId but update failed, still try to proceed
       // This handles cases where the quiz data hasn't actually changed
       if (quizId) {
-        console.log('Update failed but quiz exists, proceeding with existing ID');
+        debugLog.warning('Update failed but proceeding with existing quiz ID', { quizId });
         onNext(quizId);
       }
     } finally {

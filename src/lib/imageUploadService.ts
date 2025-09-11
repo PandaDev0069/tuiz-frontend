@@ -226,6 +226,33 @@ class ImageUploadService {
     return results;
   }
 
+  /**
+   * Upload pending thumbnail after quiz creation
+   */
+  async uploadPendingThumbnail(
+    file: File,
+    userId: string,
+    quizId: string,
+    options: UploadOptions = {},
+  ): Promise<UploadResult> {
+    const folderPath = `${userId}/quiz-${quizId}/thumbnails`;
+
+    // Debug logging
+    console.log('Uploading thumbnail with path:', folderPath);
+    console.log('User ID:', userId);
+    console.log('Quiz ID:', quizId);
+
+    return this.uploadImage(file, {
+      bucket: 'quiz-images',
+      folder: folderPath,
+      maxSize: 5 * 1024 * 1024, // 5MB
+      maxWidth: 1920,
+      maxHeight: 1080,
+      quality: 0.8,
+      ...options,
+    });
+  }
+
   // ============================================================================
   // DELETE METHODS
   // ============================================================================
@@ -377,6 +404,35 @@ export function useImageUpload() {
     isUploading,
     uploadProgress,
     error,
+  };
+}
+
+/**
+ * Hook for handling pending thumbnail uploads after quiz creation
+ */
+export function usePendingThumbnailUpload() {
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+
+  const uploadPendingThumbnail = async (
+    file: File,
+    userId: string,
+    quizId: string,
+  ): Promise<string | null> => {
+    try {
+      setIsUploadingThumbnail(true);
+      const result = await imageUploadService.uploadPendingThumbnail(file, userId, quizId);
+      return result.url;
+    } catch (error) {
+      console.error('Failed to upload pending thumbnail:', error);
+      return null;
+    } finally {
+      setIsUploadingThumbnail(false);
+    }
+  };
+
+  return {
+    uploadPendingThumbnail,
+    isUploadingThumbnail,
   };
 }
 

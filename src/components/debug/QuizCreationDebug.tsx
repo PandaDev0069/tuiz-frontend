@@ -2,7 +2,76 @@
 
 import React, { useState, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
-import { Clock, FileText, Settings, CheckCircle, Move, Minimize2, Maximize2 } from 'lucide-react';
+import {
+  Clock,
+  FileText,
+  Settings,
+  CheckCircle,
+  Move,
+  Minimize2,
+  Maximize2,
+  Activity,
+  Trash2,
+} from 'lucide-react';
+
+// Debug log entry interface
+interface DebugLogEntry {
+  id: string;
+  timestamp: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  message: string;
+  data?: unknown;
+}
+
+// Global debug logger for the quiz creation process
+class QuizCreationDebugLogger {
+  private listeners: ((entries: DebugLogEntry[]) => void)[] = [];
+  private entries: DebugLogEntry[] = [];
+
+  addEntry(type: DebugLogEntry['type'], message: string, data?: unknown) {
+    const entry: DebugLogEntry = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      timestamp: new Date().toISOString(),
+      type,
+      message,
+      data,
+    };
+
+    this.entries = [entry, ...this.entries].slice(0, 50); // Keep only last 50 entries
+    this.notifyListeners();
+  }
+
+  subscribe(listener: (entries: DebugLogEntry[]) => void) {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
+  }
+
+  getEntries() {
+    return this.entries;
+  }
+
+  clear() {
+    this.entries = [];
+    this.notifyListeners();
+  }
+
+  private notifyListeners() {
+    this.listeners.forEach((listener) => listener(this.entries));
+  }
+}
+
+// Global instance
+export const debugLogger = new QuizCreationDebugLogger();
+
+// Convenience methods for different log types
+export const debugLog = {
+  info: (message: string, data?: unknown) => debugLogger.addEntry('info', message, data),
+  success: (message: string, data?: unknown) => debugLogger.addEntry('success', message, data),
+  warning: (message: string, data?: unknown) => debugLogger.addEntry('warning', message, data),
+  error: (message: string, data?: unknown) => debugLogger.addEntry('error', message, data),
+};
 
 interface QuizCreationDebugProps {
   currentStep?: number;
@@ -16,11 +85,20 @@ export const QuizCreationDebug: React.FC<QuizCreationDebugProps> = ({
   formData = {},
 }) => {
   const [showDetails, setShowDetails] = useState(false);
+  const [showActivityLog, setShowActivityLog] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [debugEntries, setDebugEntries] = useState<DebugLogEntry[]>([]);
   const pathname = usePathname();
+
+  // Subscribe to debug logger
+  React.useEffect(() => {
+    const unsubscribe = debugLogger.subscribe(setDebugEntries);
+    setDebugEntries(debugLogger.getEntries());
+    return unsubscribe;
+  }, []);
 
   // Handle mouse down for dragging
   const handleMouseDown = useCallback(
@@ -252,8 +330,8 @@ export const QuizCreationDebug: React.FC<QuizCreationDebugProps> = ({
             </div>
           </div>
 
-          {/* Toggle Details Button */}
-          <div style={{ padding: '0 12px 8px' }}>
+          {/* Toggle Buttons */}
+          <div style={{ padding: '0 12px 8px', display: 'flex', gap: '4px' }}>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -261,7 +339,7 @@ export const QuizCreationDebug: React.FC<QuizCreationDebugProps> = ({
               }}
               onMouseDown={(e) => e.stopPropagation()}
               style={{
-                width: '100%',
+                flex: 1,
                 padding: '6px 8px',
                 backgroundColor: showDetails ? '#ef4444' : '#3b82f6',
                 color: 'white',
@@ -279,7 +357,57 @@ export const QuizCreationDebug: React.FC<QuizCreationDebugProps> = ({
                 e.currentTarget.style.opacity = '1';
               }}
             >
-              {showDetails ? 'Hide Details' : 'Show Details'}
+              {showDetails ? 'Hide Data' : 'Show Data'}
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowActivityLog(!showActivityLog);
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                backgroundColor: showActivityLog ? '#ef4444' : '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                fontWeight: 'medium',
+                position: 'relative',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '0.8';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '1';
+              }}
+            >
+              <Activity size={10} style={{ marginRight: '4px' }} />
+              {showActivityLog ? 'Hide Log' : 'Activity'}
+              {debugEntries.length > 0 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '-2px',
+                    right: '-2px',
+                    backgroundColor: '#fbbf24',
+                    color: '#000',
+                    borderRadius: '50%',
+                    width: '12px',
+                    height: '12px',
+                    fontSize: '7px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  {debugEntries.length > 9 ? '9+' : debugEntries.length}
+                </span>
+              )}
             </button>
           </div>
 
@@ -394,6 +522,147 @@ export const QuizCreationDebug: React.FC<QuizCreationDebugProps> = ({
                 >
                   Copy Data
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Activity Log */}
+          {showActivityLog && (
+            <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(255, 255, 255, 0.2)' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '8px',
+                }}
+              >
+                <span style={{ color: '#10b981', fontWeight: 'bold', fontSize: '10px' }}>
+                  <Activity size={10} style={{ marginRight: '4px', display: 'inline' }} />
+                  Activity Log
+                </span>
+                {debugEntries.length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      debugLogger.clear();
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    style={{
+                      padding: '2px 6px',
+                      backgroundColor: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '3px',
+                      fontSize: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '2px',
+                    }}
+                    title="Clear log"
+                  >
+                    <Trash2 size={8} />
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div
+                style={{
+                  fontSize: '8px',
+                  maxHeight: '150px',
+                  overflowY: 'auto',
+                  backgroundColor: 'rgba(0, 0, 0, 0.3)',
+                  padding: '6px',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                }}
+              >
+                {debugEntries.length > 0 ? (
+                  debugEntries.map((entry) => {
+                    const typeColors = {
+                      info: '#3b82f6',
+                      success: '#10b981',
+                      warning: '#fbbf24',
+                      error: '#ef4444',
+                    };
+
+                    const typeIcons = {
+                      info: 'ℹ',
+                      success: '✓',
+                      warning: '⚠',
+                      error: '✗',
+                    };
+
+                    return (
+                      <div
+                        key={entry.id}
+                        style={{
+                          marginBottom: '4px',
+                          paddingBottom: '4px',
+                          borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '4px' }}>
+                          <span
+                            style={{
+                              color: typeColors[entry.type],
+                              fontWeight: 'bold',
+                              minWidth: '12px',
+                            }}
+                          >
+                            {typeIcons[entry.type]}
+                          </span>
+                          <div style={{ flex: 1 }}>
+                            <span style={{ color: '#e5e7eb' }}>{entry.message}</span>
+                            <div style={{ color: '#9ca3af', fontSize: '7px', marginTop: '1px' }}>
+                              {new Date(entry.timestamp).toLocaleTimeString()}
+                            </div>
+                            {entry.data != null && (
+                              <div
+                                style={{
+                                  marginTop: '2px',
+                                  padding: '2px 4px',
+                                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                  borderRadius: '2px',
+                                  fontSize: '7px',
+                                  color: '#d1d5db',
+                                  fontFamily: 'monospace',
+                                }}
+                              >
+                                {(() => {
+                                  try {
+                                    const dataStr =
+                                      typeof entry.data === 'string'
+                                        ? entry.data
+                                        : JSON.stringify(entry.data, null, 1);
+                                    return dataStr.length > 100
+                                      ? dataStr.slice(0, 100) + '...'
+                                      : dataStr;
+                                  } catch {
+                                    return '[Complex Object]';
+                                  }
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div
+                    style={{
+                      color: '#9ca3af',
+                      textAlign: 'center',
+                      padding: '12px',
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    No activity logged yet
+                  </div>
+                )}
               </div>
             </div>
           )}
