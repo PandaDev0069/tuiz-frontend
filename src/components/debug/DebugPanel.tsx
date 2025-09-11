@@ -235,10 +235,7 @@ export const DebugPanel: React.FC<DebugPanelProps> = ({
         fontSize: '12px',
         minWidth: '300px',
         maxWidth: '400px',
-        boxShadow: isDragging ? '0 12px 48px rgba(0, 0, 0, 0.5)' : '0 8px 32px rgba(0, 0, 0, 0.3)',
         cursor: isDragging ? 'grabbing' : 'default',
-        transform: isDragging ? 'rotate(1deg)' : 'none',
-        transition: isDragging ? 'none' : 'box-shadow 0.2s ease, transform 0.2s ease',
       }}
     >
       {/* Header */}
