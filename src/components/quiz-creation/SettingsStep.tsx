@@ -11,6 +11,7 @@ interface SettingsStepProps {
   onNext: () => void;
   onPrevious: () => void;
   errors?: Record<string, string>;
+  quizId?: string;
 }
 
 export const SettingsStep: React.FC<SettingsStepProps> = ({

@@ -21,6 +21,7 @@ interface QuestionCreationStepProps {
   onNext: () => void;
   onPrevious: () => void;
   errors?: FormErrors<CreateQuestionForm>[];
+  quizId?: string;
 }
 
 // Validation functions

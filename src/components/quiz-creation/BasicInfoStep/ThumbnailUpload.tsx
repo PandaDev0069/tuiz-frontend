@@ -1,16 +1,24 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { CreateQuizSetForm } from '@/types/quiz';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from '@/components/ui';
 import { Upload, X } from 'lucide-react';
 import Image from 'next/image';
+import { useImageUpload } from '@/lib/imageUploadService';
+import { useAuthStore } from '@/state/useAuthStore';
 
 interface ThumbnailUploadProps {
   formData: Partial<CreateQuizSetForm>;
   onFormDataChange: (data: Partial<CreateQuizSetForm>) => void;
+  quizId?: string; // Optional quiz ID for organizing uploads
 }
 
-export const ThumbnailUpload: React.FC<ThumbnailUploadProps> = ({ formData, onFormDataChange }) => {
-  const [isUploading, setIsUploading] = useState(false);
+export const ThumbnailUpload: React.FC<ThumbnailUploadProps> = ({
+  formData,
+  onFormDataChange,
+  quizId,
+}) => {
+  const { uploadImage, isUploading } = useImageUpload();
+  const { user } = useAuthStore();
 
   const handleInputChange = (field: keyof CreateQuizSetForm, value: string | undefined) => {
     onFormDataChange({
@@ -23,17 +31,34 @@ export const ThumbnailUpload: React.FC<ThumbnailUploadProps> = ({ formData, onFo
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
+    // Get current user ID for storage path
+    const userId = user?.id;
+    if (!userId) {
+      console.error('User not authenticated');
+      return;
+    }
+
     try {
-      // NOTE: Placeholder implementation - replace with actual file upload service
-      // For now, we'll simulate the upload
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const mockUrl = URL.createObjectURL(file);
-      handleInputChange('thumbnail_url', mockUrl);
+      // Construct folder path with user ID prefix for RLS compliance
+      const folderPath = quizId
+        ? `${userId}/quiz-${quizId}/thumbnails`
+        : `${userId}/temp/thumbnails`;
+
+      const result = await uploadImage(file, {
+        bucket: 'quiz-images',
+        folder: folderPath,
+        maxSize: 5 * 1024 * 1024, // 5MB
+        maxWidth: 1920,
+        maxHeight: 1080,
+        quality: 0.8,
+      });
+
+      if (result) {
+        handleInputChange('thumbnail_url', result.url);
+      }
     } catch (error) {
       console.error('Upload failed:', error);
-    } finally {
-      setIsUploading(false);
+      // Error is already handled by useImageUpload hook (toast notification)
     }
   };
 

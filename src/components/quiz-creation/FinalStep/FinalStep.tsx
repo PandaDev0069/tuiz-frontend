@@ -11,6 +11,7 @@ interface FinalStepProps {
   onPrevious: () => void;
   onPublish: () => void;
   isMobile: boolean;
+  quizId?: string;
 }
 
 export const FinalStep: React.FC<FinalStepProps> = ({

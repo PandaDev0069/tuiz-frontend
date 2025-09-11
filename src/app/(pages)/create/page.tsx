@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
 import { Container, PageContainer, QuizCreationHeader, StepIndicator } from '@/components/ui';
 import { StructuredData } from '@/components/SEO';
+import { QuizCreationDebug } from '@/components/debug';
 import {
   BasicInfoStep,
   QuestionCreationStep,
@@ -11,8 +14,24 @@ import {
 } from '@/components/quiz-creation';
 import { CreateQuizSetForm, CreateQuestionForm, DifficultyLevel, FormErrors } from '@/types/quiz';
 
-export default function CreateQuizPage() {
+// Create a query client instance
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
+
+function CreateQuizPageContent() {
   const [currentStep, setCurrentStep] = useState(1);
+  const [quizId, setQuizId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [formData, setFormData] = useState<Partial<CreateQuizSetForm>>({
@@ -23,7 +42,6 @@ export default function CreateQuizPage() {
     category: '',
     tags: [],
     play_settings: {
-      code: 0,
       show_question_only: true,
       show_explanation: true,
       time_bonus: true,
@@ -54,7 +72,8 @@ export default function CreateQuizPage() {
 
   const handleSaveDraft = async () => {
     setIsSaving(true);
-    // Simulate saving
+    // This will be handled by individual step components
+    // For now, just simulate saving
     await new Promise((resolve) => setTimeout(resolve, 1000));
     setIsSaving(false);
     console.log('Draft saved!');
@@ -65,9 +84,8 @@ export default function CreateQuizPage() {
   };
 
   const handlePublish = () => {
-    console.log('Quiz published!', { formData, questions });
-    // NOTE: Backend API integration required for actual publishing
-    // For now, just show success message
+    console.log('Quiz published!', { formData, questions, quizId });
+    // The FinalStep component will handle actual publishing
     alert('クイズが公開されました！');
   };
 
@@ -83,31 +101,20 @@ export default function CreateQuizPage() {
     setQuestionErrors([]);
   };
 
+  // Handle BasicInfoStep completion with quiz ID
+  const handleBasicInfoNext = (createdQuizId: string) => {
+    setQuizId(createdQuizId);
+    setCurrentStep(2);
+    // Scroll to top when moving to next step
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
+  };
+
   const handleNext = () => {
-    // Validate current step
-    const errors: FormErrors<CreateQuizSetForm> = {};
-
-    if (!formData.title?.trim()) {
-      errors.title = 'タイトルは必須です';
-    }
-    if (!formData.description?.trim()) {
-      errors.description = '説明は必須です';
-    }
-    if (!formData.difficulty_level) {
-      errors.difficulty_level = '難易度を選択してください';
-    }
-    if (!formData.category?.trim()) {
-      errors.category = 'カテゴリを選択してください';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
-    }
-
     setCurrentStep((prev) => Math.min(4, prev + 1));
 
-    // Scroll to top when moving to next step (works on both mobile and PC)
+    // Scroll to top when moving to next step
     setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }, 100);
@@ -116,7 +123,7 @@ export default function CreateQuizPage() {
   const handlePrevious = () => {
     setCurrentStep((prev) => Math.max(1, prev - 1));
 
-    // Scroll to top when moving to previous step (works on both mobile and PC)
+    // Scroll to top when moving to previous step
     setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }, 100);
@@ -127,6 +134,9 @@ export default function CreateQuizPage() {
       {/* Structured Data for SEO */}
       <StructuredData type="quiz" />
       <StructuredData type="software" />
+
+      {/* Toast notifications */}
+      <Toaster position="top-right" />
 
       {/* Quiz Creation Header */}
       <QuizCreationHeader
@@ -156,8 +166,9 @@ export default function CreateQuizPage() {
                 <BasicInfoStep
                   formData={formData}
                   onFormDataChange={handleFormDataChange}
-                  onNext={handleNext}
+                  onNext={handleBasicInfoNext}
                   errors={formErrors}
+                  quizId={quizId || undefined}
                 />
               )}
 
@@ -168,6 +179,7 @@ export default function CreateQuizPage() {
                   onNext={handleNext}
                   onPrevious={handlePrevious}
                   errors={questionErrors}
+                  quizId={quizId || undefined}
                 />
               )}
 
@@ -178,6 +190,7 @@ export default function CreateQuizPage() {
                   onNext={handleNext}
                   onPrevious={handlePrevious}
                   errors={formErrors}
+                  quizId={quizId || undefined}
                 />
               )}
 
@@ -188,12 +201,25 @@ export default function CreateQuizPage() {
                   onPrevious={handlePrevious}
                   onPublish={handlePublish}
                   isMobile={isMobile}
+                  quizId={quizId || undefined}
                 />
               )}
             </div>
           </Container>
         </main>
       </PageContainer>
+
+      {/* Debug Panel for Quiz Creation */}
+      <QuizCreationDebug currentStep={currentStep} quizId={quizId} formData={formData} />
     </>
+  );
+}
+
+// Main component wrapped with QueryClientProvider
+export default function CreateQuizPage() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <CreateQuizPageContent />
+    </QueryClientProvider>
   );
 }
