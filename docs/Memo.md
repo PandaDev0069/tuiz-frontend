@@ -16,3 +16,4 @@
 - Game code can be set in advanced / if not set , generate a random one.
   - all codes should be unique and add validator for that.
   - codes can ve set in advanaced
+  - api implemented next update frontend to use the api
