@@ -123,6 +123,16 @@ export interface ValidationResponse {
   warnings: ValidationWarning[];
 }
 
+export interface QuizValidationResponse {
+  quiz: {
+    id: string;
+    title: string;
+    status: string;
+    total_questions: number;
+  };
+  validation: ValidationResponse;
+}
+
 export interface ValidationError {
   field: string;
   message: string;

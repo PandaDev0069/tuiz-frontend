@@ -9,7 +9,7 @@ import type {
   CreateQuizRequest,
   UpdateQuizRequest,
   QuizListRequest,
-  ValidationResponse,
+  QuizValidationResponse,
   ApiError,
 } from '@/types/api';
 import type { QuizSet, CreateQuestionForm } from '@/types/quiz';
@@ -200,11 +200,11 @@ export const useDeleteQuiz = () => {
 export const useValidateQuiz = () => {
   return useMutation({
     mutationFn: (quizId: string) => quizService.validateQuiz(quizId),
-    onSuccess: (validation: ValidationResponse) => {
-      if (validation.isValid) {
+    onSuccess: (response: QuizValidationResponse) => {
+      if (response.validation.isValid) {
         toast.success('クイズの検証が完了しました');
       } else {
-        toast.error(`検証エラー: ${validation.errors.length}個の問題が見つかりました`);
+        toast.error(`検証エラー: ${response.validation.errors.length}個の問題が見つかりました`);
       }
     },
     onError: (error: ApiError) => {
@@ -221,7 +221,10 @@ export const usePublishQuiz = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (quizId: string) => quizService.publishQuiz(quizId),
+    mutationFn: async (quizId: string) => {
+      const response = await quizService.publishQuiz(quizId);
+      return response.quiz;
+    },
     onSuccess: (quiz: QuizSet) => {
       toast.success('クイズが公開されました！');
 
@@ -250,7 +253,10 @@ export const useUnpublishQuiz = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (quizId: string) => quizService.unpublishQuiz(quizId),
+    mutationFn: async (quizId: string) => {
+      const response = await quizService.unpublishQuiz(quizId);
+      return response.quiz;
+    },
     onSuccess: (quiz: QuizSet) => {
       toast.success('クイズの公開を停止しました');
 

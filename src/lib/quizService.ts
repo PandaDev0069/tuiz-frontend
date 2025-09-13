@@ -18,7 +18,7 @@ import type {
   UpdateAnswerRequest,
   AnswerResponse,
   AnswersListResponse,
-  ValidationResponse,
+  QuizValidationResponse,
   PublishResponse,
   UnpublishResponse,
   GenerateCodeResponse,
@@ -27,7 +27,13 @@ import type {
   RemoveCodeResponse,
   ApiError,
 } from '@/types/api';
-import type { QuizSet, QuizSetComplete, Answer, QuestionWithAnswers } from '@/types/quiz';
+import type {
+  QuizSet,
+  QuizSetComplete,
+  Answer,
+  QuestionWithAnswers,
+  QuizPlaySettings,
+} from '@/types/quiz';
 
 // ============================================================================
 // QUIZ SERVICE CLASS
@@ -273,115 +279,6 @@ class QuizService {
   }
 
   // ============================================================================
-  // PUBLISHING OPERATIONS
-  // ============================================================================
-
-  /**
-   * Validate a quiz before publishing
-   */
-  async validateQuiz(quizId: string): Promise<ValidationResponse> {
-    try {
-      const response = await apiClient.get<ValidationResponse>(API_ENDPOINTS.VALIDATE_QUIZ(quizId));
-      return response;
-    } catch (error) {
-      handleApiError(error as ApiError);
-      throw error;
-    }
-  }
-
-  /**
-   * Publish a quiz
-   */
-  async publishQuiz(quizId: string): Promise<QuizSet> {
-    try {
-      const response = await apiClient.post<PublishResponse>(
-        API_ENDPOINTS.PUBLISH_QUIZ(quizId),
-        {},
-      );
-      return response.quiz;
-    } catch (error) {
-      handleApiError(error as ApiError);
-      throw error;
-    }
-  }
-
-  /**
-   * Unpublish a quiz
-   */
-  async unpublishQuiz(quizId: string): Promise<QuizSet> {
-    try {
-      const response = await apiClient.post<UnpublishResponse>(
-        API_ENDPOINTS.UNPUBLISH_QUIZ(quizId),
-        {},
-      );
-      return response.quiz;
-    } catch (error) {
-      handleApiError(error as ApiError);
-      throw error;
-    }
-  }
-
-  // ============================================================================
-  // CODE MANAGEMENT
-  // ============================================================================
-
-  /**
-   * Generate a new quiz code
-   */
-  async generateQuizCode(quizId: string): Promise<{ code: number }> {
-    try {
-      const response = await apiClient.post<GenerateCodeResponse>(
-        API_ENDPOINTS.GENERATE_CODE(quizId),
-        {},
-      );
-      return { code: response.code };
-    } catch (error) {
-      handleApiError(error as ApiError);
-      throw error;
-    }
-  }
-
-  /**
-   * Check if a code is available
-   */
-  async checkCodeAvailability(code: number): Promise<{ isAvailable: boolean }> {
-    try {
-      const response = await apiClient.get<CheckCodeAvailabilityResponse>(
-        API_ENDPOINTS.CHECK_CODE(code),
-      );
-      return { isAvailable: response.isAvailable };
-    } catch (error) {
-      handleApiError(error as ApiError);
-      throw error;
-    }
-  }
-
-  /**
-   * Get current quiz code
-   */
-  async getQuizCode(quizId: string): Promise<{ code: number | null }> {
-    try {
-      const response = await apiClient.get<GetQuizCodeResponse>(API_ENDPOINTS.GET_CODE(quizId));
-      return { code: response.code };
-    } catch (error) {
-      handleApiError(error as ApiError);
-      throw error;
-    }
-  }
-
-  /**
-   * Remove quiz code
-   */
-  async removeQuizCode(quizId: string): Promise<void> {
-    try {
-      await apiClient.delete<RemoveCodeResponse>(API_ENDPOINTS.REMOVE_CODE(quizId));
-    } catch (error) {
-      handleApiError(error as ApiError);
-      throw error;
-    }
-  }
-
-  // ============================================================================
   // UTILITY METHODS
   // ============================================================================
 
@@ -444,6 +341,138 @@ class QuizService {
     }
 
     return { quiz, questions: savedQuestions };
+  }
+
+  // ============================================================================
+  // CUSTOM CODE MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Generate a unique code for a quiz
+   */
+  async generateQuizCode(quizId: string): Promise<GenerateCodeResponse> {
+    try {
+      const response = await apiClient.post<GenerateCodeResponse>(
+        API_ENDPOINTS.GENERATE_CODE(quizId),
+        {},
+      );
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if a code is available
+   */
+  async checkCodeAvailability(code: number): Promise<CheckCodeAvailabilityResponse> {
+    try {
+      const response = await apiClient.get<CheckCodeAvailabilityResponse>(
+        API_ENDPOINTS.CHECK_CODE(code),
+      );
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
+   * Get current quiz code
+   */
+  async getQuizCode(quizId: string): Promise<GetQuizCodeResponse> {
+    try {
+      const response = await apiClient.get<GetQuizCodeResponse>(API_ENDPOINTS.GET_CODE(quizId));
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove quiz code
+   */
+  async removeQuizCode(quizId: string): Promise<RemoveCodeResponse> {
+    try {
+      const response = await apiClient.delete<RemoveCodeResponse>(
+        API_ENDPOINTS.REMOVE_CODE(quizId),
+      );
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
+   * Update quiz play settings
+   */
+  async updatePlaySettings(
+    quizId: string,
+    playSettings: Partial<QuizPlaySettings>,
+  ): Promise<QuizSet> {
+    try {
+      const response = await apiClient.put<QuizSet>(API_ENDPOINTS.QUIZ_BY_ID(quizId), {
+        play_settings: playSettings,
+      });
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // PUBLISHING OPERATIONS
+  // ============================================================================
+
+  /**
+   * Validate quiz before publishing
+   */
+  async validateQuiz(quizId: string): Promise<QuizValidationResponse> {
+    try {
+      const response = await apiClient.get<QuizValidationResponse>(
+        API_ENDPOINTS.VALIDATE_QUIZ(quizId),
+      );
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
+   * Publish quiz
+   */
+  async publishQuiz(quizId: string): Promise<PublishResponse> {
+    try {
+      const response = await apiClient.post<PublishResponse>(
+        API_ENDPOINTS.PUBLISH_QUIZ(quizId),
+        {},
+      );
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
+   * Unpublish quiz
+   */
+  async unpublishQuiz(quizId: string): Promise<UnpublishResponse> {
+    try {
+      const response = await apiClient.post<UnpublishResponse>(
+        API_ENDPOINTS.UNPUBLISH_QUIZ(quizId),
+        {},
+      );
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
   }
 }
 

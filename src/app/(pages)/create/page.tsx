@@ -89,12 +89,6 @@ function CreateQuizPageContent() {
     console.log('Profile clicked');
   };
 
-  const handlePublish = () => {
-    console.log('Quiz published!', { formData, questions, quizId });
-    // The FinalStep component will handle actual publishing
-    alert('クイズが公開されました！');
-  };
-
   const handleFormDataChange = (data: Partial<CreateQuizSetForm>) => {
     setFormData((prev) => ({ ...prev, ...data }));
     // Clear errors when user makes changes
@@ -205,7 +199,6 @@ function CreateQuizPageContent() {
                   formData={formData}
                   questions={questions}
                   onPrevious={handlePrevious}
-                  onPublish={handlePublish}
                   isMobile={isMobile}
                   quizId={quizId || undefined}
                 />

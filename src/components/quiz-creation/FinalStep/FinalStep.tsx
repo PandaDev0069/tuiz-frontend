@@ -1,15 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@/components/ui';
-import { CheckCircle, ArrowLeft, Upload } from 'lucide-react';
+import { CheckCircle, ArrowLeft, Upload, XCircle } from 'lucide-react';
 import { CreateQuizSetForm, CreateQuestionForm } from '@/types/quiz';
+import { useValidateQuiz, usePublishQuiz } from '@/hooks/usePublishing';
+import { useBatchSaveQuestions } from '@/hooks/useQuestionMutation';
+import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
 
 interface FinalStepProps {
   formData: Partial<CreateQuizSetForm>;
   questions: CreateQuestionForm[];
   onPrevious: () => void;
-  onPublish: () => void;
   isMobile: boolean;
   quizId?: string;
 }
@@ -18,30 +21,142 @@ export const FinalStep: React.FC<FinalStepProps> = ({
   formData,
   questions,
   onPrevious,
-  onPublish,
   isMobile,
+  quizId,
 }) => {
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isSavingQuestions, setIsSavingQuestions] = useState(false);
+  const hasSavedQuestions = useRef(false);
+  const router = useRouter();
+
+  // Hooks for publishing
+  const {
+    data: validationData,
+    isLoading: isValidating,
+    refetch: validateQuiz,
+  } = useValidateQuiz(quizId);
+  const publishQuizMutation = usePublishQuiz();
+  const batchSaveQuestionsMutation = useBatchSaveQuestions();
+
+  // Save questions first if they exist, then validate (only once)
+  useEffect(() => {
+    const saveAndValidate = async () => {
+      if (!quizId || questions.length === 0 || hasSavedQuestions.current) {
+        return;
+      }
+
+      try {
+        hasSavedQuestions.current = true;
+        setIsSavingQuestions(true);
+
+        // Save questions to database
+        await batchSaveQuestionsMutation.mutateAsync({
+          quizId,
+          questions,
+        });
+
+        // Wait a moment for the database to be updated
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // Now validate the quiz
+        validateQuiz();
+      } catch (error) {
+        console.error('FinalStep: Failed to save questions', error);
+        hasSavedQuestions.current = false; // Reset on error so it can retry
+      } finally {
+        setIsSavingQuestions(false);
+      }
+    };
+
+    saveAndValidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizId]);
+
+  // Update validation state when validation data changes
+  useEffect(() => {
+    if (validationData) {
+      // Validation data received - no action needed as UI updates automatically
+    }
+  }, [validationData]);
 
   const handlePublish = async () => {
+    if (!quizId) {
+      return;
+    }
+
     setIsPublishing(true);
-    // Simulate publishing process
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setIsPublishing(false);
-    onPublish();
+    try {
+      await publishQuizMutation.mutateAsync(quizId);
+
+      // Show success toast
+      toast.success('クイズが公開されました！', {
+        duration: 3000,
+        position: 'top-center',
+      });
+
+      // Redirect to dashboard after a short delay
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1500);
+    } catch {
+      toast.error('クイズの公開に失敗しました', {
+        duration: 4000,
+        position: 'top-center',
+      });
+    } finally {
+      setIsPublishing(false);
+    }
   };
+
+  const canPublish =
+    validationData?.validation?.isValid &&
+    !isPublishing &&
+    !publishQuizMutation.isPending &&
+    !isSavingQuestions;
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center mb-8">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <CheckCircle className="w-8 h-8 text-green-600" />
+        <div
+          className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+            isSavingQuestions
+              ? 'bg-yellow-100'
+              : isValidating
+                ? 'bg-blue-100'
+                : validationData?.validation?.isValid
+                  ? 'bg-green-100'
+                  : 'bg-red-100'
+          }`}
+        >
+          {isSavingQuestions ? (
+            <div className="w-8 h-8 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
+          ) : isValidating ? (
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          ) : validationData?.validation?.isValid ? (
+            <CheckCircle className="w-8 h-8 text-green-600" />
+          ) : (
+            <XCircle className="w-8 h-8 text-red-600" />
+          )}
         </div>
         <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900 mb-2`}>
-          クイズ完成！
+          {isSavingQuestions
+            ? '問題を保存中...'
+            : isValidating
+              ? 'クイズを検証中...'
+              : validationData?.validation?.isValid
+                ? 'クイズ完成！'
+                : 'クイズに問題があります'}
         </h2>
-        <p className="text-gray-600">クイズの内容を確認して公開しましょう</p>
+        <p className="text-gray-600">
+          {isSavingQuestions
+            ? '問題をデータベースに保存しています'
+            : isValidating
+              ? 'クイズの内容を確認しています'
+              : validationData?.validation?.isValid
+                ? 'クイズの内容を確認して公開しましょう'
+                : '以下の問題を修正してから公開してください'}
+        </p>
       </div>
 
       {/* Quiz Summary */}
@@ -118,6 +233,7 @@ export const FinalStep: React.FC<FinalStepProps> = ({
         <Button
           variant="gradient2"
           onClick={onPrevious}
+          disabled={isPublishing || publishQuizMutation.isPending || isSavingQuestions}
           className="flex items-center gap-2 px-6 py-3"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -126,16 +242,48 @@ export const FinalStep: React.FC<FinalStepProps> = ({
 
         <Button
           onClick={handlePublish}
-          disabled={isPublishing}
-          className="flex items-center gap-2 px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold"
+          disabled={!canPublish}
+          className={`flex items-center gap-2 px-8 py-3 font-semibold ${
+            canPublish
+              ? 'bg-green-600 hover:bg-green-700 text-white'
+              : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+          }`}
         >
-          <Upload className={`w-4 h-4 ${isPublishing ? 'animate-spin' : ''}`} />
-          {isPublishing ? '公開中...' : 'クイズを公開'}
+          {isSavingQuestions ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              保存中...
+            </>
+          ) : isPublishing || publishQuizMutation.isPending ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              公開中...
+            </>
+          ) : validationData?.validation?.isValid ? (
+            <>
+              <Upload className="w-4 h-4" />
+              クイズを公開
+            </>
+          ) : (
+            <>
+              <XCircle className="w-4 h-4" />
+              修正が必要
+            </>
+          )}
         </Button>
       </div>
 
-      {/* Publishing Status */}
-      {isPublishing && (
+      {/* Status Messages */}
+      {isSavingQuestions && (
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg">
+            <div className="w-4 h-4 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
+            問題を保存しています...
+          </div>
+        </div>
+      )}
+
+      {(isPublishing || publishQuizMutation.isPending) && (
         <div className="text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg">
             <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
