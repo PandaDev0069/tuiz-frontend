@@ -14,6 +14,10 @@ import { QuestionList } from './QuestionCreationStep/QuestionList';
 import { QuestionForm } from './QuestionCreationStep/QuestionForm';
 import { QuestionNavigation } from './QuestionCreationStep/QuestionNavigation';
 import { QuizOverviewPanel } from './QuestionCreationStep/QuizOverviewPanel';
+import { useBatchSaveQuestions } from '@/hooks/useQuestionMutation';
+import { useFileUpload } from '@/lib/uploadService';
+import { debugLog } from '@/components/debug';
+import { Loader2 } from 'lucide-react';
 
 interface QuestionCreationStepProps {
   questions: CreateQuestionForm[];
@@ -87,6 +91,7 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
   onQuestionsChange,
   onNext,
   onPrevious,
+  quizId,
 }) => {
   // Initialize with one blank question if none exist
   const [localQuestions, setLocalQuestions] = useState<CreateQuestionForm[]>(
@@ -98,6 +103,11 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
   const [isExplanationModalOpen, setIsExplanationModalOpen] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Hooks for question management
+  const batchSaveMutation = useBatchSaveQuestions();
+  const { uploadQuestionImage, uploadAnswerImage } = useFileUpload();
 
   // Update local state when questions prop changes
   React.useEffect(() => {
@@ -248,16 +258,25 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !quizId) return;
 
     setIsUploading(true);
+    debugLog.info('Starting question image upload', {
+      fileName: file.name,
+      size: file.size,
+      quizId,
+    });
+
     try {
-      // NOTE: Placeholder implementation - replace with actual file upload service
-      // For now, we'll simulate the upload
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const mockUrl = URL.createObjectURL(file);
-      handleQuestionFieldChange('image_url', mockUrl);
+      const imageUrl = await uploadQuestionImage(file, quizId);
+      if (imageUrl) {
+        handleQuestionFieldChange('image_url', imageUrl);
+        debugLog.success('Question image uploaded successfully', { url: imageUrl });
+      } else {
+        debugLog.warning('Question image upload returned no URL');
+      }
     } catch (error) {
+      debugLog.error('Question image upload failed', { error });
       console.error('Upload failed:', error);
     } finally {
       setIsUploading(false);
@@ -266,31 +285,40 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
 
   const handleAnswerImageUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !quizId) return;
 
     setIsUploading(true);
+    debugLog.info('Starting answer image upload', {
+      fileName: file.name,
+      size: file.size,
+      quizId,
+      answerIndex: index,
+    });
+
     try {
-      // NOTE: Placeholder implementation - replace with actual file upload service
-      // For now, we'll simulate the upload
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const mockUrl = URL.createObjectURL(file);
+      const imageUrl = await uploadAnswerImage(file, quizId);
+      if (imageUrl) {
+        const updatedQuestions = [...localQuestions];
+        const currentQuestion = updatedQuestions[selectedQuestionIndex];
+        const updatedAnswers = [...currentQuestion.answers];
+        updatedAnswers[index] = {
+          ...updatedAnswers[index],
+          image_url: imageUrl,
+        };
 
-      const updatedQuestions = [...localQuestions];
-      const currentQuestion = updatedQuestions[selectedQuestionIndex];
-      const updatedAnswers = [...currentQuestion.answers];
-      updatedAnswers[index] = {
-        ...updatedAnswers[index],
-        image_url: mockUrl,
-      };
+        updatedQuestions[selectedQuestionIndex] = {
+          ...currentQuestion,
+          answers: updatedAnswers,
+        };
 
-      updatedQuestions[selectedQuestionIndex] = {
-        ...currentQuestion,
-        answers: updatedAnswers,
-      };
-
-      setLocalQuestions(updatedQuestions);
-      onQuestionsChange(updatedQuestions);
+        setLocalQuestions(updatedQuestions);
+        onQuestionsChange(updatedQuestions);
+        debugLog.success('Answer image uploaded successfully', { url: imageUrl });
+      } else {
+        debugLog.warning('Answer image upload returned no URL');
+      }
     } catch (error) {
+      debugLog.error('Answer image upload failed', { error });
       console.error('Answer image upload failed:', error);
     } finally {
       setIsUploading(false);
@@ -314,7 +342,7 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
     onQuestionsChange(updatedQuestions);
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     const validation = validateAllQuestions(localQuestions);
 
     if (!validation.isValid) {
@@ -322,14 +350,87 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
       return;
     }
 
+    if (!quizId) {
+      debugLog.error('Cannot save questions: No quiz ID provided');
+      return;
+    }
+
     setShowValidationErrors(false);
-    onNext();
+    setIsSaving(true);
+    debugLog.info('Starting question save process', {
+      quizId,
+      questionCount: localQuestions.length,
+    });
+
+    try {
+      // Convert CreateQuestionForm to CreateQuestionRequest format
+      const questionsToSave = localQuestions.map((question) => {
+        // Remove any temporary fields and ensure proper format
+        const { ...questionData } = question;
+        return {
+          question_text: questionData.question_text,
+          question_type: questionData.question_type,
+          image_url: questionData.image_url,
+          show_question_time: questionData.show_question_time,
+          answering_time: questionData.answering_time,
+          points: questionData.points,
+          difficulty: questionData.difficulty,
+          order_index: questionData.order_index,
+          explanation_title: questionData.explanation_title,
+          explanation_text: questionData.explanation_text,
+          explanation_image_url: questionData.explanation_image_url,
+          show_explanation_time: questionData.show_explanation_time,
+          answers: questionData.answers.map((answer) => ({
+            answer_text: answer.answer_text,
+            image_url: answer.image_url,
+            is_correct: answer.is_correct,
+            order_index: answer.order_index,
+          })),
+        };
+      });
+
+      // Use batch save to save all questions at once
+      const savedQuestions = await batchSaveMutation.mutateAsync({
+        quizId,
+        questions: questionsToSave,
+      });
+
+      debugLog.success('All questions saved successfully', {
+        savedCount: savedQuestions.length,
+      });
+
+      // Update parent component with saved questions
+      onQuestionsChange(localQuestions);
+
+      // Proceed to next step
+      onNext();
+    } catch (error) {
+      debugLog.error('Failed to save questions', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      console.error('Failed to save questions:', error);
+      // Don't proceed to next step if saving failed
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  const isProcessing = isSaving || batchSaveMutation.isPending;
 
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Header */}
       <QuestionHeader />
+
+      {/* Auto-save indicator */}
+      {isProcessing && (
+        <div className="flex items-center justify-center p-2 bg-blue-50 border border-blue-200 rounded-lg">
+          <Loader2 className="w-4 h-4 animate-spin text-blue-600 mr-2" />
+          <span className="text-sm text-blue-700">
+            {isSaving ? '問題を保存中...' : '処理中...'}
+          </span>
+        </div>
+      )}
 
       {/* Question Adding Panel */}
       <div className="space-y-4">
@@ -387,8 +488,9 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
       <QuestionNavigation
         onPrevious={onPrevious}
         onNext={handleNext}
-        canProceed={validationErrors.length === 0}
+        canProceed={validationErrors.length === 0 && !isProcessing}
         validationErrors={validationErrors}
+        isLoading={isProcessing}
       />
 
       {/* Explanation Modal */}
@@ -400,6 +502,7 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
         explanationImageUrl={localQuestions[selectedQuestionIndex]?.explanation_image_url}
         onSave={handleExplanationSave}
         questionNumber={localQuestions[selectedQuestionIndex]?.order_index || 1}
+        quizId={quizId}
       />
     </div>
   );

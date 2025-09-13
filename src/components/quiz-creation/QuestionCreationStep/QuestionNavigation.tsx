@@ -2,12 +2,14 @@
 
 import React from 'react';
 import { Button } from '@/components/ui';
+import { Loader2 } from 'lucide-react';
 
 interface QuestionNavigationProps {
   onPrevious: () => void;
   onNext: () => void;
   canProceed: boolean;
   validationErrors: string[];
+  isLoading?: boolean;
 }
 
 export const QuestionNavigation: React.FC<QuestionNavigationProps> = ({
@@ -15,6 +17,7 @@ export const QuestionNavigation: React.FC<QuestionNavigationProps> = ({
   onNext,
   canProceed,
   validationErrors,
+  isLoading = false,
 }) => {
   return (
     <div className="flex justify-between pt-4 md:pt-6">
@@ -28,15 +31,24 @@ export const QuestionNavigation: React.FC<QuestionNavigationProps> = ({
       <Button
         variant="gradient2"
         onClick={onNext}
-        disabled={!canProceed}
+        disabled={!canProceed || isLoading}
         className={`px-6 md:px-8 text-sm md:text-base ${
-          !canProceed ? 'opacity-50 cursor-not-allowed' : ''
+          !canProceed || isLoading ? 'opacity-50 cursor-not-allowed' : ''
         }`}
         title={!canProceed ? 'すべての問題を完成させてください' : ''}
       >
-        次へ進む
-        {!canProceed && validationErrors.length > 0 && (
-          <span className="ml-2 text-xs">({validationErrors.length}個のエラー)</span>
+        {isLoading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+            保存中...
+          </>
+        ) : (
+          <>
+            次へ進む
+            {!canProceed && validationErrors.length > 0 && (
+              <span className="ml-2 text-xs">({validationErrors.length}個のエラー)</span>
+            )}
+          </>
         )}
       </Button>
     </div>

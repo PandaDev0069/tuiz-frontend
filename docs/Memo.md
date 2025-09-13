@@ -17,3 +17,9 @@
   - all codes should be unique and add validator for that.
   - codes can ve set in advanaced
   - api implemented next update frontend to use the api
+
+## Db improvements
+
+- On deleting the quiz-set , delete all the questions and answers related to it.
+- On deleting the question , delete all the answers related to it.
+- On deleting the answer , delete the image related to it.

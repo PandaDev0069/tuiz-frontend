@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Label, Textarea } from '@/components/ui';
 import { Upload, X, BookOpen, Image as ImageIcon, FileText } from 'lucide-react';
 import Image from 'next/image';
+import { useFileUpload } from '@/lib/uploadService';
+import { debugLog } from '@/components/debug';
 
 interface ExplanationModalProps {
   isOpen: boolean;
@@ -17,6 +19,7 @@ interface ExplanationModalProps {
     explanation_image_url?: string;
   }) => void;
   questionNumber: number;
+  quizId?: string;
 }
 
 export const ExplanationModal: React.FC<ExplanationModalProps> = ({
@@ -27,12 +30,15 @@ export const ExplanationModal: React.FC<ExplanationModalProps> = ({
   explanationImageUrl = '',
   onSave,
   questionNumber,
+  quizId,
 }) => {
   const [localTitle, setLocalTitle] = useState(explanationTitle);
   const [localText, setLocalText] = useState(explanationText);
   const [localImageUrl, setLocalImageUrl] = useState(explanationImageUrl);
-  const [isUploading, setIsUploading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Use the upload service
+  const { uploadQuestionImage, isUploading } = useFileUpload();
 
   // Handle screen size detection
   React.useEffect(() => {
@@ -54,18 +60,25 @@ export const ExplanationModal: React.FC<ExplanationModalProps> = ({
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !quizId) return;
 
-    setIsUploading(true);
+    debugLog.info('Starting explanation image upload', {
+      fileName: file.name,
+      size: file.size,
+      quizId,
+    });
+
     try {
-      // NOTE: Placeholder implementation - replace with actual file upload service
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const mockUrl = URL.createObjectURL(file);
-      setLocalImageUrl(mockUrl);
+      const imageUrl = await uploadQuestionImage(file, quizId);
+      if (imageUrl) {
+        setLocalImageUrl(imageUrl);
+        debugLog.success('Explanation image uploaded successfully', { url: imageUrl });
+      } else {
+        debugLog.warning('Explanation image upload returned no URL');
+      }
     } catch (error) {
+      debugLog.error('Explanation image upload failed', { error });
       console.error('Upload failed:', error);
-    } finally {
-      setIsUploading(false);
     }
   };
 

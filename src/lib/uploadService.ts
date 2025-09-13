@@ -56,6 +56,64 @@ class UploadService {
   }
 
   /**
+   * Upload question image via backend API
+   */
+  async uploadQuestionImage(file: File, quizId: string): Promise<UploadResult> {
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch(`${cfg.apiBase}/upload/question-image/${quizId}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${this.getAuthToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData: UploadError = await response.json();
+        throw new Error(errorData.message || errorData.error || 'Upload failed');
+      }
+
+      const result: UploadResult = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Question image upload error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload answer image via backend API
+   */
+  async uploadAnswerImage(file: File, quizId: string): Promise<UploadResult> {
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch(`${cfg.apiBase}/upload/answer-image/${quizId}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${this.getAuthToken()}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData: UploadError = await response.json();
+        throw new Error(errorData.message || errorData.error || 'Upload failed');
+      }
+
+      const result: UploadResult = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Answer image upload error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get stored auth token
    */
   private getAuthToken(): string {
@@ -158,8 +216,80 @@ export function useFileUpload() {
     }
   };
 
+  const uploadQuestionImage = async (file: File, quizId: string): Promise<string | null> => {
+    try {
+      setIsUploading(true);
+      setError(null);
+      setUploadProgress(0);
+
+      // Validate file
+      const validation = uploadService.validateImageFile(file);
+      if (!validation.isValid) {
+        throw new Error(validation.error);
+      }
+
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev: number) => Math.min(prev + 10, 90));
+      }, 100);
+
+      const result = await uploadService.uploadQuestionImage(file, quizId);
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      toast.success('問題画像がアップロードされました');
+      return result.url;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'アップロードに失敗しました';
+      setError(message);
+      toast.error(message);
+      return null;
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setUploadProgress(0), 1000);
+    }
+  };
+
+  const uploadAnswerImage = async (file: File, quizId: string): Promise<string | null> => {
+    try {
+      setIsUploading(true);
+      setError(null);
+      setUploadProgress(0);
+
+      // Validate file
+      const validation = uploadService.validateImageFile(file);
+      if (!validation.isValid) {
+        throw new Error(validation.error);
+      }
+
+      // Simulate progress for better UX
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev: number) => Math.min(prev + 10, 90));
+      }, 100);
+
+      const result = await uploadService.uploadAnswerImage(file, quizId);
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      toast.success('選択肢画像がアップロードされました');
+      return result.url;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'アップロードに失敗しました';
+      setError(message);
+      toast.error(message);
+      return null;
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setUploadProgress(0), 1000);
+    }
+  };
+
   return {
     uploadQuizThumbnail,
+    uploadQuestionImage,
+    uploadAnswerImage,
     isUploading,
     uploadProgress,
     error,
