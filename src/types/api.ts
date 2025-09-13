@@ -186,6 +186,7 @@ export const API_ENDPOINTS = {
   // Quiz endpoints
   QUIZ: '/quiz',
   QUIZ_BY_ID: (id: string) => `/quiz/${id}`,
+  QUIZ_START_EDIT: (id: string) => `/quiz/${id}/start-edit`,
   QUIZ_LIST: '/quiz',
 
   // Question endpoints

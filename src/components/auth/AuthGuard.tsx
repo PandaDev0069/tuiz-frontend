@@ -33,15 +33,7 @@ export function AuthGuard({ children, redirectTo = '/auth/login', fallback }: Au
   }, [initializeAuth, isInitialized]);
 
   // Debug logging
-  useEffect(() => {
-    console.log('AuthGuard: Auth state changed', {
-      user: !!user,
-      session: !!session,
-      loading,
-      isInitialized,
-      hasToken: !!session?.access_token,
-    });
-  }, [user, session, loading, isInitialized]);
+  useEffect(() => {}, [user, session, loading, isInitialized]);
 
   // Show loading state while checking authentication
   if (loading || !isInitialized) {

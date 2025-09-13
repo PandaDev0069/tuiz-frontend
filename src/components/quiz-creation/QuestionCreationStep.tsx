@@ -145,20 +145,24 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
     const baseQuestion = {
       question_text: '',
       question_type: questionType,
+      image_url: null,
       show_question_time: 10,
       answering_time: 10,
       show_explanation_time: 30,
       points: 100,
       difficulty: DifficultyLevel.EASY,
       order_index: orderIndex,
+      explanation_title: null,
+      explanation_text: null,
+      explanation_image_url: null,
     };
 
     if (questionType === QuestionType.TRUE_FALSE) {
       return {
         ...baseQuestion,
         answers: [
-          { answer_text: 'True', is_correct: false, order_index: 1 },
-          { answer_text: 'False', is_correct: false, order_index: 2 },
+          { answer_text: 'True', image_url: null, is_correct: false, order_index: 1 },
+          { answer_text: 'False', image_url: null, is_correct: false, order_index: 2 },
         ],
       };
     }
@@ -166,8 +170,8 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
     return {
       ...baseQuestion,
       answers: [
-        { answer_text: '', is_correct: true, order_index: 1 },
-        { answer_text: '', is_correct: false, order_index: 2 },
+        { answer_text: '', image_url: null, is_correct: true, order_index: 1 },
+        { answer_text: '', image_url: null, is_correct: false, order_index: 2 },
       ],
     };
   }
@@ -326,9 +330,9 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
   };
 
   const handleExplanationSave = (explanationData: {
-    explanation_title?: string;
-    explanation_text?: string;
-    explanation_image_url?: string;
+    explanation_title?: string | null;
+    explanation_text?: string | null;
+    explanation_image_url?: string | null;
   }) => {
     const updatedQuestions = [...localQuestions];
     const currentQuestion = updatedQuestions[selectedQuestionIndex];

@@ -3,30 +3,35 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@/components/ui';
 import { CheckCircle, ArrowLeft, Upload, XCircle } from 'lucide-react';
-import { CreateQuizSetForm, CreateQuestionForm } from '@/types/quiz';
+import { CreateQuizSetForm, CreateQuestionForm, QuestionWithAnswers } from '@/types/quiz';
 import { useValidateQuiz, usePublishQuiz } from '@/hooks/usePublishing';
-import { useBatchSaveQuestions } from '@/hooks/useQuestionMutation';
+import { useBatchSaveQuestions, useSyncQuestionsForEdit } from '@/hooks/useQuestionMutation';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 
 interface FinalStepProps {
   formData: Partial<CreateQuizSetForm>;
   questions: CreateQuestionForm[];
+  originalQuestions?: QuestionWithAnswers[];
   onPrevious: () => void;
   isMobile: boolean;
   quizId?: string;
+  onOriginalQuestionsChange?: (questions: QuestionWithAnswers[]) => void;
 }
 
 export const FinalStep: React.FC<FinalStepProps> = ({
   formData,
   questions,
+  originalQuestions = [],
   onPrevious,
   isMobile,
   quizId,
+  onOriginalQuestionsChange,
 }) => {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isSavingQuestions, setIsSavingQuestions] = useState(false);
   const hasSavedQuestions = useRef(false);
+  const isSyncInProgress = useRef(false);
   const router = useRouter();
 
   // Hooks for publishing
@@ -37,23 +42,67 @@ export const FinalStep: React.FC<FinalStepProps> = ({
   } = useValidateQuiz(quizId);
   const publishQuizMutation = usePublishQuiz();
   const batchSaveQuestionsMutation = useBatchSaveQuestions();
+  const syncQuestionsMutation = useSyncQuestionsForEdit((savedQuestions) => {
+    // Update originalQuestions in parent component after successful sync
+    console.log(
+      'syncQuestionsForEdit success callback called with:',
+      savedQuestions.map((q) => q.id),
+    );
+    if (onOriginalQuestionsChange) {
+      onOriginalQuestionsChange(savedQuestions);
+      console.log('Called onOriginalQuestionsChange with updated questions');
+    } else {
+      console.log('onOriginalQuestionsChange callback not provided');
+    }
+  });
 
   // Save questions first if they exist, then validate (only once)
   useEffect(() => {
     const saveAndValidate = async () => {
-      if (!quizId || questions.length === 0 || hasSavedQuestions.current) {
+      if (
+        !quizId ||
+        questions.length === 0 ||
+        hasSavedQuestions.current ||
+        isSavingQuestions ||
+        isSyncInProgress.current
+      ) {
+        console.log('Skipping save - conditions not met:', {
+          hasQuizId: !!quizId,
+          hasQuestions: questions.length > 0,
+          hasSaved: hasSavedQuestions.current,
+          isSaving: isSavingQuestions,
+          isSyncInProgress: isSyncInProgress.current,
+        });
         return;
       }
 
       try {
         hasSavedQuestions.current = true;
+        isSyncInProgress.current = true;
         setIsSavingQuestions(true);
 
-        // Save questions to database
-        await batchSaveQuestionsMutation.mutateAsync({
+        console.log('Starting question save process:', {
           quizId,
-          questions,
+          questionCount: questions.length,
+          originalQuestionCount: originalQuestions.length,
+          isEditMode: originalQuestions.length > 0,
         });
+
+        // Use sync method if we have original questions (edit mode), otherwise use batch save
+        if (originalQuestions.length > 0) {
+          console.log('Using sync method for edit mode');
+          await syncQuestionsMutation.mutateAsync({
+            quizId,
+            currentQuestions: questions,
+            originalQuestions,
+          });
+        } else {
+          console.log('Using batch save for new quiz');
+          await batchSaveQuestionsMutation.mutateAsync({
+            quizId,
+            questions,
+          });
+        }
 
         // Wait a moment for the database to be updated
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -65,10 +114,16 @@ export const FinalStep: React.FC<FinalStepProps> = ({
         hasSavedQuestions.current = false; // Reset on error so it can retry
       } finally {
         setIsSavingQuestions(false);
+        isSyncInProgress.current = false;
       }
     };
 
-    saveAndValidate();
+    // Use a timeout to prevent multiple rapid calls
+    const timeoutId = setTimeout(saveAndValidate, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizId]);
 

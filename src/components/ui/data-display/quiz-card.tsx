@@ -5,13 +5,14 @@ import { Text } from '../core/typography';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { QuizSet, QuizStatus } from '@/types/quiz';
-import { Edit3, Play, Trash2, Flame, Globe, Lock } from 'lucide-react';
+import { Edit3, Play, Trash2, Flame, Globe, Lock, Loader2 } from 'lucide-react';
 
 export interface QuizCardProps {
   quiz: QuizSet;
   onEdit?: (id: string) => void;
   onStart?: (id: string) => void;
   onDelete?: (id: string) => void;
+  isDeleting?: boolean;
   className?: string;
 }
 
@@ -20,6 +21,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onEdit,
   onStart,
   onDelete,
+  isDeleting = false,
   className,
 }) => {
   const handleEdit = () => onEdit?.(quiz.id);
@@ -121,7 +123,13 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       <CardFooter className="flex gap-2 pt-0 mt-auto">
         {quiz.status === QuizStatus.DRAFT ? (
           <>
-            <Button variant="gradient2" size="sm" onClick={handleEdit}>
+            <Button
+              variant="gradient2"
+              size="sm"
+              onClick={handleEdit}
+              disabled={isDeleting}
+              className="flex-1"
+            >
               <Edit3 className="w-4 h-4 mr-1" />
               編集
             </Button>
@@ -129,9 +137,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               variant="destructive"
               size="sm"
               onClick={handleDelete}
+              disabled={isDeleting}
               className="flex-1 bg-red-400 hover:bg-red-500 text-white"
             >
-              <Trash2 className="w-4 h-4 mr-1" />
+              {isDeleting ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-1" />
+              )}
               削除
             </Button>
           </>
@@ -141,6 +154,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               variant="gradient2"
               size="sm"
               onClick={handleEdit}
+              disabled={isDeleting}
               className="flex-1 hover:from-purple-500 hover:to-pink-500 hover:shadow-lg hover:transform-none"
             >
               <Edit3 className="w-4 h-4 mr-1" />
@@ -149,6 +163,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             <Button
               size="sm"
               onClick={handleStart}
+              disabled={isDeleting}
               className="flex-1 bg-green-500 hover:bg-green-600 text-white shadow-md hover:shadow-lg"
             >
               <Play className="w-4 h-4 mr-1" />
@@ -158,9 +173,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               variant="destructive"
               size="sm"
               onClick={handleDelete}
+              disabled={isDeleting}
               className="flex-1 bg-red-400 hover:bg-red-500 text-white"
             >
-              <Trash2 className="w-4 h-4 mr-1" />
+              {isDeleting ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4 mr-1" />
+              )}
               削除
             </Button>
           </>

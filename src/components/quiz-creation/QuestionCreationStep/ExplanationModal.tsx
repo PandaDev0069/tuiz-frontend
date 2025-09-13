@@ -10,13 +10,13 @@ import { debugLog } from '@/components/debug';
 interface ExplanationModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  explanationTitle?: string;
-  explanationText?: string;
-  explanationImageUrl?: string;
+  explanationTitle?: string | null;
+  explanationText?: string | null;
+  explanationImageUrl?: string | null;
   onSave: (data: {
-    explanation_title?: string;
-    explanation_text?: string;
-    explanation_image_url?: string;
+    explanation_title?: string | null;
+    explanation_text?: string | null;
+    explanation_image_url?: string | null;
   }) => void;
   questionNumber: number;
   quizId?: string;
@@ -169,7 +169,7 @@ export const ExplanationModal: React.FC<ExplanationModalProps> = ({
                         id="explanation_title_mobile"
                         type="text"
                         placeholder="解説のタイトルを入力..."
-                        value={localTitle}
+                        value={localTitle || ''}
                         onChange={(e) => setLocalTitle(e.target.value)}
                         className="w-full px-3 py-2 border-2 border-blue-500 rounded-lg focus:border-blue-600 focus:ring-2 focus:ring-blue-300 text-sm"
                       />
@@ -197,7 +197,7 @@ export const ExplanationModal: React.FC<ExplanationModalProps> = ({
                       <Textarea
                         id="explanation_text_mobile"
                         placeholder="問題の解説を入力してください..."
-                        value={localText}
+                        value={localText || ''}
                         onChange={(e) => setLocalText(e.target.value)}
                         variant="primary"
                         className="h-32 border-2 border-green-500 focus:border-green-600 focus:ring-2 focus:ring-green-300 text-sm"
@@ -302,7 +302,7 @@ export const ExplanationModal: React.FC<ExplanationModalProps> = ({
                           id="explanation_title_desktop"
                           type="text"
                           placeholder="解説のタイトルを入力..."
-                          value={localTitle}
+                          value={localTitle || ''}
                           onChange={(e) => setLocalTitle(e.target.value)}
                           className="w-full px-4 py-3 border-2 border-blue-500 rounded-lg focus:border-blue-600 focus:ring-2 focus:ring-blue-300"
                         />
@@ -326,7 +326,7 @@ export const ExplanationModal: React.FC<ExplanationModalProps> = ({
                         <Textarea
                           id="explanation_text_desktop"
                           placeholder="問題の解説を入力してください..."
-                          value={localText}
+                          value={localText || ''}
                           onChange={(e) => setLocalText(e.target.value)}
                           variant="primary"
                           className="h-40 border-2 border-green-500 focus:border-green-600 focus:ring-2 focus:ring-green-300"

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/state/useAuthStore';
 import { useRouter } from 'next/navigation';
 import {
@@ -16,11 +17,23 @@ import {
 import { QuizCard } from '@/components/ui/data-display/quiz-card';
 import { FilterState } from '@/components/ui/overlays/sidebar-filter';
 import { ProfileData } from '@/components/ui/overlays/profile-settings-modal';
-import { QuizSet, QuizStatus, DifficultyLevel } from '@/types/quiz';
-import { PenTool, Gamepad2, BarChart3, Library } from 'lucide-react';
+import { PenTool, Gamepad2, BarChart3, Library, Loader2, AlertCircle } from 'lucide-react';
 import { StructuredData } from '@/components/SEO';
+import { useDraftQuizzes, usePublishedQuizzes, useQuizActions } from '@/hooks/useDashboard';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
-export default function DashboardPage() {
+// Create a QueryClient instance
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 2,
+    },
+  },
+});
+
+// Dashboard content component
+function DashboardContent() {
   const { user } = useAuthStore();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -37,243 +50,20 @@ export default function DashboardPage() {
     tags: [],
   });
 
-  // Mock quiz data
-  const mockDraftQuizzes: QuizSet[] = [
-    {
-      id: 'draft-1',
-      user_id: user?.id || 'user-1',
-      title: 'JavaScript基礎知識クイズ',
-      description:
-        'JavaScriptの基本的な構文、変数、関数について学べるクイズです。初心者向けの内容となっています。',
-      thumbnail_url: undefined,
-      is_public: false,
-      difficulty_level: DifficultyLevel.EASY,
-      category: 'プログラミング',
-      total_questions: 15,
-      times_played: 0,
-      created_at: '2024-01-15T10:00:00Z',
-      updated_at: '2024-01-20T14:30:00Z',
-      status: QuizStatus.DRAFT,
-      tags: ['JavaScript', '基礎', '初心者'],
-      play_settings: {
-        code: 123456,
-        show_question_only: false,
-        show_explanation: false,
-        time_bonus: false,
-        streak_bonus: false,
-        show_correct_answer: false,
-        max_players: 400,
-      },
-    },
-    {
-      id: 'draft-2',
-      user_id: user?.id || 'user-1',
-      title: '世界史重要事件クイズ',
-      description:
-        '世界の歴史における重要な出来事や人物についてのクイズ。古代から現代まで幅広くカバーしています。',
-      thumbnail_url: undefined,
-      is_public: true,
-      difficulty_level: DifficultyLevel.MEDIUM,
-      category: '歴史',
-      total_questions: 25,
-      times_played: 0,
-      created_at: '2024-01-10T09:00:00Z',
-      updated_at: '2024-01-18T16:45:00Z',
-      status: QuizStatus.DRAFT,
-      tags: ['世界史', '重要事件', '人物'],
-      play_settings: {
-        code: 123456,
-        show_question_only: false,
-        show_explanation: false,
-        time_bonus: false,
-        streak_bonus: false,
-        show_correct_answer: false,
-        max_players: 400,
-      },
-    },
-    {
-      id: 'draft-3',
-      user_id: user?.id || 'user-1',
-      title: '数学パズル集',
-      description:
-        '論理的思考力を鍛える数学パズルのコレクション。代数、幾何、確率など様々な分野から出題。',
-      thumbnail_url: undefined,
-      is_public: false,
-      difficulty_level: DifficultyLevel.HARD,
-      category: '数学',
-      total_questions: 20,
-      times_played: 0,
-      created_at: '2024-01-05T11:00:00Z',
-      updated_at: '2024-01-22T10:15:00Z',
-      status: QuizStatus.DRAFT,
-      tags: ['数学', 'パズル', '論理'],
-      play_settings: {
-        code: 123456,
-        show_question_only: false,
-        show_explanation: false,
-        time_bonus: false,
-        streak_bonus: false,
-        show_correct_answer: false,
-        max_players: 400,
-      },
-    },
-    {
-      id: 'draft-4',
-      user_id: user?.id || 'user-1',
-      title: '科学実験クイズ',
-      description: '化学、物理、生物の実験に関するクイズ。実験の手順や結果の予測について学べます。',
-      thumbnail_url: undefined,
-      is_public: true,
-      difficulty_level: DifficultyLevel.MEDIUM,
-      category: '科学',
-      total_questions: 18,
-      times_played: 0,
-      created_at: '2024-01-12T13:00:00Z',
-      updated_at: '2024-01-19T15:20:00Z',
-      status: QuizStatus.DRAFT,
-      tags: ['科学', '実験', '化学', '物理'],
-      play_settings: {
-        code: 123456,
-        show_question_only: false,
-        show_explanation: false,
-        time_bonus: false,
-        streak_bonus: false,
-        show_correct_answer: false,
-        max_players: 400,
-      },
-    },
-  ];
+  // Real data hooks
+  const { data: draftData, isLoading: isLoadingDrafts, error: draftError } = useDraftQuizzes();
 
-  const mockPublishedQuizzes: QuizSet[] = [
-    {
-      id: 'published-1',
-      user_id: user?.id || 'user-1',
-      title: 'Python入門クイズ',
-      description:
-        'Pythonプログラミングの基礎を学べるクイズ。変数、ループ、関数の概念を理解しましょう。',
-      thumbnail_url: undefined,
-      is_public: true,
-      difficulty_level: DifficultyLevel.EASY,
-      category: 'プログラミング',
-      total_questions: 20,
-      times_played: 156,
-      created_at: '2023-12-01T08:00:00Z',
-      updated_at: '2024-01-15T12:00:00Z',
-      status: QuizStatus.PUBLISHED,
-      tags: ['Python', '入門', '基礎'],
-      play_settings: {
-        code: 123456,
-        show_question_only: false,
-        show_explanation: false,
-        time_bonus: false,
-        streak_bonus: false,
-        show_correct_answer: false,
-        max_players: 400,
-      },
-    },
-    {
-      id: 'published-2',
-      user_id: user?.id || 'user-1',
-      title: '日本地理マスター',
-      description: '日本の都道府県、地形、気候についての総合クイズ。地理の知識を深めましょう。',
-      thumbnail_url: undefined,
-      is_public: true,
-      difficulty_level: DifficultyLevel.MEDIUM,
-      category: '地理',
-      total_questions: 30,
-      times_played: 89,
-      created_at: '2023-11-15T10:00:00Z',
-      updated_at: '2024-01-10T14:30:00Z',
-      status: QuizStatus.PUBLISHED,
-      tags: ['日本', '地理', '都道府県'],
-      play_settings: {
-        code: 123456,
-        show_question_only: false,
-        show_explanation: false,
-        time_bonus: false,
-        streak_bonus: false,
-        show_correct_answer: false,
-        max_players: 400,
-      },
-    },
-    {
-      id: 'published-3',
-      user_id: user?.id || 'user-1',
-      title: '英語文法チャレンジ',
-      description: '中学・高校レベルの英語文法を総復習できるクイズ。時制、助動詞、関係代名詞など。',
-      thumbnail_url: undefined,
-      is_public: true,
-      difficulty_level: DifficultyLevel.MEDIUM,
-      category: '英語',
-      total_questions: 25,
-      times_played: 234,
-      created_at: '2023-10-20T09:00:00Z',
-      updated_at: '2024-01-05T11:45:00Z',
-      status: QuizStatus.PUBLISHED,
-      tags: ['英語', '文法', '中学', '高校'],
-      play_settings: {
-        code: 123456,
-        show_question_only: false,
-        show_explanation: false,
-        time_bonus: false,
-        streak_bonus: false,
-        show_correct_answer: false,
-        max_players: 400,
-      },
-    },
-    {
-      id: 'published-4',
-      user_id: user?.id || 'user-1',
-      title: '音楽理論クイズ',
-      description:
-        '楽譜の読み方、音程、和音について学べる音楽理論のクイズ。初心者から上級者まで対応。',
-      thumbnail_url: undefined,
-      is_public: true,
-      difficulty_level: DifficultyLevel.HARD,
-      category: '音楽',
-      total_questions: 35,
-      times_played: 67,
-      created_at: '2023-09-10T14:00:00Z',
-      updated_at: '2023-12-28T16:20:00Z',
-      status: QuizStatus.PUBLISHED,
-      tags: ['音楽', '理論', '楽譜', '和音'],
-      play_settings: {
-        code: 123456,
-        show_question_only: false,
-        show_explanation: false,
-        time_bonus: false,
-        streak_bonus: false,
-        show_correct_answer: false,
-        max_players: 400,
-      },
-    },
-    {
-      id: 'published-5',
-      user_id: user?.id || 'user-1',
-      title: '料理の基本知識',
-      description:
-        '調理法、食材の選び方、栄養について学べる料理の基礎知識クイズ。家庭料理からプロまで。',
-      thumbnail_url: undefined,
-      is_public: true,
-      difficulty_level: DifficultyLevel.EASY,
-      category: '料理',
-      total_questions: 22,
-      times_played: 189,
-      created_at: '2023-08-25T11:00:00Z',
-      updated_at: '2023-12-15T13:10:00Z',
-      status: QuizStatus.PUBLISHED,
-      tags: ['料理', '調理法', '食材', '栄養'],
-      play_settings: {
-        code: 123456,
-        show_question_only: false,
-        show_explanation: false,
-        time_bonus: false,
-        streak_bonus: false,
-        show_correct_answer: false,
-        max_players: 400,
-      },
-    },
-  ];
+  const {
+    data: publishedData,
+    isLoading: isLoadingPublished,
+    error: publishedError,
+  } = usePublishedQuizzes();
+
+  const { deleteQuiz, isDeleting } = useQuizActions();
+
+  // Get quiz data from API
+  const draftQuizzes = draftData?.data || [];
+  const publishedQuizzes = publishedData?.data || [];
 
   // Mock profile data - in real app this would come from API
   const mockProfile: ProfileData = {
@@ -285,16 +75,13 @@ export default function DashboardPage() {
   };
 
   const handleSearch = (query: string) => {
+    // TODO: Implement search functionality with backend
     console.log('Search query:', query);
-    console.log('Active filters:', filters);
-    // Search functionality will be implemented when backend API is ready
-    // For now, log the search parameters
   };
 
   const handleClearSearch = () => {
+    // TODO: Implement clear search functionality
     console.log('Search cleared');
-    // Clear search functionality will be implemented when backend API is ready
-    // For now, just log the action
   };
 
   const handleFilterToggle = () => {
@@ -303,31 +90,33 @@ export default function DashboardPage() {
 
   const handleFiltersChange = (newFilters: FilterState) => {
     setFilters(newFilters);
+    // TODO: Implement filter functionality with backend
     console.log('Filters updated:', newFilters);
-    // Filter application will be implemented when backend API is ready
-    // For now, just log the filter changes
   };
 
   const handleProfileSave = (updatedProfile: ProfileData) => {
+    // TODO: Implement profile save functionality
     console.log('Profile updated:', updatedProfile);
-    // Profile save API call will be implemented when backend is ready
-    // For now, just close the modal
     setProfileModalOpen(false);
   };
 
   const handleEditQuiz = (id: string) => {
-    console.log('Edit quiz:', id);
-    // Edit functionality will be implemented
+    router.push(`/create?edit=${id}`);
   };
 
   const handleStartQuiz = (id: string) => {
-    console.log('Start quiz:', id);
-    // Start quiz functionality will be implemented
+    // TODO: Implement start quiz functionality - redirect to play page
+    router.push(`/play/${id}`);
   };
 
-  const handleDeleteQuiz = (id: string) => {
-    console.log('Delete quiz:', id);
-    // Delete functionality will be implemented
+  const handleDeleteQuiz = async (id: string) => {
+    if (window.confirm('このクイズを削除してもよろしいですか？')) {
+      try {
+        await deleteQuiz(id);
+      } catch {
+        // Error is handled in the hook
+      }
+    }
   };
 
   const handleCreateQuiz = () => {
@@ -436,96 +225,162 @@ export default function DashboardPage() {
 
             {/* Draft Quizzes Section */}
             <div className="mb-12">
-              <h2 className="text-xl sm:text-2xl font-semibold mb-4 px-auto">下書きのクイズ</h2>
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4 px-auto">
+                下書きのクイズ{' '}
+                {isLoadingDrafts && <Loader2 className="inline w-5 h-5 animate-spin ml-2" />}
+              </h2>
 
-              {/* Horizontal Scrollable Draft Cards */}
-              <div className="relative w-full">
-                <div
-                  id="draft-quizzes-container"
-                  className="flex gap-4 overflow-x-auto pb-4 scrollbar-none sm:scrollbar-thin scroll-smooth quiz-scroll-container quiz-card-gap w-full"
-                  style={{
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: '#6fd6ff #f3f4f6',
-                  }}
-                >
-                  {mockDraftQuizzes.map((quiz) => (
-                    <div
-                      key={quiz.id}
-                      className="flex-shrink-0 w-[300px] sm:w-[320px] md:w-[320px] lg:w-[320px] quiz-card-mobile quiz-card-tablet quiz-card-desktop"
+              {/* Error State */}
+              {draftError && (
+                <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                  <span className="text-red-700">下書きクイズの読み込みに失敗しました</span>
+                </div>
+              )}
+
+              {/* Loading State */}
+              {isLoadingDrafts ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span>下書きクイズを読み込み中...</span>
+                  </div>
+                </div>
+              ) : draftQuizzes.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <p>下書きのクイズがありません</p>
+                  <Button onClick={handleCreateQuiz} className="mt-4" variant="gradient">
+                    新しいクイズを作成
+                  </Button>
+                </div>
+              ) : (
+                /* Horizontal Scrollable Draft Cards */
+                <div className="relative w-full">
+                  <div
+                    id="draft-quizzes-container"
+                    className="flex gap-4 overflow-x-auto pb-4 scrollbar-none sm:scrollbar-thin scroll-smooth quiz-scroll-container quiz-card-gap w-full"
+                    style={{
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: '#6fd6ff #f3f4f6',
+                    }}
+                  >
+                    {draftQuizzes.map((quiz) => (
+                      <div
+                        key={quiz.id}
+                        className="flex-shrink-0 w-[300px] sm:w-[320px] md:w-[320px] lg:w-[320px] quiz-card-mobile quiz-card-tablet quiz-card-desktop"
+                      >
+                        <QuizCard
+                          quiz={quiz}
+                          onEdit={handleEditQuiz}
+                          onStart={handleStartQuiz}
+                          onDelete={handleDeleteQuiz}
+                          isDeleting={isDeleting}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Scroll Navigation Arrows - Hidden on mobile */}
+                  <div className="hidden md:block">
+                    <button
+                      onClick={() => scrollContainer('left', 'draft-quizzes-container')}
+                      className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 cursor-pointer hover:bg-gray-50 hover:shadow-xl transition-all duration-200 border border-gray-200"
+                      aria-label="Scroll left"
                     >
-                      <QuizCard
-                        quiz={quiz}
-                        onEdit={handleEditQuiz}
-                        onStart={handleStartQuiz}
-                        onDelete={handleDeleteQuiz}
-                      />
-                    </div>
-                  ))}
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M15 19l-7-7 7-7"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => scrollContainer('right', 'draft-quizzes-container')}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 cursor-pointer hover:bg-gray-50 hover:shadow-xl transition-all duration-200 border border-gray-200"
+                      aria-label="Scroll right"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-
-                {/* Scroll Navigation Arrows - Hidden on mobile */}
-                <div className="hidden md:block">
-                  <button
-                    onClick={() => scrollContainer('left', 'draft-quizzes-container')}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 cursor-pointer hover:bg-gray-50 hover:shadow-xl transition-all duration-200 border border-gray-200"
-                    aria-label="Scroll left"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 19l-7-7 7-7"
-                      />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => scrollContainer('right', 'draft-quizzes-container')}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-600 cursor-pointer hover:bg-gray-50 hover:shadow-xl transition-all duration-200 border border-gray-200"
-                    aria-label="Scroll right"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Published Quizzes Section */}
             <div className="mb-12">
-              <h2 className="text-xl sm:text-2xl font-semibold mb-4 px-auto">公開済みのクイズ</h2>
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4 px-auto">
+                公開済みのクイズ{' '}
+                {isLoadingPublished && <Loader2 className="inline w-5 h-5 animate-spin ml-2" />}
+              </h2>
 
-              {/* Horizontal Scrollable Published Cards */}
-              <div className="relative w-full">
-                <div
-                  id="published-quizzes-container"
-                  className="flex gap-4 overflow-x-auto pb-4 scrollbar-none sm:scrollbar-thin scroll-smooth quiz-scroll-container quiz-card-gap w-full"
-                  style={{
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: '#6fd6ff #f3f4f6',
-                  }}
-                >
-                  {mockPublishedQuizzes.map((quiz) => (
-                    <div
-                      key={quiz.id}
-                      className="flex-shrink-0 w-[300px] sm:w-[360px] md:w-[360px] lg:w-[360px] quiz-card-mobile quiz-card-tablet quiz-card-desktop"
-                    >
-                      <QuizCard
-                        quiz={quiz}
-                        onEdit={handleEditQuiz}
-                        onStart={handleStartQuiz}
-                        onDelete={handleDeleteQuiz}
-                      />
-                    </div>
-                  ))}
+              {/* Error State */}
+              {publishedError && (
+                <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                  <span className="text-red-700">公開済みクイズの読み込みに失敗しました</span>
                 </div>
-              </div>
+              )}
+
+              {/* Loading State */}
+              {isLoadingPublished ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span>公開済みクイズを読み込み中...</span>
+                  </div>
+                </div>
+              ) : publishedQuizzes.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <p>公開済みのクイズがありません</p>
+                  <p className="text-sm mt-2">クイズを作成して公開しましょう</p>
+                </div>
+              ) : (
+                /* Horizontal Scrollable Published Cards */
+                <div className="relative w-full">
+                  <div
+                    id="published-quizzes-container"
+                    className="flex gap-4 overflow-x-auto pb-4 scrollbar-none sm:scrollbar-thin scroll-smooth quiz-scroll-container quiz-card-gap w-full"
+                    style={{
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: '#6fd6ff #f3f4f6',
+                    }}
+                  >
+                    {publishedQuizzes.map((quiz) => (
+                      <div
+                        key={quiz.id}
+                        className="flex-shrink-0 w-[300px] sm:w-[360px] md:w-[360px] lg:w-[360px] quiz-card-mobile quiz-card-tablet quiz-card-desktop"
+                      >
+                        <QuizCard
+                          quiz={quiz}
+                          onEdit={handleEditQuiz}
+                          onStart={handleStartQuiz}
+                          onDelete={handleDeleteQuiz}
+                          isDeleting={isDeleting}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </Container>
         </main>
@@ -539,5 +394,16 @@ export default function DashboardPage() {
         />
       </PageContainer>
     </>
+  );
+}
+
+// Main dashboard page with QueryClientProvider and AuthGuard
+export default function DashboardPage() {
+  return (
+    <AuthGuard>
+      <QueryClientProvider client={queryClient}>
+        <DashboardContent />
+      </QueryClientProvider>
+    </AuthGuard>
   );
 }

@@ -274,7 +274,7 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
 
     const newAnswer: CreateAnswerForm = {
       answer_text: '',
-      image_url: undefined,
+      image_url: null,
       is_correct: false,
       order_index: answers.length + 1,
     };
@@ -300,7 +300,7 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
     const updatedAnswers = [...answers];
     updatedAnswers[index] = {
       ...updatedAnswers[index],
-      image_url: undefined,
+      image_url: null,
     };
     onAnswersChange(updatedAnswers);
   };

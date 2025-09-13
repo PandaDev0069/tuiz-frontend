@@ -276,6 +276,34 @@ export const useUnpublishQuiz = () => {
 };
 
 /**
+ * Hook to start editing a quiz (set status to draft)
+ */
+export const useStartEditQuiz = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => quizService.startEditQuiz(id),
+    onSuccess: (data, quizId) => {
+      // Update cache with new status
+      queryClient.setQueryData(QUIZ_QUERY_KEYS.detail(quizId), (old: QuizSet | undefined) => ({
+        ...old,
+        status: data.status,
+        updated_at: data.updated_at,
+      }));
+
+      // Invalidate lists to reflect status change
+      queryClient.invalidateQueries({
+        queryKey: QUIZ_QUERY_KEYS.lists(),
+      });
+    },
+    onError: (error: ApiError) => {
+      const message = handleApiError(error, { showToast: false });
+      toast.error(`編集の開始に失敗しました: ${message}`);
+    },
+  });
+};
+
+/**
  * Hook to save quiz as draft (create or update)
  */
 export const useSaveDraft = () => {

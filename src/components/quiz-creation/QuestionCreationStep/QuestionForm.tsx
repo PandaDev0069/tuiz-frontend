@@ -86,7 +86,7 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
                       />
                       <button
                         type="button"
-                        onClick={() => onQuestionFieldChange('image_url', undefined)}
+                        onClick={() => onQuestionFieldChange('image_url', null)}
                         className="absolute top-1 right-1 sm:top-2 sm:right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
                       >
                         <X className="w-3 h-3 sm:w-4 sm:h-4" />

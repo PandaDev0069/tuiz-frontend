@@ -9,7 +9,7 @@ import { DifficultyCategoryForm } from './BasicInfoStep/DifficultyCategoryForm';
 import { ThumbnailUpload } from './BasicInfoStep/ThumbnailUpload';
 import { VisibilitySettings } from './BasicInfoStep/VisibilitySettings';
 import { TagsManager } from './BasicInfoStep/TagsManager';
-import { useCreateQuiz, useUpdateQuiz } from '@/hooks/useQuizMutation';
+import { useCreateQuiz, useUpdateQuiz, useStartEditQuiz } from '@/hooks/useQuizMutation';
 import { useFileUpload } from '@/lib/uploadService';
 import { debugLog } from '@/components/debug';
 import { Loader2 } from 'lucide-react';
@@ -34,6 +34,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const createQuizMutation = useCreateQuiz();
   const updateQuizMutation = useUpdateQuiz();
+  const startEditMutation = useStartEditQuiz();
   const { uploadQuizThumbnail } = useFileUpload();
 
   const isFormValid = () => {
@@ -57,8 +58,14 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
       let resultQuizId: string;
 
       if (quizId) {
-        // Quiz already exists, always update it
-        debugLog.info('Updating existing quiz', { quizId });
+        // Quiz already exists, start edit mode and update it
+        debugLog.info('Starting edit mode for existing quiz', { quizId });
+
+        // First, set quiz status to draft
+        await startEditMutation.mutateAsync(quizId);
+        debugLog.info('Quiz set to draft status', { quizId });
+
+        // Then update the quiz data
         const updatedQuiz = await updateQuizMutation.mutateAsync({
           id: quizId,
           data: formData as CreateQuizSetForm,
@@ -131,7 +138,11 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   };
 
   const isProcessing =
-    isSaving || createQuizMutation.isPending || updateQuizMutation.isPending || isLoading;
+    isSaving ||
+    createQuizMutation.isPending ||
+    updateQuizMutation.isPending ||
+    startEditMutation.isPending ||
+    isLoading;
 
   return (
     <div className="space-y-4 md:space-y-6">
