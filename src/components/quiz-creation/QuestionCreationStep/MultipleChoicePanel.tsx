@@ -155,6 +155,12 @@ const ImageUploadSection: React.FC<ImageUploadSectionProps> = ({
                 alt={`Answer option ${index + 1} image`}
                 fill
                 className="object-cover"
+                onError={(e) => {
+                  console.error('Answer image failed to load:', answer.image_url, e);
+                }}
+                onLoad={() => {
+                  console.log('Answer image loaded successfully:', answer.image_url);
+                }}
               />
             </div>
             <button

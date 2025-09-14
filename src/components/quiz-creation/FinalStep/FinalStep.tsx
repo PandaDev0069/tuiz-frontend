@@ -1,37 +1,32 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@/components/ui';
 import { CheckCircle, ArrowLeft, Upload, XCircle } from 'lucide-react';
-import { CreateQuizSetForm, CreateQuestionForm, QuestionWithAnswers } from '@/types/quiz';
+import { CreateQuizSetForm, CreateQuestionForm } from '@/types/quiz';
 import { useValidateQuiz, usePublishQuiz } from '@/hooks/usePublishing';
-import { useBatchSaveQuestions, useSyncQuestionsForEdit } from '@/hooks/useQuestionMutation';
+import { useEditPublish } from '@/hooks/useEditPublish';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 
 interface FinalStepProps {
   formData: Partial<CreateQuizSetForm>;
   questions: CreateQuestionForm[];
-  originalQuestions?: QuestionWithAnswers[];
   onPrevious: () => void;
   isMobile: boolean;
   quizId?: string;
-  onOriginalQuestionsChange?: (questions: QuestionWithAnswers[]) => void;
+  isEditMode?: boolean;
 }
 
 export const FinalStep: React.FC<FinalStepProps> = ({
   formData,
   questions,
-  originalQuestions = [],
   onPrevious,
   isMobile,
   quizId,
-  onOriginalQuestionsChange,
+  isEditMode = false,
 }) => {
   const [isPublishing, setIsPublishing] = useState(false);
-  const [isSavingQuestions, setIsSavingQuestions] = useState(false);
-  const hasSavedQuestions = useRef(false);
-  const isSyncInProgress = useRef(false);
   const router = useRouter();
 
   // Hooks for publishing
@@ -41,91 +36,31 @@ export const FinalStep: React.FC<FinalStepProps> = ({
     refetch: validateQuiz,
   } = useValidateQuiz(quizId);
   const publishQuizMutation = usePublishQuiz();
-  const batchSaveQuestionsMutation = useBatchSaveQuestions();
-  const syncQuestionsMutation = useSyncQuestionsForEdit((savedQuestions) => {
-    // Update originalQuestions in parent component after successful sync
-    console.log(
-      'syncQuestionsForEdit success callback called with:',
-      savedQuestions.map((q) => q.id),
-    );
-    if (onOriginalQuestionsChange) {
-      onOriginalQuestionsChange(savedQuestions);
-      console.log('Called onOriginalQuestionsChange with updated questions');
-    } else {
-      console.log('onOriginalQuestionsChange callback not provided');
-    }
-  });
+  const { publishQuiz, isPublishing: isEditPublishing } = useEditPublish(quizId || '');
 
-  // Save questions first if they exist, then validate (only once)
+  // Validate quiz when entering final step (questions are already saved from step navigation)
   useEffect(() => {
-    const saveAndValidate = async () => {
-      if (
-        !quizId ||
-        questions.length === 0 ||
-        hasSavedQuestions.current ||
-        isSavingQuestions ||
-        isSyncInProgress.current
-      ) {
-        console.log('Skipping save - conditions not met:', {
-          hasQuizId: !!quizId,
-          hasQuestions: questions.length > 0,
-          hasSaved: hasSavedQuestions.current,
-          isSaving: isSavingQuestions,
-          isSyncInProgress: isSyncInProgress.current,
-        });
+    const validateQuizData = async () => {
+      if (!quizId || questions.length === 0) {
         return;
       }
 
       try {
-        hasSavedQuestions.current = true;
-        isSyncInProgress.current = true;
-        setIsSavingQuestions(true);
-
-        console.log('Starting question save process:', {
-          quizId,
-          questionCount: questions.length,
-          originalQuestionCount: originalQuestions.length,
-          isEditMode: originalQuestions.length > 0,
-        });
-
-        // Use sync method if we have original questions (edit mode), otherwise use batch save
-        if (originalQuestions.length > 0) {
-          console.log('Using sync method for edit mode');
-          await syncQuestionsMutation.mutateAsync({
-            quizId,
-            currentQuestions: questions,
-            originalQuestions,
-          });
-        } else {
-          console.log('Using batch save for new quiz');
-          await batchSaveQuestionsMutation.mutateAsync({
-            quizId,
-            questions,
-          });
-        }
-
-        // Wait a moment for the database to be updated
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        // Now validate the quiz
-        validateQuiz();
+        console.log('Starting quiz validation...');
+        await validateQuiz();
       } catch (error) {
-        console.error('FinalStep: Failed to save questions', error);
-        hasSavedQuestions.current = false; // Reset on error so it can retry
-      } finally {
-        setIsSavingQuestions(false);
-        isSyncInProgress.current = false;
+        console.error('Error in quiz validation:', error);
+        toast.error('クイズの検証に失敗しました');
       }
     };
 
     // Use a timeout to prevent multiple rapid calls
-    const timeoutId = setTimeout(saveAndValidate, 100);
+    const timeoutId = setTimeout(validateQuizData, 100);
 
     return () => {
       clearTimeout(timeoutId);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quizId]);
+  }, [quizId, questions.length, validateQuiz]);
 
   // Update validation state when validation data changes
   useEffect(() => {
@@ -139,27 +74,40 @@ export const FinalStep: React.FC<FinalStepProps> = ({
       return;
     }
 
-    setIsPublishing(true);
-    try {
-      await publishQuizMutation.mutateAsync(quizId);
+    if (isEditMode) {
+      // For edit mode, just publish (questions are already saved from step navigation)
+      try {
+        await publishQuiz();
+      } catch {
+        toast.error('公開に失敗しました。もう一度お試しください。', {
+          duration: 4000,
+          position: 'top-center',
+        });
+      }
+    } else {
+      // Use regular publish for creation mode
+      setIsPublishing(true);
+      try {
+        await publishQuizMutation.mutateAsync(quizId);
 
-      // Show success toast
-      toast.success('クイズが公開されました！', {
-        duration: 3000,
-        position: 'top-center',
-      });
+        // Show success toast
+        toast.success('クイズが公開されました！', {
+          duration: 3000,
+          position: 'top-center',
+        });
 
-      // Redirect to dashboard after a short delay
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 1500);
-    } catch {
-      toast.error('クイズの公開に失敗しました', {
-        duration: 4000,
-        position: 'top-center',
-      });
-    } finally {
-      setIsPublishing(false);
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 1500);
+      } catch {
+        toast.error('クイズの公開に失敗しました', {
+          duration: 4000,
+          position: 'top-center',
+        });
+      } finally {
+        setIsPublishing(false);
+      }
     }
   };
 
@@ -167,7 +115,7 @@ export const FinalStep: React.FC<FinalStepProps> = ({
     validationData?.validation?.isValid &&
     !isPublishing &&
     !publishQuizMutation.isPending &&
-    !isSavingQuestions;
+    !isEditPublishing;
 
   return (
     <div className="space-y-6">
@@ -175,18 +123,14 @@ export const FinalStep: React.FC<FinalStepProps> = ({
       <div className="text-center mb-8">
         <div
           className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-            isSavingQuestions
-              ? 'bg-yellow-100'
-              : isValidating
-                ? 'bg-blue-100'
-                : validationData?.validation?.isValid
-                  ? 'bg-green-100'
-                  : 'bg-red-100'
+            isValidating
+              ? 'bg-blue-100'
+              : validationData?.validation?.isValid
+                ? 'bg-green-100'
+                : 'bg-red-100'
           }`}
         >
-          {isSavingQuestions ? (
-            <div className="w-8 h-8 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
-          ) : isValidating ? (
+          {isValidating ? (
             <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
           ) : validationData?.validation?.isValid ? (
             <CheckCircle className="w-8 h-8 text-green-600" />
@@ -195,22 +139,22 @@ export const FinalStep: React.FC<FinalStepProps> = ({
           )}
         </div>
         <h2 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-gray-900 mb-2`}>
-          {isSavingQuestions
-            ? '問題を保存中...'
-            : isValidating
-              ? 'クイズを検証中...'
-              : validationData?.validation?.isValid
-                ? 'クイズ完成！'
-                : 'クイズに問題があります'}
+          {isValidating
+            ? 'クイズを検証中...'
+            : validationData?.validation?.isValid
+              ? isEditMode
+                ? '編集完了！'
+                : 'クイズ完成！'
+              : 'クイズに問題があります'}
         </h2>
         <p className="text-gray-600">
-          {isSavingQuestions
-            ? '問題をデータベースに保存しています'
-            : isValidating
-              ? 'クイズの内容を確認しています'
-              : validationData?.validation?.isValid
-                ? 'クイズの内容を確認して公開しましょう'
-                : '以下の問題を修正してから公開してください'}
+          {isValidating
+            ? 'クイズの内容を確認しています'
+            : validationData?.validation?.isValid
+              ? isEditMode
+                ? '編集内容を確認して公開しましょう'
+                : 'クイズの内容を確認して公開しましょう'
+              : '以下の問題を修正してから公開してください'}
         </p>
       </div>
 
@@ -288,7 +232,7 @@ export const FinalStep: React.FC<FinalStepProps> = ({
         <Button
           variant="gradient2"
           onClick={onPrevious}
-          disabled={isPublishing || publishQuizMutation.isPending || isSavingQuestions}
+          disabled={isPublishing || publishQuizMutation.isPending}
           className="flex items-center gap-2 px-6 py-3"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -304,12 +248,7 @@ export const FinalStep: React.FC<FinalStepProps> = ({
               : 'bg-gray-400 text-gray-200 cursor-not-allowed'
           }`}
         >
-          {isSavingQuestions ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              保存中...
-            </>
-          ) : isPublishing || publishQuizMutation.isPending ? (
+          {isPublishing || publishQuizMutation.isPending || isEditPublishing ? (
             <>
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               公開中...
@@ -317,7 +256,7 @@ export const FinalStep: React.FC<FinalStepProps> = ({
           ) : validationData?.validation?.isValid ? (
             <>
               <Upload className="w-4 h-4" />
-              クイズを公開
+              {isEditMode ? '編集を公開' : 'クイズを公開'}
             </>
           ) : (
             <>
@@ -329,20 +268,11 @@ export const FinalStep: React.FC<FinalStepProps> = ({
       </div>
 
       {/* Status Messages */}
-      {isSavingQuestions && (
-        <div className="text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg">
-            <div className="w-4 h-4 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
-            問題を保存しています...
-          </div>
-        </div>
-      )}
-
-      {(isPublishing || publishQuizMutation.isPending) && (
+      {(isPublishing || publishQuizMutation.isPending || isEditPublishing) && (
         <div className="text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg">
             <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            クイズを公開しています...
+            {isEditMode ? '編集を公開しています...' : 'クイズを公開しています...'}
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import {
@@ -9,7 +10,6 @@ import {
   QuizCreationHeader,
   StepIndicator,
   AuthGuard,
-  SaveStatusIndicator,
 } from '@/components/ui';
 import { StructuredData } from '@/components/SEO';
 import { QuizCreationDebug } from '@/components/debug';
@@ -20,8 +20,9 @@ import {
   FinalStep,
 } from '@/components/quiz-creation';
 import { CreateQuizSetForm, CreateQuestionForm, DifficultyLevel, FormErrors } from '@/types/quiz';
-import { useBatchSaveQuestions } from '@/hooks/useQuestionMutation';
 import { quizService } from '@/lib/quizService';
+import { useEditSave } from '@/hooks/useEditSave';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 // Create a query client instance
@@ -39,13 +40,16 @@ const queryClient = new QueryClient({
   },
 });
 
-function CreateQuizPageContent() {
+function EditQuizPageContent() {
+  const params = useParams();
+  const router = useRouter();
+  const quizId = params.quizId as string;
+
   const [currentStep, setCurrentStep] = useState(1);
-  const [quizId, setQuizId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<CreateQuizSetForm>>({
     title: '',
     description: '',
@@ -67,46 +71,7 @@ function CreateQuizPageContent() {
   const [questionErrors, setQuestionErrors] = useState<FormErrors<CreateQuestionForm>[]>([]);
 
   // Save functionality
-  const batchSaveQuestionsMutation = useBatchSaveQuestions();
-
-  const saveQuizData = async (data: Partial<CreateQuizSetForm>) => {
-    if (!quizId) return;
-
-    setSaveStatus('saving');
-    try {
-      await quizService.updateQuiz(quizId, {
-        title: data.title,
-        description: data.description,
-        is_public: data.is_public,
-        difficulty_level: data.difficulty_level,
-        category: data.category,
-        tags: data.tags,
-        play_settings: data.play_settings,
-      });
-      setSaveStatus('saved');
-      setLastSaved(new Date());
-    } catch (error) {
-      setSaveStatus('error');
-      console.error('Failed to save quiz data:', error);
-    }
-  };
-
-  const saveQuestionsData = async (questions: CreateQuestionForm[]) => {
-    if (!quizId) return;
-
-    setSaveStatus('saving');
-    try {
-      await batchSaveQuestionsMutation.mutateAsync({
-        quizId,
-        questions,
-      });
-      setSaveStatus('saved');
-      setLastSaved(new Date());
-    } catch (error) {
-      setSaveStatus('error');
-      console.error('Failed to save questions data:', error);
-    }
-  };
+  const { saveQuizData, saveQuestionsData } = useEditSave(quizId);
 
   // Handle screen size detection
   React.useEffect(() => {
@@ -123,6 +88,86 @@ function CreateQuizPageContent() {
     // Cleanup
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
+
+  // Load quiz data for editing
+  useEffect(() => {
+    const loadQuizForEdit = async () => {
+      if (!quizId) return;
+
+      try {
+        setIsLoading(true);
+        setLoadError(null);
+        console.log('Loading quiz for editing:', quizId);
+
+        // First, set quiz to draft status
+        await quizService.setQuizToDraft(quizId);
+        console.log('Quiz set to draft status');
+
+        // Get complete quiz data with questions and answers
+        const quizData = await quizService.getQuizForEdit(quizId);
+        console.log('Loaded quiz data for editing:', quizData);
+        console.log('Quiz thumbnail URL:', quizData.thumbnail_url);
+
+        // Populate form data
+        setFormData({
+          title: quizData.title,
+          description: quizData.description,
+          thumbnail_url: quizData.thumbnail_url || undefined,
+          is_public: quizData.is_public,
+          difficulty_level: quizData.difficulty_level,
+          category: quizData.category,
+          tags: quizData.tags,
+          play_settings: quizData.play_settings,
+        });
+
+        // Populate questions
+        const questionsData = (quizData.questions || []).map((q) => {
+          console.log('Processing question:', {
+            id: q.id,
+            question_text: q.question_text,
+            image_url: q.image_url,
+            answers: q.answers.map((a) => ({
+              id: a.id,
+              answer_text: a.answer_text,
+              image_url: a.image_url,
+            })),
+          });
+
+          return {
+            id: q.id, // Include the ID for existing questions
+            question_text: q.question_text,
+            question_type: q.question_type,
+            image_url: q.image_url || null,
+            show_question_time: q.show_question_time,
+            answering_time: q.answering_time,
+            points: q.points,
+            difficulty: q.difficulty,
+            order_index: q.order_index,
+            explanation_title: q.explanation_title || null,
+            explanation_text: q.explanation_text || null,
+            explanation_image_url: q.explanation_image_url || null,
+            show_explanation_time: q.show_explanation_time,
+            answers: q.answers.map((a) => ({
+              id: a.id, // Include the ID for existing answers
+              answer_text: a.answer_text,
+              image_url: a.image_url || null,
+              is_correct: a.is_correct,
+              order_index: a.order_index,
+            })),
+          };
+        });
+        setQuestions(questionsData);
+        console.log('Loaded questions data for editing:', questionsData);
+      } catch (error) {
+        console.error('Failed to load quiz for editing:', error);
+        setLoadError(error instanceof Error ? error.message : 'Failed to load quiz');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadQuizForEdit();
+  }, [quizId]);
 
   const handleSaveDraft = async () => {
     if (!quizId) {
@@ -173,9 +218,11 @@ function CreateQuizPageContent() {
     setQuestionErrors([]);
   };
 
-  // Handle BasicInfoStep completion with quiz ID
-  const handleBasicInfoNext = (createdQuizId: string) => {
-    setQuizId(createdQuizId);
+  // Handle BasicInfoStep completion
+  const handleBasicInfoNext = async () => {
+    // Save quiz data before moving to next step
+    await saveQuizData(formData);
+
     setCurrentStep(2);
     // Scroll to top when moving to next step
     setTimeout(() => {
@@ -184,12 +231,12 @@ function CreateQuizPageContent() {
   };
 
   const handleNext = async () => {
-    // Save data before moving to next step
+    // Save current step data before moving to next step
     if (currentStep === 2) {
-      // Save questions when leaving question creation step
+      // Save questions data
       await saveQuestionsData(questions);
     } else if (currentStep === 3) {
-      // Save quiz data when leaving settings step
+      // Save quiz data (settings)
       await saveQuizData(formData);
     }
 
@@ -202,12 +249,12 @@ function CreateQuizPageContent() {
   };
 
   const handlePrevious = async () => {
-    // Save data before moving to previous step
+    // Save current step data before moving to previous step
     if (currentStep === 2) {
-      // Save questions when leaving question creation step
+      // Save questions data
       await saveQuestionsData(questions);
     } else if (currentStep === 3) {
-      // Save quiz data when leaving settings step
+      // Save quiz data (settings)
       await saveQuizData(formData);
     }
 
@@ -219,6 +266,37 @@ function CreateQuizPageContent() {
     }, 100);
   };
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex items-center gap-2 text-gray-600">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <span>クイズを読み込み中...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">読み込みエラー</h2>
+          <p className="text-gray-600 mb-4">{loadError}</p>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            ダッシュボードに戻る
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Structured Data for SEO */}
@@ -229,20 +307,13 @@ function CreateQuizPageContent() {
       <Toaster position="top-right" />
 
       {/* Quiz Creation Header */}
-      <QuizCreationHeader
-        currentStep={currentStep}
-        totalSteps={4}
-        onSaveDraft={currentStep < 4 ? handleSaveDraft : undefined}
-        isSaving={isSaving}
-        onProfileClick={handleProfileClick}
-      />
-
-      {/* Save Status Indicator */}
-      <div className="absolute top-4 right-4 z-10">
-        <SaveStatusIndicator
-          status={saveStatus}
-          lastSaved={lastSaved}
-          className="bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-sm border"
+      <div className="relative">
+        <QuizCreationHeader
+          currentStep={currentStep}
+          totalSteps={4}
+          onSaveDraft={currentStep < 4 ? handleSaveDraft : undefined}
+          isSaving={isSaving}
+          onProfileClick={handleProfileClick}
         />
       </div>
 
@@ -267,7 +338,7 @@ function CreateQuizPageContent() {
                   onFormDataChange={handleFormDataChange}
                   onNext={handleBasicInfoNext}
                   errors={formErrors}
-                  quizId={quizId || undefined}
+                  quizId={quizId}
                 />
               )}
 
@@ -278,7 +349,7 @@ function CreateQuizPageContent() {
                   onNext={handleNext}
                   onPrevious={handlePrevious}
                   errors={questionErrors}
-                  quizId={quizId || undefined}
+                  quizId={quizId}
                 />
               )}
 
@@ -289,7 +360,7 @@ function CreateQuizPageContent() {
                   onNext={handleNext}
                   onPrevious={handlePrevious}
                   errors={formErrors}
-                  quizId={quizId || undefined}
+                  quizId={quizId}
                 />
               )}
 
@@ -299,7 +370,8 @@ function CreateQuizPageContent() {
                   questions={questions}
                   onPrevious={handlePrevious}
                   isMobile={isMobile}
-                  quizId={quizId || undefined}
+                  quizId={quizId}
+                  isEditMode={true}
                 />
               )}
             </div>
@@ -314,11 +386,11 @@ function CreateQuizPageContent() {
 }
 
 // Main component wrapped with QueryClientProvider and AuthGuard
-export default function CreateQuizPage() {
+export default function EditQuizPage() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthGuard>
-        <CreateQuizPageContent />
+        <EditQuizPageContent />
       </AuthGuard>
     </QueryClientProvider>
   );

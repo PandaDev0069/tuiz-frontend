@@ -101,7 +101,7 @@ function DashboardContent() {
   };
 
   const handleEditQuiz = (id: string) => {
-    router.push(`/create?edit=${id}`);
+    router.push(`/create/edit/${id}`);
   };
 
   const handleStartQuiz = (id: string) => {

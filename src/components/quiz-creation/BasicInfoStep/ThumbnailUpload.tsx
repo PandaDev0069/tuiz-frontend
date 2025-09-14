@@ -126,6 +126,12 @@ export const ThumbnailUpload: React.FC<ThumbnailUploadProps> = ({
                 width={300}
                 height={128}
                 className="w-full h-32 object-cover rounded-lg border"
+                onError={(e) => {
+                  console.error('Thumbnail image failed to load:', formData.thumbnail_url, e);
+                }}
+                onLoad={() => {
+                  console.log('Thumbnail image loaded successfully:', formData.thumbnail_url);
+                }}
               />
               <button
                 type="button"

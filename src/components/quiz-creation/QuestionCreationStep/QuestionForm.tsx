@@ -83,10 +83,16 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
                         width={300}
                         height={200}
                         className="w-full h-full object-cover rounded-lg border"
+                        onError={(e) => {
+                          console.error('Question image failed to load:', question.image_url, e);
+                        }}
+                        onLoad={() => {
+                          console.log('Question image loaded successfully:', question.image_url);
+                        }}
                       />
                       <button
                         type="button"
-                        onClick={() => onQuestionFieldChange('image_url', null)}
+                        onClick={() => onQuestionFieldChange('image_url', undefined)}
                         className="absolute top-1 right-1 sm:top-2 sm:right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
                       >
                         <X className="w-3 h-3 sm:w-4 sm:h-4" />

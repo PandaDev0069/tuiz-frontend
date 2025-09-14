@@ -89,6 +89,81 @@ class QuizService {
   }
 
   /**
+   * Get quiz data for editing (includes all questions and answers)
+   */
+  async getQuizForEdit(id: string): Promise<QuizSetComplete> {
+    try {
+      const response = await apiClient.get<QuizSetComplete>(`${API_ENDPOINTS.QUIZ_BY_ID(id)}/edit`);
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
+   * Set quiz to draft status for editing
+   */
+  async setQuizToDraft(id: string): Promise<void> {
+    try {
+      await apiClient.patch(`${API_ENDPOINTS.QUIZ_BY_ID(id)}/draft`, {});
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
+   * Save quiz data during editing
+   */
+  async saveQuizData(id: string, data: UpdateQuizRequest): Promise<QuizSet> {
+    try {
+      const response = await apiClient.put<QuizSet>(API_ENDPOINTS.QUIZ_BY_ID(id), data);
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
+   * Save questions data during editing
+   */
+  async saveQuestionsData(
+    id: string,
+    questions: CreateQuestionRequest[],
+  ): Promise<QuestionWithAnswers[]> {
+    try {
+      const response = await apiClient.post<QuestionWithAnswers[]>(
+        `${API_ENDPOINTS.QUIZ_BY_ID(id)}/questions/batch`,
+        {
+          questions,
+        },
+      );
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
+   * Publish edited quiz
+   */
+  async publishEditedQuiz(id: string): Promise<{ id: string; status: string; updated_at: string }> {
+    try {
+      const response = await apiClient.patch<{ id: string; status: string; updated_at: string }>(
+        `${API_ENDPOINTS.QUIZ_BY_ID(id)}/publish`,
+        {},
+      );
+      return response;
+    } catch (error) {
+      handleApiError(error as ApiError);
+      throw error;
+    }
+  }
+
+  /**
    * Start editing a quiz (set status to draft)
    */
   async startEditQuiz(id: string): Promise<{ id: string; status: string; updated_at: string }> {
@@ -358,83 +433,6 @@ class QuizService {
           image_url: answer.image_url ?? null,
         })) || [],
     };
-  }
-
-  /**
-   * Synchronize questions for editing - handles create, update, and delete
-   */
-  async syncQuestionsForEdit(
-    quizId: string,
-    currentQuestions: (CreateQuestionRequest | (UpdateQuestionRequest & { id: string }))[],
-    originalQuestions: QuestionWithAnswers[] = [],
-  ): Promise<QuestionWithAnswers[]> {
-    console.log('syncQuestionsForEdit called with:', {
-      quizId,
-      currentQuestionCount: currentQuestions.length,
-      originalQuestionCount: originalQuestions.length,
-      currentQuestionIds: currentQuestions.map((q) => ('id' in q ? q.id : 'new')),
-      originalQuestionIds: originalQuestions.map((q) => q.id),
-    });
-
-    const results: QuestionWithAnswers[] = [];
-    const originalQuestionIds = new Set(originalQuestions.map((q) => q.id));
-    const currentQuestionIds = new Set(
-      currentQuestions.filter((q) => 'id' in q && q.id).map((q) => (q as { id: string }).id),
-    );
-
-    // 1. Delete questions that were removed
-    const questionsToDelete = originalQuestions.filter((q) => !currentQuestionIds.has(q.id));
-    console.log(
-      'Questions to delete:',
-      questionsToDelete.map((q) => q.id),
-    );
-
-    for (const question of questionsToDelete) {
-      try {
-        await this.deleteQuestion(quizId, question.id);
-        console.log('Deleted question:', question.id);
-      } catch (error) {
-        console.error('Failed to delete question:', question.id, error);
-      }
-    }
-
-    // 2. Process current questions (create or update)
-    for (const question of currentQuestions) {
-      try {
-        // Sanitize the question data before sending to backend
-        const sanitizedQuestion = this.sanitizeQuestionData(question);
-
-        if ('id' in question && question.id && originalQuestionIds.has(question.id)) {
-          // Update existing question
-          console.log('Updating existing question:', question.id);
-          const updated = await this.updateQuestion(quizId, question.id, sanitizedQuestion);
-          if (updated) {
-            results.push(updated);
-            console.log('Updated question:', question.id);
-          }
-        } else {
-          // Create new question
-          console.log('Creating new question:', question.question_text?.substring(0, 50) + '...');
-          const created = await this.addQuestion(
-            quizId,
-            sanitizedQuestion as CreateQuestionRequest,
-          );
-          if (created) {
-            results.push(created);
-            console.log('Created new question:', created.id);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to sync question:', question, error);
-        // Don't add undefined to results array
-      }
-    }
-
-    console.log(
-      'syncQuestionsForEdit completed. Results:',
-      results.filter(Boolean).map((q) => q.id),
-    );
-    return results.filter(Boolean);
   }
 
   /**

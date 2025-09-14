@@ -12,7 +12,7 @@ import type {
   ReorderQuestionsRequest,
   ApiError,
 } from '@/types/api';
-import type { QuestionWithAnswers, QuizSetComplete } from '@/types/quiz';
+import type { QuestionWithAnswers } from '@/types/quiz';
 
 // ============================================================================
 // QUERY KEYS
@@ -309,54 +309,6 @@ export const useBatchSaveQuestions = () => {
     onError: (error: ApiError) => {
       const message = handleApiError(error, { showToast: false });
       toast.error(`問題の保存に失敗しました: ${message}`);
-    },
-  });
-};
-
-/**
- * Hook to sync questions for editing (handles create, update, delete)
- */
-export const useSyncQuestionsForEdit = (
-  onSuccess?: (savedQuestions: QuestionWithAnswers[]) => void,
-) => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({
-      quizId,
-      currentQuestions,
-      originalQuestions = [],
-    }: {
-      quizId: string;
-      currentQuestions: (CreateQuestionRequest | (UpdateQuestionRequest & { id: string }))[];
-      originalQuestions?: QuestionWithAnswers[];
-    }) => quizService.syncQuestionsForEdit(quizId, currentQuestions, originalQuestions),
-    onSuccess: (savedQuestions, { quizId }) => {
-      // Update cache with synced questions
-      queryClient.setQueryData(
-        QUIZ_QUERY_KEYS.complete(quizId),
-        (old: QuizSetComplete | undefined) => ({
-          ...old,
-          questions: savedQuestions,
-        }),
-      );
-
-      // Invalidate related queries
-      queryClient.invalidateQueries({
-        queryKey: QUIZ_QUERY_KEYS.detail(quizId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: QUIZ_QUERY_KEYS.lists(),
-      });
-
-      // Call the success callback if provided
-      if (onSuccess) {
-        onSuccess(savedQuestions);
-      }
-    },
-    onError: (error: ApiError) => {
-      const message = handleApiError(error, { showToast: false });
-      toast.error(`問題の同期に失敗しました: ${message}`);
     },
   });
 };
