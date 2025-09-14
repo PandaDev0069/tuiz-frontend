@@ -32,6 +32,7 @@ export { StepIndicator } from './core/step-indicator';
 export { DashboardMessage } from './core/dashboard-message';
 export { SidebarFilter } from './overlays/sidebar-filter';
 export { ProfileSettingsModal } from './overlays/profile-settings-modal';
+export { WarningModal, useWarningModal } from './overlays/warning-modal';
 export { AuthProvider } from '../providers/AuthProvider';
 export { AuthGuard, withAuthGuard } from '../auth/AuthGuard';
 export { SaveStatusIndicator } from './indicators/save-status-indicator';

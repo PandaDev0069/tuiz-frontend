@@ -20,7 +20,6 @@ import {
   FinalStep,
 } from '@/components/quiz-creation';
 import { CreateQuizSetForm, CreateQuestionForm, DifficultyLevel, FormErrors } from '@/types/quiz';
-import { useBatchSaveQuestions } from '@/hooks/useQuestionMutation';
 import { quizService } from '@/lib/quizService';
 import { toast } from 'react-hot-toast';
 
@@ -67,7 +66,6 @@ function CreateQuizPageContent() {
   const [questionErrors, setQuestionErrors] = useState<FormErrors<CreateQuestionForm>[]>([]);
 
   // Save functionality
-  const batchSaveQuestionsMutation = useBatchSaveQuestions();
 
   const saveQuizData = async (data: Partial<CreateQuizSetForm>) => {
     if (!quizId) return;
@@ -88,23 +86,6 @@ function CreateQuizPageContent() {
     } catch (error) {
       setSaveStatus('error');
       console.error('Failed to save quiz data:', error);
-    }
-  };
-
-  const saveQuestionsData = async (questions: CreateQuestionForm[]) => {
-    if (!quizId) return;
-
-    setSaveStatus('saving');
-    try {
-      await batchSaveQuestionsMutation.mutateAsync({
-        quizId,
-        questions,
-      });
-      setSaveStatus('saved');
-      setLastSaved(new Date());
-    } catch (error) {
-      setSaveStatus('error');
-      console.error('Failed to save questions data:', error);
     }
   };
 
@@ -138,9 +119,9 @@ function CreateQuizPageContent() {
         await saveQuizData(formData);
         toast.success('基本情報が保存されました', { duration: 2000 });
       } else if (currentStep === 2) {
-        // Save questions
-        await saveQuestionsData(questions);
-        toast.success('問題が保存されました', { duration: 2000 });
+        // Save questions - this will be handled by QuestionCreationStep component
+        // We just need to trigger the save through the component's internal mechanism
+        toast.success('問題の保存は自動的に行われます', { duration: 2000 });
       } else if (currentStep === 3) {
         // Save quiz data (settings)
         await saveQuizData(formData);
@@ -185,13 +166,11 @@ function CreateQuizPageContent() {
 
   const handleNext = async () => {
     // Save data before moving to next step
-    if (currentStep === 2) {
-      // Save questions when leaving question creation step
-      await saveQuestionsData(questions);
-    } else if (currentStep === 3) {
+    if (currentStep === 3) {
       // Save quiz data when leaving settings step
       await saveQuizData(formData);
     }
+    // Note: Step 2 (questions) is handled by QuestionCreationStep component itself
 
     setCurrentStep((prev) => Math.min(4, prev + 1));
 
@@ -203,13 +182,11 @@ function CreateQuizPageContent() {
 
   const handlePrevious = async () => {
     // Save data before moving to previous step
-    if (currentStep === 2) {
-      // Save questions when leaving question creation step
-      await saveQuestionsData(questions);
-    } else if (currentStep === 3) {
+    if (currentStep === 3) {
       // Save quiz data when leaving settings step
       await saveQuizData(formData);
     }
+    // Note: Step 2 (questions) is handled by QuestionCreationStep component itself
 
     setCurrentStep((prev) => Math.max(1, prev - 1));
 

@@ -19,7 +19,8 @@ import { FilterState } from '@/components/ui/overlays/sidebar-filter';
 import { ProfileData } from '@/components/ui/overlays/profile-settings-modal';
 import { PenTool, Gamepad2, BarChart3, Library, Loader2, AlertCircle } from 'lucide-react';
 import { StructuredData } from '@/components/SEO';
-import { useDraftQuizzes, usePublishedQuizzes, useQuizActions } from '@/hooks/useDashboard';
+import { useDraftQuizzes, usePublishedQuizzes } from '@/hooks/useDashboard';
+import { useQuizDeletion } from '@/hooks/useQuizDeletion';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 
 // Create a QueryClient instance
@@ -59,7 +60,7 @@ function DashboardContent() {
     error: publishedError,
   } = usePublishedQuizzes();
 
-  const { deleteQuiz, isDeleting } = useQuizActions();
+  const { confirmDeleteQuiz, isDeleting, WarningModalComponent } = useQuizDeletion();
 
   // Get quiz data from API
   const draftQuizzes = draftData?.data || [];
@@ -109,13 +110,10 @@ function DashboardContent() {
     router.push(`/play/${id}`);
   };
 
-  const handleDeleteQuiz = async (id: string) => {
-    if (window.confirm('このクイズを削除してもよろしいですか？')) {
-      try {
-        await deleteQuiz(id);
-      } catch {
-        // Error is handled in the hook
-      }
+  const handleDeleteQuiz = (id: string) => {
+    const quiz = [...draftQuizzes, ...publishedQuizzes].find((q) => q.id === id);
+    if (quiz) {
+      confirmDeleteQuiz(quiz);
     }
   };
 
@@ -392,6 +390,9 @@ function DashboardContent() {
           profile={mockProfile}
           onSave={handleProfileSave}
         />
+
+        {/* Warning Modal */}
+        <WarningModalComponent />
       </PageContainer>
     </>
   );
