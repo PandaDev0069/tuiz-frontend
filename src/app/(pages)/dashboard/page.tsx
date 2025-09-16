@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useAuthStore } from '@/state/useAuthStore';
 import { useRouter } from 'next/navigation';
 import {
   Container,
@@ -35,7 +34,6 @@ const queryClient = new QueryClient({
 
 // Dashboard content component
 function DashboardContent() {
-  const { user } = useAuthStore();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -66,14 +64,7 @@ function DashboardContent() {
   const draftQuizzes = draftData?.data || [];
   const publishedQuizzes = publishedData?.data || [];
 
-  // Mock profile data - in real app this would come from API
-  const mockProfile: ProfileData = {
-    username: user?.username || 'user123',
-    displayName: user?.displayName || 'Quiz Master',
-    email: user?.email || 'user@example.com',
-    bio: 'Passionate quiz creator and lifelong learner. I love creating engaging educational content that challenges and inspires.',
-    avatarUrl: undefined,
-  };
+  // Profile data is now fetched by the ProfileSettingsModal component
 
   const handleSearch = (query: string) => {
     // TODO: Implement search functionality with backend
@@ -96,7 +87,7 @@ function DashboardContent() {
   };
 
   const handleProfileSave = (updatedProfile: ProfileData) => {
-    // TODO: Implement profile save functionality
+    // Profile save is now handled by the ProfileSettingsModal component
     console.log('Profile updated:', updatedProfile);
     setProfileModalOpen(false);
   };
@@ -387,7 +378,6 @@ function DashboardContent() {
         <ProfileSettingsModal
           isOpen={profileModalOpen}
           onClose={() => setProfileModalOpen(false)}
-          profile={mockProfile}
           onSave={handleProfileSave}
         />
 

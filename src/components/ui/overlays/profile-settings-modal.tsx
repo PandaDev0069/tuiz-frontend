@@ -6,8 +6,9 @@ import { Card, CardHeader, CardTitle, CardContent } from '../core/card';
 import { Input } from '../forms/input';
 import { Text } from '../core/typography';
 import { cn } from '@/lib/utils';
-import { X, Upload, User, Mail, Edit3, Save, Camera } from 'lucide-react';
+import { X, Upload, User, Mail, Edit3, Save, Camera, Loader2 } from 'lucide-react';
 import Image from 'next/image';
+import { useProfileManagement } from '@/hooks/useProfile';
 
 export interface ProfileData {
   username: string;
@@ -20,22 +21,60 @@ export interface ProfileData {
 interface ProfileSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  profile: ProfileData;
+  profile?: ProfileData; // Make optional since we'll fetch from API
   onSave?: (profile: ProfileData) => void;
 }
 
 export function ProfileSettingsModal({
   isOpen,
   onClose,
-  profile,
+  profile: propProfile,
   onSave,
 }: ProfileSettingsModalProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState<ProfileData>(profile);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(profile.avatarUrl || null);
+  const [formData, setFormData] = useState<ProfileData>({
+    username: '',
+    displayName: '',
+    email: '',
+    avatarUrl: '',
+  });
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Update form data when profile prop changes
+  // Use the profile management hook
+  const {
+    profile: apiProfile,
+    isLoading,
+    updateUsername,
+    updateDisplayName,
+    uploadAvatar,
+    deleteAvatar,
+    isUpdatingUsername,
+    isUpdatingDisplayName,
+    isDeletingAvatar,
+  } = useProfileManagement();
+
+  // Convert API profile to component profile format
+  const profile: ProfileData = React.useMemo(() => {
+    if (apiProfile) {
+      return {
+        username: apiProfile.username || '',
+        displayName: apiProfile.displayName,
+        email: '', // Email is not returned by the API for security
+        avatarUrl: apiProfile.avatarUrl || undefined,
+      };
+    }
+    return (
+      propProfile || {
+        username: '',
+        displayName: '',
+        email: '',
+        avatarUrl: '',
+      }
+    );
+  }, [apiProfile, propProfile]);
+
+  // Update form data when profile changes
   useEffect(() => {
     setFormData(profile);
     setAvatarPreview(profile.avatarUrl || null);
@@ -48,24 +87,79 @@ export function ProfileSettingsModal({
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleAvatarUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setAvatarPreview(result);
-        setFormData((prev) => ({ ...prev, avatarUrl: result }));
-      };
-      reader.readAsDataURL(file);
+      // Basic client-side validation before showing preview
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+
+      if (file.size > maxSize) {
+        // Show error toast immediately
+        const { toast } = await import('react-hot-toast');
+        toast.error('ファイルサイズが大きすぎます。最大5MBまでです。');
+        return;
+      }
+
+      if (!allowedTypes.includes(file.type)) {
+        // Show error toast immediately
+        const { toast } = await import('react-hot-toast');
+        toast.error(
+          'サポートされていないファイル形式です。JPEG、PNG、WebP、GIFのみ対応しています。',
+        );
+        return;
+      }
+
+      try {
+        // Show preview immediately
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const result = e.target?.result as string;
+          setAvatarPreview(result);
+        };
+        reader.readAsDataURL(file);
+
+        // Upload to server
+        await uploadAvatar(file);
+      } catch {
+        // Error handling is done in the service layer
+        // Reset preview on error
+        setAvatarPreview(profile.avatarUrl || null);
+      }
     }
   };
 
-  const handleSave = () => {
-    if (onSave) {
-      onSave(formData);
+  const handleDeleteAvatar = async () => {
+    try {
+      await deleteAvatar();
+      setAvatarPreview(null);
+      setFormData((prev) => ({ ...prev, avatarUrl: undefined }));
+    } catch (error) {
+      console.error('Avatar delete error:', error);
     }
-    setIsEditing(false);
+  };
+
+  const handleSave = async () => {
+    try {
+      // Update username if changed
+      if (formData.username !== profile.username) {
+        await updateUsername({ username: formData.username });
+      }
+
+      // Update display name if changed
+      if (formData.displayName !== profile.displayName) {
+        await updateDisplayName({ displayName: formData.displayName });
+      }
+
+      // Call onSave callback if provided
+      if (onSave) {
+        onSave(formData);
+      }
+
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Save error:', error);
+    }
   };
 
   const handleCancel = () => {
@@ -73,6 +167,25 @@ export function ProfileSettingsModal({
     setAvatarPreview(profile.avatarUrl || null);
     setIsEditing(false);
   };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-[9998] flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative w-full max-w-2xl mx-4 px-4 sm:px-0">
+          <Card className="relative bg-gradient-to-br from-rose-200 via-purple-300 to-indigo-400 shadow-2xl border-0">
+            <CardContent className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-700" />
+                <Text className="text-gray-700">プロフィールを読み込み中...</Text>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   if (!isOpen) return null;
 
@@ -113,19 +226,20 @@ export function ProfileSettingsModal({
               <div className="relative group">
                 <div
                   className={cn(
-                    'w-24 h-24 rounded-full overflow-hidden border-4 bg-gradient-to-br from-orange-200 via-pink-200 to-purple-200 flex items-center justify-center shadow-lg',
+                    'relative w-24 h-24 rounded-full overflow-hidden border-4 flex items-center justify-center shadow-lg',
                     avatarPreview
                       ? 'border-gradient-to-r from-emerald-400 to-cyan-500'
-                      : 'border-dashed border-pink-400',
+                      : 'border-dashed border-pink-400 bg-gradient-to-br from-orange-200 via-pink-200 to-purple-200',
                   )}
                 >
                   {avatarPreview ? (
                     <Image
                       src={avatarPreview}
                       alt="プロフィールアバター"
-                      width={96}
-                      height={96}
-                      className="w-full h-full object-cover rounded-full"
+                      fill
+                      quality={95}
+                      className="object-cover rounded-full"
+                      style={{ objectFit: 'cover' }}
                     />
                   ) : (
                     <User className="h-12 w-12 text-purple-600" />
@@ -166,13 +280,18 @@ export function ProfileSettingsModal({
                 {avatarPreview && (
                   <Button
                     size="sm"
-                    onClick={() => {
-                      setAvatarPreview(null);
-                      setFormData((prev) => ({ ...prev, avatarUrl: undefined }));
-                    }}
-                    className="text-red-700 hover:text-red-800 bg-gradient-to-r from-red-200 to-pink-200 hover:from-red-300 hover:to-pink-300 border-2 border-red-400 hover:border-red-500 shadow-md"
+                    onClick={handleDeleteAvatar}
+                    disabled={isDeletingAvatar}
+                    className="text-red-700 hover:text-red-800 bg-gradient-to-r from-red-200 to-pink-200 hover:from-red-300 hover:to-pink-300 border-2 border-red-400 hover:border-red-500 shadow-md disabled:opacity-50"
                   >
-                    削除
+                    {isDeletingAvatar ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        削除中...
+                      </>
+                    ) : (
+                      '削除'
+                    )}
                   </Button>
                 )}
               </div>
@@ -244,10 +363,20 @@ export function ProfileSettingsModal({
                   <Button
                     variant="gradient2"
                     onClick={handleSave}
-                    className="flex items-center gap-2"
+                    disabled={isUpdatingUsername || isUpdatingDisplayName}
+                    className="flex items-center gap-2 disabled:opacity-50"
                   >
-                    <Save className="h-4 w-4" />
-                    保存
+                    {isUpdatingUsername || isUpdatingDisplayName ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        保存中...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        保存
+                      </>
+                    )}
                   </Button>
                 </>
               ) : hasChanges ? (
@@ -258,10 +387,20 @@ export function ProfileSettingsModal({
                   <Button
                     variant="gradient2"
                     onClick={handleSave}
-                    className="flex items-center gap-2"
+                    disabled={isUpdatingUsername || isUpdatingDisplayName}
+                    className="flex items-center gap-2 disabled:opacity-50"
                   >
-                    <Save className="h-4 w-4" />
-                    変更を保存
+                    {isUpdatingUsername || isUpdatingDisplayName ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        保存中...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        変更を保存
+                      </>
+                    )}
                   </Button>
                 </>
               ) : (
