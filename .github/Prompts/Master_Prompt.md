@@ -96,12 +96,14 @@ This project has two repositories: one for the frontend and one for the backend.
 
 - Waiting room for host and players (two separate pages).
 - Host control panel and public display screen separation
+
 - Real-time question broadcasting and answer collection
 - Leaderboard system with live updates
 
 **Priority 2: Game Flow Implementation**
 
 - Question timing and answer submission system
+
 - Answer reveal and explanation display
 - Podium view with winner animations
 - Game session management and reconnection handling
