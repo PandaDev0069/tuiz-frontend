@@ -132,13 +132,21 @@ export function useCloneQuiz() {
   const { addQuizToMyLibrary, setCloneLoading } = useQuizLibraryStore();
 
   return useMutation({
-    mutationFn: (quizId: string) => {
+    mutationFn: async (quizId: string) => {
       setCloneLoading(true);
-      return quizLibraryService.cloneQuiz(quizId);
+      try {
+        const result = await quizLibraryService.cloneQuiz(quizId);
+        return result;
+      } catch (error) {
+        setCloneLoading(false);
+        throw error;
+      }
     },
     onSuccess: (data: CloneQuizResponse) => {
       // Add cloned quiz to my library in the store
-      addQuizToMyLibrary(data.quiz);
+      if (data && data.clonedQuiz) {
+        addQuizToMyLibrary(data.clonedQuiz);
+      }
 
       // Invalidate my library queries to refetch fresh data
       queryClient.invalidateQueries({
@@ -146,9 +154,6 @@ export function useCloneQuiz() {
       });
 
       setCloneLoading(false);
-
-      // Return the response for the component to handle success feedback
-      return data;
     },
     onError: (error: Error) => {
       toast.error(error.message || 'クイズのクローンに失敗しました');
@@ -159,7 +164,6 @@ export function useCloneQuiz() {
 
 // Delete Quiz Mutation
 export function useDeleteQuiz() {
-  const queryClient = useQueryClient();
   const { removeQuizFromMyLibrary, setDeleteLoading } = useQuizLibraryStore();
 
   return useMutation({
@@ -171,14 +175,12 @@ export function useDeleteQuiz() {
       // Remove quiz from my library in the store
       removeQuizFromMyLibrary(quizId);
 
-      // Invalidate my library queries to refetch fresh data
-      queryClient.invalidateQueries({
-        queryKey: quizLibraryKeys.myLibrary(),
-      });
-
       // Show success message
       toast.success(data.message || 'クイズが正常に削除されました');
       setDeleteLoading(false);
+
+      // Note: We don't need to invalidate queries since we're updating the local state directly
+      // This prevents race conditions where the refetch tries to access the deleted quiz
     },
     onError: (error: Error) => {
       toast.error(error.message || 'クイズの削除に失敗しました');

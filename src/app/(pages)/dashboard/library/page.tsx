@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
+import { toast, Toaster } from 'react-hot-toast';
 import { queryClient } from '@/lib/queryClient';
 import { PageContainer } from '@/components/ui/core/page-container';
 import { QuizLibraryHeader } from '@/components/ui/core/quiz-library-header';
@@ -56,7 +56,7 @@ export default function LibraryPage() {
   };
 
   const handleEditQuiz = (id: string) => {
-    router.push(`/dashboard/create/edit?id=${id}`);
+    router.push(`/create/edit/${id}`);
   };
 
   const handleStartQuiz = (id: string) => {
@@ -64,8 +64,9 @@ export default function LibraryPage() {
   };
 
   const handleDeleteQuiz = (id: string) => {
-    // TODO: Implement delete quiz functionality
-    console.log('Delete quiz:', id);
+    // The actual deletion is handled by the useDeleteQuiz hook in MyLibraryContent
+    // This handler is for any additional parent-level logic after successful deletion
+    console.log('Quiz deleted:', id);
   };
 
   // Event handlers for Public Browse
@@ -85,9 +86,6 @@ export default function LibraryPage() {
 
   const handleCloneQuiz = async (id: string) => {
     try {
-      // Show immediate feedback that cloning has started
-      toast.loading('クイズをクローンしています...', { id: `clone-${id}` });
-
       // The actual cloning is handled by the useCloneQuiz hook in PublicBrowseContent
       // This handler is for additional parent-level logic after successful clone
       console.log('Clone quiz initiated:', id);
@@ -96,7 +94,7 @@ export default function LibraryPage() {
       // or refresh the current view. The PublicBrowseContent will handle the actual clone
     } catch (error) {
       console.error('Failed to initiate clone:', error);
-      toast.error('クローンの開始に失敗しました', { id: `clone-${id}` });
+      toast.error('クローンの開始に失敗しました');
     }
   };
 
@@ -105,7 +103,10 @@ export default function LibraryPage() {
     setActiveTab('my-library');
 
     // Show success message
-    toast.success(`「${originalQuizTitle}」をクローンしました！`);
+    toast.success(`「${originalQuizTitle}」をクローンしました！`, {
+      duration: 4000,
+      id: `clone-success-${clonedQuizId}`, // Unique ID to prevent conflicts
+    });
 
     // Option to edit the cloned quiz (we can add this as a separate notification)
     setTimeout(() => {
@@ -114,7 +115,7 @@ export default function LibraryPage() {
           <span>編集しますか？</span>
           <button
             onClick={() => {
-              router.push(`/dashboard/create/edit?id=${clonedQuizId}`);
+              router.push(`/create/edit/${clonedQuizId}`);
               toast.dismiss();
             }}
             className="text-blue-600 underline"
@@ -181,6 +182,7 @@ export default function LibraryPage() {
           </LibraryTabs>
         </div>
       </PageContainer>
+      <Toaster position="top-right" />
     </QueryClientProvider>
   );
 }

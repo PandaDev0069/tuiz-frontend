@@ -111,7 +111,10 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
     // Find the quiz being cloned for the success callback
     const quizToClone = (quizzes || []).find((q) => q.id === id);
 
-    if (!quizToClone) return;
+    if (!quizToClone) {
+      console.error('Quiz not found for cloning:', id);
+      return;
+    }
 
     // Show cloning modal
     setCloneModalState({
@@ -123,16 +126,21 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
     try {
       const result = await cloneQuizMutation.mutateAsync(id);
 
+      // Check if result is valid and has the expected structure
+      if (!result || !result.clonedQuiz || !result.clonedQuiz.id) {
+        throw new Error('Invalid response from clone API');
+      }
+
       // Update modal to success state
       setCloneModalState((prev) => ({
         ...prev,
         status: 'success',
-        clonedQuizId: result.quiz.id,
+        clonedQuizId: result.clonedQuiz.id,
       }));
 
       // Call parent success handler if provided
       if (onCloneSuccess && result) {
-        onCloneSuccess(result.quiz.id, quizToClone.title);
+        onCloneSuccess(result.clonedQuiz.id, quizToClone.title);
       }
 
       onCloneQuiz(id); // Call parent handler for any additional logic
@@ -213,7 +221,7 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
         error={cloneModalState.error}
         onEditClonedQuiz={() => {
           if (cloneModalState.clonedQuizId) {
-            window.location.href = `/dashboard/create/edit?id=${cloneModalState.clonedQuizId}`;
+            window.location.href = `/create/edit/${cloneModalState.clonedQuizId}`;
           }
         }}
         onViewMyLibrary={() => {

@@ -6,6 +6,7 @@ import { LibraryFilters } from './LibraryFilters';
 import { LibraryGrid } from './LibraryGrid';
 import { useMyLibrary, useDeleteQuiz } from '@/hooks/useQuizLibrary';
 import { useMyLibraryState, useQuizLibraryActions } from '@/state/useQuizLibraryStore';
+import { useConfirmation } from '@/hooks/useConfirmation';
 
 type MyLibraryFilters = {
   category?: string;
@@ -39,6 +40,9 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
 
   // Get actions from Zustand store
   const { setMyLibraryFilters, setMyLibraryPagination } = useQuizLibraryActions();
+
+  // Confirmation hook for delete warnings
+  const { confirmDelete, WarningModalComponent } = useConfirmation();
 
   // Map UI status to API status
   const mapStatusForAPI = (uiStatus: string): 'draft' | 'published' | undefined => {
@@ -80,14 +84,20 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
     setMyLibraryPagination(pagination);
   }, [pagination, setMyLibraryPagination]);
 
-  // Handle delete quiz
-  const handleDeleteQuiz = async (id: string) => {
-    try {
-      await deleteQuizMutation.mutateAsync(id);
-      onDeleteQuiz(id); // Call parent handler for any additional logic
-    } catch (error) {
-      console.error('Failed to delete quiz:', error);
-    }
+  // Handle delete quiz with confirmation
+  const handleDeleteQuiz = (id: string) => {
+    const quiz = quizzes?.find((q) => q.id === id);
+    if (!quiz) return;
+
+    confirmDelete(quiz.title, async () => {
+      try {
+        await deleteQuizMutation.mutateAsync(id);
+        onDeleteQuiz(id); // Call parent handler for any additional logic
+      } catch (error) {
+        console.error('Failed to delete quiz:', error);
+        // Don't call onDeleteQuiz if deletion failed
+      }
+    });
   };
 
   // Get available categories from current quizzes
@@ -141,6 +151,9 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
             : '新しいクイズを作成するか、パブリックライブラリからクローンしてみましょう',
         }}
       />
+
+      {/* Warning Modal for delete confirmation */}
+      <WarningModalComponent />
     </div>
   );
 };

@@ -33,8 +33,13 @@ export interface QuizPreviewResponse {
 }
 
 export interface CloneQuizResponse {
-  quiz: QuizSet;
+  clonedQuiz: QuizSet;
   message: string;
+  originalQuiz: {
+    id: string;
+    title: string;
+    author: string;
+  };
 }
 
 // Request Types
@@ -95,7 +100,25 @@ class QuizLibraryService {
       throw new Error(errorData.message || errorData.error || 'API request failed');
     }
 
-    return response.json();
+    // Handle empty responses (common for DELETE operations)
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      // Return a default success response for non-JSON responses
+      return { message: 'Operation completed successfully' } as T;
+    }
+
+    // Try to parse JSON, but handle empty responses gracefully
+    const text = await response.text();
+    if (!text.trim()) {
+      return { message: 'Operation completed successfully' } as T;
+    }
+
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      console.warn('Failed to parse JSON response:', text);
+      return { message: 'Operation completed successfully' } as T;
+    }
   }
 
   private getAuthToken(): string | null {
@@ -169,9 +192,17 @@ class QuizLibraryService {
 
   // Delete Quiz API (for my library)
   async deleteQuiz(quizId: string): Promise<{ message: string }> {
-    return this.makeRequest<{ message: string }>(`/api/quizzes/${quizId}`, {
-      method: 'DELETE',
-    });
+    console.log('Attempting to delete quiz with ID:', quizId);
+    try {
+      const result = await this.makeRequest<{ message: string }>(`/quiz/${quizId}`, {
+        method: 'DELETE',
+      });
+      console.log('Delete quiz API response:', result);
+      return result;
+    } catch (error) {
+      console.error('Delete quiz API error:', error);
+      throw error;
+    }
   }
 
   // Get Quiz Details API (for preview)
