@@ -15,6 +15,8 @@ export interface SearchBarProps {
   isFilterOpen?: boolean;
   className?: string;
   defaultValue?: string;
+  suggestions?: string[];
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
 export const SearchBar: React.FC<SearchBarProps> = ({
@@ -26,6 +28,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   isFilterOpen = false,
   className,
   defaultValue = '',
+  suggestions = [],
+  onSuggestionClick,
 }) => {
   const [query, setQuery] = useState(defaultValue);
   const [isFocused, setIsFocused] = useState(false);
@@ -121,31 +125,34 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       </div>
 
       {/* Search Suggestions - YouTube Style */}
-      {isFocused && query && (
+      {isFocused && (query || suggestions.length > 0) && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-20 max-h-60 overflow-y-auto">
-          <div className="p-3 text-sm text-gray-500 border-b border-gray-100 font-medium">
-            最近の検索
-          </div>
-          <div className="p-2">
-            <div className="px-3 py-2.5 hover:bg-gray-50 rounded-lg cursor-pointer text-sm text-gray-700 transition-colors">
-              <div className="flex items-center gap-3">
-                <Search className="h-4 w-4 text-gray-400" />
-                <span>{query} プログラミング</span>
+          {suggestions.length > 0 && (
+            <>
+              <div className="p-3 text-sm text-gray-500 border-b border-gray-100 font-medium">
+                {query ? '検索候補' : '最近の検索'}
               </div>
-            </div>
-            <div className="px-3 py-2.5 hover:bg-gray-50 rounded-lg cursor-pointer text-sm text-gray-700 transition-colors">
-              <div className="flex items-center gap-3">
-                <Search className="h-4 w-4 text-gray-400" />
-                <span>{query} 数学</span>
+              <div className="p-2">
+                {suggestions.map((suggestion, index) => (
+                  <div
+                    key={index}
+                    onClick={() => {
+                      setQuery(suggestion);
+                      if (onSuggestionClick) {
+                        onSuggestionClick(suggestion);
+                      }
+                    }}
+                    className="px-3 py-2.5 hover:bg-gray-50 rounded-lg cursor-pointer text-sm text-gray-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Search className="h-4 w-4 text-gray-400" />
+                      <span>{suggestion}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-            <div className="px-3 py-2.5 hover:bg-gray-50 rounded-lg cursor-pointer text-sm text-gray-700 transition-colors">
-              <div className="flex items-center gap-3">
-                <Search className="h-4 w-4 text-gray-400" />
-                <span>{query} 歴史</span>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       )}
     </div>

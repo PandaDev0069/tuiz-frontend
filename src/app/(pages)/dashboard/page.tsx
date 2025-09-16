@@ -20,6 +20,7 @@ import { PenTool, Gamepad2, BarChart3, Library, Loader2, AlertCircle } from 'luc
 import { StructuredData } from '@/components/SEO';
 import { useDraftQuizzes, usePublishedQuizzes } from '@/hooks/useDashboard';
 import { useQuizDeletion } from '@/hooks/useQuizDeletion';
+import { useQuizSearch, useRecentSearches, useSearchSuggestions } from '@/hooks/useQuizSearch';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 
 // Create a QueryClient instance
@@ -37,6 +38,7 @@ function DashboardContent() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<FilterState>({
     status: [],
     difficulty: [],
@@ -49,9 +51,24 @@ function DashboardContent() {
     tags: [],
   });
 
-  // Real data hooks
-  const { data: draftData, isLoading: isLoadingDrafts, error: draftError } = useDraftQuizzes();
+  // Search hooks
+  const { recentSearches, addRecentSearch } = useRecentSearches();
+  const searchSuggestions = useSearchSuggestions(searchQuery, recentSearches);
 
+  // Search functionality
+  const {
+    draftQuizzes: searchDraftQuizzes,
+    publishedQuizzes: searchPublishedQuizzes,
+    isLoading: isSearchLoading,
+    error: searchError,
+  } = useQuizSearch({
+    searchQuery,
+    debounceMs: 300,
+    limit: 50,
+  });
+
+  // Real data hooks (fallback when not searching)
+  const { data: draftData, isLoading: isLoadingDrafts, error: draftError } = useDraftQuizzes();
   const {
     data: publishedData,
     isLoading: isLoadingPublished,
@@ -60,20 +77,32 @@ function DashboardContent() {
 
   const { confirmDeleteQuiz, isDeleting, WarningModalComponent } = useQuizDeletion();
 
-  // Get quiz data from API
-  const draftQuizzes = draftData?.data || [];
-  const publishedQuizzes = publishedData?.data || [];
+  // Determine which data to use based on search state
+  const isSearchActive = searchQuery.trim().length > 0;
+  const draftQuizzes = isSearchActive ? searchDraftQuizzes : draftData?.data || [];
+  const publishedQuizzes = isSearchActive ? searchPublishedQuizzes : publishedData?.data || [];
+  const isLoadingDraftsFinal = isSearchActive ? isSearchLoading : isLoadingDrafts;
+  const isLoadingPublishedFinal = isSearchActive ? isSearchLoading : isLoadingPublished;
+  const draftErrorFinal = isSearchActive ? searchError : draftError;
+  const publishedErrorFinal = isSearchActive ? searchError : publishedError;
 
   // Profile data is now fetched by the ProfileSettingsModal component
 
   const handleSearch = (query: string) => {
-    // TODO: Implement search functionality with backend
-    console.log('Search query:', query);
+    setSearchQuery(query);
+
+    if (query.trim()) {
+      addRecentSearch(query);
+    }
   };
 
   const handleClearSearch = () => {
-    // TODO: Implement clear search functionality
-    console.log('Search cleared');
+    setSearchQuery('');
+  };
+
+  const handleSearchSuggestionClick = (suggestion: string) => {
+    setSearchQuery(suggestion);
+    addRecentSearch(suggestion);
   };
 
   const handleFilterToggle = () => {
@@ -203,6 +232,9 @@ function DashboardContent() {
                   onFilterToggle={handleFilterToggle}
                   isFilterOpen={sidebarOpen}
                   className="w-full max-w-3xl"
+                  defaultValue={searchQuery}
+                  suggestions={searchSuggestions}
+                  onSuggestionClick={handleSearchSuggestionClick}
                 />
               </div>
 
@@ -219,11 +251,11 @@ function DashboardContent() {
             <div className="mb-12">
               <h2 className="text-xl sm:text-2xl font-semibold mb-4 px-auto">
                 下書きのクイズ{' '}
-                {isLoadingDrafts && <Loader2 className="inline w-5 h-5 animate-spin ml-2" />}
+                {isLoadingDraftsFinal && <Loader2 className="inline w-5 h-5 animate-spin ml-2" />}
               </h2>
 
               {/* Error State */}
-              {draftError && (
+              {draftErrorFinal && (
                 <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
                   <AlertCircle className="w-5 h-5 text-red-500" />
                   <span className="text-red-700">下書きクイズの読み込みに失敗しました</span>
@@ -231,7 +263,7 @@ function DashboardContent() {
               )}
 
               {/* Loading State */}
-              {isLoadingDrafts ? (
+              {isLoadingDraftsFinal ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="flex items-center gap-2 text-gray-600">
                     <Loader2 className="w-6 h-6 animate-spin" />
@@ -321,11 +353,13 @@ function DashboardContent() {
             <div className="mb-12">
               <h2 className="text-xl sm:text-2xl font-semibold mb-4 px-auto">
                 公開済みのクイズ{' '}
-                {isLoadingPublished && <Loader2 className="inline w-5 h-5 animate-spin ml-2" />}
+                {isLoadingPublishedFinal && (
+                  <Loader2 className="inline w-5 h-5 animate-spin ml-2" />
+                )}
               </h2>
 
               {/* Error State */}
-              {publishedError && (
+              {publishedErrorFinal && (
                 <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
                   <AlertCircle className="w-5 h-5 text-red-500" />
                   <span className="text-red-700">公開済みクイズの読み込みに失敗しました</span>
@@ -333,7 +367,7 @@ function DashboardContent() {
               )}
 
               {/* Loading State */}
-              {isLoadingPublished ? (
+              {isLoadingPublishedFinal ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="flex items-center gap-2 text-gray-600">
                     <Loader2 className="w-6 h-6 animate-spin" />
