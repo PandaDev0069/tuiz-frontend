@@ -61,8 +61,27 @@ export const LibraryFilters: React.FC<LibraryFiltersProps> = ({
     };
   }, []);
 
-  // Apply filters with validation and debouncing
-  const applyFilters = useCallback(
+  // Apply status filters immediately (no debounce)
+  const applyStatusFilter = useCallback(
+    (status: string) => {
+      // Clear any pending debounced calls
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+
+      // Validate status value
+      if (type === 'my-library' && ['all', 'drafts', 'published'].includes(status)) {
+        const validatedStatus = status as 'all' | 'drafts' | 'published';
+        onFiltersChange({ status: validatedStatus });
+      } else if (type === 'public-browse') {
+        onFiltersChange({ status: undefined });
+      }
+    },
+    [type, onFiltersChange],
+  );
+
+  // Apply other filters with debouncing
+  const applyOtherFilters = useCallback(
     (newFilters: Partial<LibraryFiltersProps['filters']>) => {
       // Clear any existing timeout
       if (debounceTimeoutRef.current) {
@@ -79,15 +98,6 @@ export const LibraryFilters: React.FC<LibraryFiltersProps> = ({
             newFilters.category === 'all' ? undefined : newFilters.category;
         }
 
-        if (newFilters.status !== undefined) {
-          // Only allow valid status values for my-library
-          if (type === 'my-library' && ['all', 'drafts', 'published'].includes(newFilters.status)) {
-            validatedFilters.status = newFilters.status as 'all' | 'drafts' | 'published';
-          } else if (type === 'public-browse') {
-            validatedFilters.status = undefined;
-          }
-        }
-
         if (newFilters.difficulty !== undefined) {
           validatedFilters.difficulty =
             newFilters.difficulty === 'all' ? undefined : newFilters.difficulty;
@@ -101,7 +111,22 @@ export const LibraryFilters: React.FC<LibraryFiltersProps> = ({
         onFiltersChange(validatedFilters);
       }, 150); // 150ms debounce
     },
-    [type, onFiltersChange],
+    [onFiltersChange],
+  );
+
+  // Main apply filters function
+  const applyFilters = useCallback(
+    (newFilters: Partial<LibraryFiltersProps['filters']>) => {
+      // Handle status changes immediately
+      if (newFilters.status !== undefined) {
+        applyStatusFilter(newFilters.status);
+        return;
+      }
+
+      // Handle other filters with debouncing
+      applyOtherFilters(newFilters);
+    },
+    [applyStatusFilter, applyOtherFilters],
   );
 
   // Clear all filters (immediate, no debounce)
