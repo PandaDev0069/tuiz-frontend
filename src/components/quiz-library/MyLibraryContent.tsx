@@ -20,6 +20,7 @@ interface MyLibraryProps {
   pagination: { page: number; limit: number };
   onFiltersChange: (filters: Partial<MyLibraryFilters>) => void;
   onPageChange: (page: number) => void;
+  onSearchChange: (query: string) => void;
   onEditQuiz: (id: string) => void;
   onStartQuiz: (id: string) => void;
   onDeleteQuiz: (id: string) => void;
@@ -31,6 +32,7 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
   pagination,
   onFiltersChange,
   onPageChange,
+  onSearchChange,
   onEditQuiz,
   onStartQuiz,
   onDeleteQuiz,
@@ -125,6 +127,8 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
         filters={filters}
         categories={availableCategories}
         onFiltersChange={onFiltersChange}
+        searchQuery={searchQuery}
+        onSearchChange={onSearchChange}
       />
 
       <LibraryGrid

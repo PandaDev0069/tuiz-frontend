@@ -192,17 +192,9 @@ class QuizLibraryService {
 
   // Delete Quiz API (for my library)
   async deleteQuiz(quizId: string): Promise<{ message: string }> {
-    console.log('Attempting to delete quiz with ID:', quizId);
-    try {
-      const result = await this.makeRequest<{ message: string }>(`/quiz/${quizId}`, {
-        method: 'DELETE',
-      });
-      console.log('Delete quiz API response:', result);
-      return result;
-    } catch (error) {
-      console.error('Delete quiz API error:', error);
-      throw error;
-    }
+    return this.makeRequest<{ message: string }>(`/quiz/${quizId}`, {
+      method: 'DELETE',
+    });
   }
 
   // Get Quiz Details API (for preview)

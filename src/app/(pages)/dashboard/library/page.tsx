@@ -32,6 +32,7 @@ export default function LibraryPage() {
     page: 1,
     limit: 12,
   });
+  const [myLibrarySearchQuery, setMyLibrarySearchQuery] = useState('');
 
   // State for Public Browse
   const [publicBrowseQuery, setPublicBrowseQuery] = useState('');
@@ -48,6 +49,11 @@ export default function LibraryPage() {
   // Event handlers for My Library
   const handleMyLibraryFiltersChange = (filters: Partial<typeof myLibraryFilters>) => {
     setMyLibraryFilters((prev) => ({ ...prev, ...filters }));
+    setMyLibraryPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page
+  };
+
+  const handleMyLibrarySearchChange = (query: string) => {
+    setMyLibrarySearchQuery(query);
     setMyLibraryPagination((prev) => ({ ...prev, page: 1 })); // Reset to first page
   };
 
@@ -155,11 +161,12 @@ export default function LibraryPage() {
           <LibraryTabs activeTab={activeTab} onTabChange={setActiveTab}>
             <TabsContent value="my-library" className="space-y-6">
               <MyLibraryContent
-                searchQuery=""
+                searchQuery={myLibrarySearchQuery}
                 filters={myLibraryFilters}
                 pagination={myLibraryPagination}
                 onFiltersChange={handleMyLibraryFiltersChange}
                 onPageChange={handleMyLibraryPageChange}
+                onSearchChange={handleMyLibrarySearchChange}
                 onEditQuiz={handleEditQuiz}
                 onStartQuiz={handleStartQuiz}
                 onDeleteQuiz={handleDeleteQuiz}
