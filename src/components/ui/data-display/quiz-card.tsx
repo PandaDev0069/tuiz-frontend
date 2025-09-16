@@ -120,7 +120,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       </CardContent>
 
       {/* Action Buttons - Fixed at bottom */}
-      <CardFooter className="flex gap-2 pt-0 mt-auto">
+      <CardFooter className="flex gap-0.5 sm:gap-2 pt-0 mt-auto">
         {quiz.status === QuizStatus.DRAFT ? (
           <>
             <Button
@@ -128,9 +128,9 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               size="sm"
               onClick={handleEdit}
               disabled={isDeleting}
-              className="flex-1"
+              className="flex-1 text-[10px] sm:text-sm px-1 sm:px-3"
             >
-              <Edit3 className="w-4 h-4 mr-1" />
+              <Edit3 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
               編集
             </Button>
             <Button
@@ -138,12 +138,12 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               size="sm"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="flex-1 bg-red-400 hover:bg-red-500 text-white"
+              className="flex-1 bg-red-400 hover:bg-red-500 text-white text-[10px] sm:text-sm px-1 sm:px-3"
             >
               {isDeleting ? (
-                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                <Loader2 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1 animate-spin" />
               ) : (
-                <Trash2 className="w-4 h-4 mr-1" />
+                <Trash2 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
               )}
               削除
             </Button>
@@ -155,18 +155,18 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               size="sm"
               onClick={handleEdit}
               disabled={isDeleting}
-              className="flex-1 hover:from-purple-500 hover:to-pink-500 hover:shadow-lg hover:transform-none"
+              className="flex-1 hover:from-purple-500 hover:to-pink-500 hover:shadow-lg hover:transform-none text-[10px] sm:text-sm px-1 sm:px-3"
             >
-              <Edit3 className="w-4 h-4 mr-1" />
+              <Edit3 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
               編集
             </Button>
             <Button
               size="sm"
               onClick={handleStart}
               disabled={isDeleting}
-              className="flex-1 bg-green-500 hover:bg-green-600 text-white shadow-md hover:shadow-lg"
+              className="flex-1 bg-green-500 hover:bg-green-600 text-white shadow-md hover:shadow-lg text-[10px] sm:text-sm px-1 sm:px-3"
             >
-              <Play className="w-4 h-4 mr-1" />
+              <Play className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
               ゲーム開始
             </Button>
             <Button
@@ -174,12 +174,12 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               size="sm"
               onClick={handleDelete}
               disabled={isDeleting}
-              className="flex-1 bg-red-400 hover:bg-red-500 text-white"
+              className="flex-1 bg-red-400 hover:bg-red-500 text-white text-[10px] sm:text-sm px-1 sm:px-3"
             >
               {isDeleting ? (
-                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                <Loader2 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1 animate-spin" />
               ) : (
-                <Trash2 className="w-4 h-4 mr-1" />
+                <Trash2 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
               )}
               削除
             </Button>
