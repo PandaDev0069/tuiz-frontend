@@ -5,18 +5,7 @@ import { Card, CardContent, CardTitle, CardHeader } from '@/components/ui/core/c
 import { Button } from '@/components/ui/core/button';
 import { Text } from '@/components/ui/core/typography';
 import { Badge } from '@/components/ui/data-display/badge';
-import {
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  Globe,
-  Users,
-  Timer,
-  Award,
-  Copy,
-  Play,
-} from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Eye, Globe, Users, Timer, Award, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { QuizSet, QuestionWithAnswers } from '@/types/quiz';
 import Image from 'next/image';
@@ -41,7 +30,6 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
   isLoading = false,
   error,
   onCloneQuiz,
-  onStartQuiz,
   isCloning = false,
 }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -533,17 +521,6 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                       クローン
                     </>
                   )}
-                </Button>
-              )}
-              {onStartQuiz && (
-                <Button
-                  variant="default"
-                  onClick={() => onStartQuiz(quiz.id)}
-                  size="sm"
-                  className="bg-gray-800 hover:bg-gray-700 text-white font-semibold"
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  プレイ開始
                 </Button>
               )}
             </div>

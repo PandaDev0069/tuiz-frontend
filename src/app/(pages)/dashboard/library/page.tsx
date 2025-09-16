@@ -12,9 +12,62 @@ import {
   TabsContent,
   MyLibraryContent,
   PublicBrowseContent,
+  PreviewQuizModal,
 } from '@/components/quiz-library';
+import { useQuizPreview, useCloneQuiz } from '@/hooks/useQuizLibrary';
 
 type TabValue = 'my-library' | 'public-browse';
+
+// Preview Quiz Wrapper Component (uses hooks inside QueryClientProvider)
+interface PreviewQuizWrapperProps {
+  isOpen: boolean;
+  quizId: string | null;
+  onClose: () => void;
+  onStartQuiz: (quizId: string) => void;
+}
+
+const PreviewQuizWrapper: React.FC<PreviewQuizWrapperProps> = ({
+  isOpen,
+  quizId,
+  onClose,
+  onStartQuiz,
+}) => {
+  // Preview quiz hook
+  const {
+    data: previewData,
+    isLoading: previewLoading,
+    error: previewError,
+  } = useQuizPreview(quizId || '', isOpen);
+
+  // Clone quiz hook
+  const { mutate: cloneQuiz, isPending: isCloning } = useCloneQuiz();
+
+  const handleClone = (quizId: string) => {
+    cloneQuiz(quizId, {
+      onSuccess: (data) => {
+        toast.success(data.message);
+        onClose();
+      },
+      onError: (error) => {
+        toast.error(error.message || 'Failed to clone quiz');
+      },
+    });
+  };
+
+  return (
+    <PreviewQuizModal
+      isOpen={isOpen}
+      onClose={onClose}
+      quiz={previewData?.quiz || null}
+      questions={previewData?.questions || []}
+      isLoading={previewLoading}
+      error={previewError?.message}
+      onCloneQuiz={handleClone}
+      onStartQuiz={onStartQuiz}
+      isCloning={isCloning}
+    />
+  );
+};
 
 // Using global query client from @/lib/queryClient
 
@@ -44,6 +97,15 @@ export default function LibraryPage() {
   const [publicBrowsePagination, setPublicBrowsePagination] = useState({
     page: 1,
     limit: 12,
+  });
+
+  // Preview modal state
+  const [previewModalState, setPreviewModalState] = useState<{
+    isOpen: boolean;
+    quizId: string | null;
+  }>({
+    isOpen: false,
+    quizId: null,
   });
 
   // Event handlers for My Library
@@ -138,8 +200,22 @@ export default function LibraryPage() {
   };
 
   const handlePreviewQuiz = (id: string) => {
-    // TODO: Implement preview quiz functionality
-    console.log('Preview quiz:', id);
+    setPreviewModalState({
+      isOpen: true,
+      quizId: id,
+    });
+  };
+
+  const handleClosePreview = () => {
+    setPreviewModalState({
+      isOpen: false,
+      quizId: null,
+    });
+  };
+
+  const handleStartFromPreview = (quizId: string) => {
+    // Navigate to quiz start page
+    router.push(`/dashboard/quiz/${quizId}/start`);
   };
 
   return (
@@ -188,6 +264,14 @@ export default function LibraryPage() {
             </TabsContent>
           </LibraryTabs>
         </div>
+
+        {/* Preview Quiz Modal */}
+        <PreviewQuizWrapper
+          isOpen={previewModalState.isOpen}
+          quizId={previewModalState.quizId}
+          onClose={handleClosePreview}
+          onStartQuiz={handleStartFromPreview}
+        />
       </PageContainer>
       <Toaster position="top-right" />
     </QueryClientProvider>

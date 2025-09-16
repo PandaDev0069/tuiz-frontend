@@ -25,7 +25,6 @@ const clearUserSpecificData = () => {
   clearUserSpecificQueries();
 
   // Clear any other user-specific stores here
-  // TODO: Add other stores as needed
 };
 
 export const useAuthStore = create<AuthState & AuthActions>()((set) => ({

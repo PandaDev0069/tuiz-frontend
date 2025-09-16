@@ -156,16 +156,29 @@ class QuizLibraryService {
       `/quiz-library/my-library${queryString}`,
     );
 
+    // Fetch status counts in parallel
+    const statusCounts = await this.getStatusCounts();
+
     // Map backend response to frontend expected format
     return {
       quizzes: response.data,
       pagination: response.pagination,
-      total_by_status: {
-        all: response.pagination.total,
-        published: 0, // TODO: Implement status counts
-        draft: 0,
-      },
+      total_by_status: statusCounts,
     };
+  }
+
+  // Categories API
+  async getCategories(): Promise<{ categories: Array<{ category: string; count: number }> }> {
+    return this.makeRequest<{ categories: Array<{ category: string; count: number }> }>(
+      '/quiz-library/categories',
+    );
+  }
+
+  // Status Counts API
+  async getStatusCounts(): Promise<{ all: number; published: number; draft: number }> {
+    return this.makeRequest<{ all: number; published: number; draft: number }>(
+      '/quiz-library/status-counts',
+    );
   }
 
   // Public Browse API
@@ -175,11 +188,14 @@ class QuizLibraryService {
       `/quiz-library/public/browse${queryString}`,
     );
 
+    // Fetch categories in parallel
+    const categoriesResponse = await this.getCategories();
+
     // Map backend response to frontend expected format
     return {
       quizzes: response.data,
       pagination: response.pagination,
-      categories: [], // TODO: Implement categories endpoint
+      categories: categoriesResponse.categories.map((cat) => cat.category),
     };
   }
 
@@ -216,12 +232,6 @@ class QuizLibraryService {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
-  }
-
-  // Get Categories API
-  async getCategories(): Promise<string[]> {
-    const response = await this.makeRequest<{ categories: string[] }>('/quiz-library/categories');
-    return response.categories;
   }
 }
 
