@@ -111,7 +111,7 @@ function DashboardContent() {
 
   const handleFiltersChange = (newFilters: FilterState) => {
     setFilters(newFilters);
-    // TODO: Implement filter functionality with backend
+    // Update Later: Implement filter functionality with backend
     console.log('Filters updated:', newFilters);
   };
 
