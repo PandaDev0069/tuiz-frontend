@@ -127,7 +127,8 @@ const useQuizData = (
 const QuickActions: React.FC<{
   onCreateQuiz: () => void;
   onJoinQuiz: () => void;
-}> = ({ onCreateQuiz, onJoinQuiz }) => (
+  onLibrary: () => void;
+}> = ({ onCreateQuiz, onJoinQuiz, onLibrary }) => (
   <div className="mb-8">
     <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-1 max-w-4xl mx-auto">
       <Button
@@ -166,7 +167,10 @@ const QuickActions: React.FC<{
         <span className="text-xs sm:text-sm">分析表示</span>
       </Button>
 
-      <Button className="group relative h-24 sm:h-28 w-full sm:w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 hover:from-violet-600 hover:via-purple-600 hover:to-fuchsia-600 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden">
+      <Button
+        className="group relative h-24 sm:h-28 w-full sm:w-48 flex flex-col items-center justify-center gap-0 bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 hover:from-violet-600 hover:via-purple-600 hover:to-fuchsia-600 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-200 border-0 overflow-hidden"
+        onClick={onLibrary}
+      >
         <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
         <Library
           className="!w-12 !h-12 sm:!w-15 sm:!h-15 !text-orange-400 group-hover:scale-110 transition-transform duration-200"
@@ -472,6 +476,10 @@ function DashboardContent() {
     router.push('/join');
   };
 
+  const handleLibrary = () => {
+    router.push('/dashboard/library');
+  };
+
   return (
     <>
       {/* Structured Data for SEO */}
@@ -484,7 +492,11 @@ function DashboardContent() {
         <main role="main">
           <Container size="lg" className="max-w-7xl mx-auto">
             {/* Quick Actions Section */}
-            <QuickActions onCreateQuiz={handleCreateQuiz} onJoinQuiz={handleJoinQuiz} />
+            <QuickActions
+              onCreateQuiz={handleCreateQuiz}
+              onJoinQuiz={handleJoinQuiz}
+              onLibrary={handleLibrary}
+            />
 
             {/* Search and Filter Section */}
             <SearchSection
