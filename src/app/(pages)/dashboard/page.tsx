@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { queryClient } from '@/lib/queryClient';
 import {
   Container,
   Button,
@@ -276,15 +277,7 @@ const ScrollNavigation: React.FC<{
   </div>
 );
 
-// Create a QueryClient instance
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      retry: 2,
-    },
-  },
-});
+// Using global query client from @/lib/queryClient
 
 // Quiz Section component for displaying quiz lists
 const QuizSection: React.FC<{

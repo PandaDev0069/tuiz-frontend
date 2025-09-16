@@ -109,7 +109,7 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
   // Handle clone quiz
   const handleCloneQuiz = async (id: string) => {
     // Find the quiz being cloned for the success callback
-    const quizToClone = quizzes.find((q) => q.id === id);
+    const quizToClone = (quizzes || []).find((q) => q.id === id);
 
     if (!quizToClone) return;
 
@@ -149,7 +149,7 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
 
   // Get available categories from current quizzes
   const availableCategories = Array.from(
-    new Set(quizzes.map((q) => q.category).filter(Boolean)),
+    new Set((quizzes || []).map((q) => q.category).filter(Boolean)),
   ) as string[];
 
   // Use store pagination if available, otherwise fall back to props
@@ -159,9 +159,9 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
       : {
           page: pagination.page,
           limit: pagination.limit,
-          total: quizzes.length,
-          total_pages: Math.ceil(quizzes.length / pagination.limit),
-          has_next: pagination.page < Math.ceil(quizzes.length / pagination.limit),
+          total: (quizzes || []).length,
+          total_pages: Math.ceil((quizzes || []).length / pagination.limit),
+          has_next: pagination.page < Math.ceil((quizzes || []).length / pagination.limit),
           has_prev: pagination.page > 1,
         };
 

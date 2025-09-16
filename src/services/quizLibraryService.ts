@@ -99,17 +99,15 @@ class QuizLibraryService {
   }
 
   private getAuthToken(): string | null {
-    // TODO: Replace with actual auth token retrieval from your auth store
-    // For now, return null since we're using mock data
     if (typeof window !== 'undefined') {
-      const authData = localStorage.getItem('tuiz_auth_data');
-      if (authData) {
-        try {
-          const parsed = JSON.parse(authData);
-          return parsed.session?.access_token || null;
-        } catch {
-          return null;
+      try {
+        const sessionStr = localStorage.getItem('tuiz_session');
+        if (sessionStr) {
+          const session = JSON.parse(sessionStr);
+          return session?.access_token || null;
         }
+      } catch {
+        return null;
       }
     }
     return null;
@@ -131,18 +129,40 @@ class QuizLibraryService {
   // My Library API
   async getMyLibrary(params: MyLibraryRequest = {}): Promise<MyLibraryResponse> {
     const queryString = this.buildQueryString(params as Record<string, unknown>);
-    return this.makeRequest<MyLibraryResponse>(`/api/quiz-library/my-library${queryString}`);
+    const response = await this.makeRequest<{ data: QuizSet[]; pagination: PaginationInfo }>(
+      `/quiz-library/my-library${queryString}`,
+    );
+
+    // Map backend response to frontend expected format
+    return {
+      quizzes: response.data,
+      pagination: response.pagination,
+      total_by_status: {
+        all: response.pagination.total,
+        published: 0, // TODO: Implement status counts
+        draft: 0,
+      },
+    };
   }
 
   // Public Browse API
   async getPublicQuizzes(params: PublicBrowseRequest = {}): Promise<PublicBrowseResponse> {
     const queryString = this.buildQueryString(params as Record<string, unknown>);
-    return this.makeRequest<PublicBrowseResponse>(`/api/quiz-library/public/browse${queryString}`);
+    const response = await this.makeRequest<{ data: QuizSet[]; pagination: PaginationInfo }>(
+      `/quiz-library/public/browse${queryString}`,
+    );
+
+    // Map backend response to frontend expected format
+    return {
+      quizzes: response.data,
+      pagination: response.pagination,
+      categories: [], // TODO: Implement categories endpoint
+    };
   }
 
   // Clone Quiz API
   async cloneQuiz(quizId: string): Promise<CloneQuizResponse> {
-    return this.makeRequest<CloneQuizResponse>(`/api/quiz-library/clone/${quizId}`, {
+    return this.makeRequest<CloneQuizResponse>(`/quiz-library/clone/${quizId}`, {
       method: 'POST',
     });
   }
@@ -161,7 +181,7 @@ class QuizLibraryService {
 
   // Get Quiz Preview API (for detailed preview with questions)
   async getQuizPreview(quizId: string): Promise<QuizPreviewResponse> {
-    return this.makeRequest<QuizPreviewResponse>(`/api/quiz-library/preview/${quizId}`);
+    return this.makeRequest<QuizPreviewResponse>(`/quiz-library/preview/${quizId}`);
   }
 
   // Update Quiz Status API
@@ -177,9 +197,7 @@ class QuizLibraryService {
 
   // Get Categories API
   async getCategories(): Promise<string[]> {
-    const response = await this.makeRequest<{ categories: string[] }>(
-      '/api/quiz-library/categories',
-    );
+    const response = await this.makeRequest<{ categories: string[] }>('/quiz-library/categories');
     return response.categories;
   }
 }

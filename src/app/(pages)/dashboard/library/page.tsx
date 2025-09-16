@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
+import { queryClient } from '@/lib/queryClient';
 import { PageContainer } from '@/components/ui/core/page-container';
 import { DashboardHeader } from '@/components/ui/core/dashboard-header';
 import {
@@ -15,15 +16,7 @@ import {
 
 type TabValue = 'my-library' | 'public-browse';
 
-// Create a QueryClient instance
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+// Using global query client from @/lib/queryClient
 
 export default function LibraryPage() {
   const router = useRouter();
@@ -33,7 +26,7 @@ export default function LibraryPage() {
   const [myLibraryFilters, setMyLibraryFilters] = useState({
     category: undefined as string | undefined,
     status: 'all' as 'all' | 'drafts' | 'published',
-    sort: 'updated_at_desc',
+    sort: 'updated_desc',
   });
   const [myLibraryPagination, setMyLibraryPagination] = useState({
     page: 1,
@@ -45,7 +38,7 @@ export default function LibraryPage() {
   const [publicBrowseFilters, setPublicBrowseFilters] = useState({
     category: undefined as string | undefined,
     difficulty: undefined as string | undefined,
-    sort: 'times_played_desc',
+    sort: 'plays_desc',
   });
   const [publicBrowsePagination, setPublicBrowsePagination] = useState({
     page: 1,

@@ -112,11 +112,10 @@ export const PublicQuizCard: React.FC<PublicQuizCardProps> = ({
       {/* Action Buttons - Fixed at bottom */}
       <CardFooter className="flex gap-0.5 sm:gap-2 pt-0 mt-auto">
         <Button
-          variant="outline"
           size="sm"
           onClick={handlePreview}
           disabled={isCloning}
-          className="flex-1 text-[10px] sm:text-sm px-1 sm:px-3"
+          className="flex-1 bg-green-500 hover:bg-green-600 text-white shadow-md hover:shadow-lg text-[10px] sm:text-sm px-1 sm:px-3"
         >
           <Eye className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
           プレビュー

@@ -91,13 +91,13 @@ const initialPagination: PaginationState = {
 const initialMyLibraryFilters: MyLibraryFilters = {
   category: undefined,
   status: 'all',
-  sort: 'updated_at_desc',
+  sort: 'updated_desc',
 };
 
 const initialPublicBrowseFilters: PublicBrowseFilters = {
   category: undefined,
   difficulty: undefined,
-  sort: 'times_played_desc',
+  sort: 'plays_desc',
 };
 
 export const useQuizLibraryStore = create<QuizLibraryState & QuizLibraryActions>()(
@@ -284,41 +284,73 @@ export const useQuizLibraryStore = create<QuizLibraryState & QuizLibraryActions>
   ),
 );
 
-// Selector hooks for better performance
-export const useMyLibraryState = () =>
-  useQuizLibraryStore((state) => ({
-    quizzes: state.myLibraryQuizzes,
-    filters: state.myLibraryFilters,
-    pagination: state.myLibraryPagination,
-    loading: state.myLibraryLoading,
-    error: state.myLibraryError,
-  }));
+// Selector hooks for better performance - using individual selectors to prevent infinite loops
+export const useMyLibraryQuizzes = () => useQuizLibraryStore((state) => state.myLibraryQuizzes);
+export const useMyLibraryFilters = () => useQuizLibraryStore((state) => state.myLibraryFilters);
+export const useMyLibraryPagination = () =>
+  useQuizLibraryStore((state) => state.myLibraryPagination);
+export const useMyLibraryLoading = () => useQuizLibraryStore((state) => state.myLibraryLoading);
+export const useMyLibraryError = () => useQuizLibraryStore((state) => state.myLibraryError);
 
-export const usePublicBrowseState = () =>
-  useQuizLibraryStore((state) => ({
-    quizzes: state.publicQuizzes,
-    query: state.publicBrowseQuery,
-    filters: state.publicBrowseFilters,
-    pagination: state.publicBrowsePagination,
-    loading: state.publicBrowseLoading,
-    error: state.publicBrowseError,
-  }));
+export const usePublicQuizzes = () => useQuizLibraryStore((state) => state.publicQuizzes);
+export const usePublicBrowseQuery = () => useQuizLibraryStore((state) => state.publicBrowseQuery);
+export const usePublicBrowseFilters = () =>
+  useQuizLibraryStore((state) => state.publicBrowseFilters);
+export const usePublicBrowsePagination = () =>
+  useQuizLibraryStore((state) => state.publicBrowsePagination);
+export const usePublicBrowseLoading = () =>
+  useQuizLibraryStore((state) => state.publicBrowseLoading);
+export const usePublicBrowseError = () => useQuizLibraryStore((state) => state.publicBrowseError);
 
-export const useQuizLibraryActions = () =>
-  useQuizLibraryStore((state) => ({
+// Combined selector hooks for convenience (memoized to prevent infinite loops)
+export const useMyLibraryState = () => {
+  const quizzes = useMyLibraryQuizzes();
+  const filters = useMyLibraryFilters();
+  const pagination = useMyLibraryPagination();
+  const loading = useMyLibraryLoading();
+  const error = useMyLibraryError();
+
+  return { quizzes, filters, pagination, loading, error };
+};
+
+export const usePublicBrowseState = () => {
+  const quizzes = usePublicQuizzes();
+  const query = usePublicBrowseQuery();
+  const filters = usePublicBrowseFilters();
+  const pagination = usePublicBrowsePagination();
+  const loading = usePublicBrowseLoading();
+  const error = usePublicBrowseError();
+
+  return { quizzes, query, filters, pagination, loading, error };
+};
+
+export const useQuizLibraryActions = () => {
+  const setMyLibraryFilters = useQuizLibraryStore((state) => state.setMyLibraryFilters);
+  const setMyLibraryPagination = useQuizLibraryStore((state) => state.setMyLibraryPagination);
+  const resetMyLibraryPagination = useQuizLibraryStore((state) => state.resetMyLibraryPagination);
+  const setPublicBrowseQuery = useQuizLibraryStore((state) => state.setPublicBrowseQuery);
+  const setPublicBrowseFilters = useQuizLibraryStore((state) => state.setPublicBrowseFilters);
+  const setPublicBrowsePagination = useQuizLibraryStore((state) => state.setPublicBrowsePagination);
+  const resetPublicBrowsePagination = useQuizLibraryStore(
+    (state) => state.resetPublicBrowsePagination,
+  );
+  const addQuizToMyLibrary = useQuizLibraryStore((state) => state.addQuizToMyLibrary);
+  const updateQuizInMyLibrary = useQuizLibraryStore((state) => state.updateQuizInMyLibrary);
+  const removeQuizFromMyLibrary = useQuizLibraryStore((state) => state.removeQuizFromMyLibrary);
+
+  return {
     // My Library Actions
-    setMyLibraryFilters: state.setMyLibraryFilters,
-    setMyLibraryPagination: state.setMyLibraryPagination,
-    resetMyLibraryPagination: state.resetMyLibraryPagination,
-
+    setMyLibraryFilters,
+    setMyLibraryPagination,
+    resetMyLibraryPagination,
     // Public Browse Actions
-    setPublicBrowseQuery: state.setPublicBrowseQuery,
-    setPublicBrowseFilters: state.setPublicBrowseFilters,
-    setPublicBrowsePagination: state.setPublicBrowsePagination,
-    resetPublicBrowsePagination: state.resetPublicBrowsePagination,
-
+    setPublicBrowseQuery,
+    setPublicBrowseFilters,
+    setPublicBrowsePagination,
+    resetPublicBrowsePagination,
     // Quiz Operations
-    addQuizToMyLibrary: state.addQuizToMyLibrary,
-    updateQuizInMyLibrary: state.updateQuizInMyLibrary,
-    removeQuizFromMyLibrary: state.removeQuizFromMyLibrary,
-  }));
+    addQuizToMyLibrary,
+    updateQuizInMyLibrary,
+    removeQuizFromMyLibrary,
+  };
+};

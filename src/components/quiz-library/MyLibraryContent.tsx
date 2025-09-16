@@ -92,7 +92,7 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
 
   // Get available categories from current quizzes
   const availableCategories = Array.from(
-    new Set(quizzes.map((q) => q.category).filter(Boolean)),
+    new Set((quizzes || []).map((q) => q.category).filter(Boolean)),
   ) as string[];
 
   // Use store pagination if available, otherwise fall back to props
@@ -102,9 +102,9 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
       : {
           page: pagination.page,
           limit: pagination.limit,
-          total: quizzes.length,
-          total_pages: Math.ceil(quizzes.length / pagination.limit),
-          has_next: pagination.page < Math.ceil(quizzes.length / pagination.limit),
+          total: (quizzes || []).length,
+          total_pages: Math.ceil((quizzes || []).length / pagination.limit),
+          has_next: pagination.page < Math.ceil((quizzes || []).length / pagination.limit),
           has_prev: pagination.page > 1,
         };
 

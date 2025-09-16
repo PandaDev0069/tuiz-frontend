@@ -2,6 +2,8 @@
 import { create } from 'zustand';
 import { authService } from '@/lib/auth';
 import type { User, Session, AuthState, LoginRequest, RegisterRequest } from '@/types/auth';
+import { useQuizLibraryStore } from './useQuizLibraryStore';
+import { clearUserSpecificQueries } from '@/lib/queryClient';
 
 interface AuthActions {
   login: (data: LoginRequest) => Promise<void>;
@@ -14,6 +16,18 @@ interface AuthActions {
   initializeAuth: () => void;
 }
 
+// Helper function to clear all user-specific data
+const clearUserSpecificData = () => {
+  // Clear quiz library store
+  useQuizLibraryStore.getState().resetAllState();
+
+  // Clear React Query caches
+  clearUserSpecificQueries();
+
+  // Clear any other user-specific stores here
+  // TODO: Add other stores as needed
+};
+
 export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
   // State
   user: null,
@@ -24,6 +38,10 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
   login: async (data: LoginRequest) => {
     try {
       set({ loading: true });
+
+      // Clear any existing user data before logging in
+      clearUserSpecificData();
+
       const response = await authService.login(data);
 
       set({
@@ -40,6 +58,10 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
   register: async (data: RegisterRequest) => {
     try {
       set({ loading: true });
+
+      // Clear any existing user data before registering
+      clearUserSpecificData();
+
       const response = await authService.register(data);
 
       set({
@@ -57,6 +79,10 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
     try {
       set({ loading: true });
       await authService.logout(clearCredentials);
+
+      // Clear all user-specific data
+      clearUserSpecificData();
+
       set({
         user: null,
         session: null,
@@ -66,6 +92,10 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
       // Even if server logout fails, clear local state
       console.warn('Logout failed, but clearing local state:', error);
       authService.clearAuthData();
+
+      // Clear all user-specific data
+      clearUserSpecificData();
+
       set({
         user: null,
         session: null,
@@ -74,11 +104,23 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
     }
   },
 
-  setUser: (user: User | null) => set({ user }),
+  setUser: (user: User | null) => {
+    const currentUser = useAuthStore.getState().user;
+
+    // If user is changing (not just setting to null), clear user-specific data
+    if (currentUser && user && currentUser.id !== user.id) {
+      clearUserSpecificData();
+    }
+
+    set({ user });
+  },
   setSession: (session: Session | null) => set({ session }),
   setLoading: (loading: boolean) => set({ loading }),
 
   clearAuth: () => {
+    // Clear all user-specific data
+    clearUserSpecificData();
+
     set({
       user: null,
       session: null,

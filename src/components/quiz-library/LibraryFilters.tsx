@@ -31,7 +31,7 @@ export const LibraryFilters: React.FC<LibraryFiltersProps> = ({
     onFiltersChange({
       category: undefined,
       status: 'all',
-      sort: 'updated_at_desc',
+      sort: 'updated_desc',
       difficulty: undefined,
     });
     if (onSearchChange) {
@@ -63,17 +63,13 @@ export const LibraryFilters: React.FC<LibraryFiltersProps> = ({
 
   // Sort options
   const sortOptions = [
-    { value: 'updated_at_desc', label: '更新日順（新しい順）' },
-    { value: 'updated_at_asc', label: '更新日順（古い順）' },
-    { value: 'created_at_desc', label: '作成日順（新しい順）' },
-    { value: 'created_at_asc', label: '作成日順（古い順）' },
+    { value: 'updated_desc', label: '更新日順（新しい順）' },
+    { value: 'created_desc', label: '作成日順（新しい順）' },
     { value: 'title_asc', label: 'タイトル順（A-Z）' },
-    { value: 'title_desc', label: 'タイトル順（Z-A）' },
     ...(type === 'public-browse'
       ? [
-          { value: 'times_played_desc', label: '人気順' },
-          { value: 'difficulty_asc', label: '難易度順（簡単→難しい）' },
-          { value: 'difficulty_desc', label: '難易度順（難しい→簡単）' },
+          { value: 'plays_desc', label: '人気順' },
+          { value: 'questions_desc', label: '問題数順（多い順）' },
         ]
       : []),
   ];

@@ -54,15 +54,15 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
       case 'easy':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-500';
       case 'medium':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-500';
       case 'hard':
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-orange-500';
       case 'expert':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-500';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-500';
     }
   };
 
@@ -82,28 +82,40 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden">
-        <CardHeader className="border-b border-gray-200 bg-gray-50">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden  rounded-3xl">
+        <CardHeader className="bg-gradient-to-br from-blue-700 via-blue-800 to-teal-800 text-white border-0 rounded-t-3xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Eye className="w-6 h-6 text-blue-600" />
-              <CardTitle className="text-xl font-bold">クイズプレビュー</CardTitle>
+              <div className="p-3 m-2 bg-white/20 rounded-lg">
+                <Eye className="w-6 h-6 text-white" />
+              </div>
+              <CardTitle className="text-xl font-bold text-white">クイズプレビュー</CardTitle>
             </div>
-            <Button variant="outline" size="sm" onClick={onClose}>
-              <X className="w-4 h-4" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="h-8 w-8 m-3 bg-gradient-to-br from-red-200 to-pink-300 hover:from-red-300 hover:to-pink-400 text-red-700 hover:text-red-800 rounded-full"
+            >
+              <X className="h-4 w-4" />
             </Button>
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex gap-1 mt-4">
+          <div className="flex gap-2 mt-4">
             {(['overview', 'questions', 'settings'] as const).map((tab) => (
               <Button
                 key={tab}
-                variant={activeTab === tab ? 'default' : 'outline'}
+                variant={activeTab === tab ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setActiveTab(tab)}
-                className="flex-1"
+                className={cn(
+                  'flex-1 transition-all duration-200 rounded-xl border-2',
+                  activeTab === tab
+                    ? 'bg-white text-blue-700 shadow-lg font-semibold border-white'
+                    : 'text-white hover:bg-white/20 rounded-xl border-white/30 hover:border-white/50',
+                )}
               >
                 {tab === 'overview' && '概要'}
                 {tab === 'questions' && '問題'}
@@ -113,22 +125,27 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
           </div>
         </CardHeader>
 
-        <CardContent className="overflow-y-auto max-h-[60vh] p-6">
+        <CardContent className="overflow-y-auto max-h-[60vh] p-6 bg-gradient-to-br from-purple-50 via-pink-25 to-orange-50">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <Text className="ml-3">読み込み中...</Text>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <Text className="ml-3 text-gray-600">読み込み中...</Text>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-12">
-              <Text className="text-red-600 mb-4">{error}</Text>
-              <Button onClick={onClose} variant="outline">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg mb-4">
+                <Text className="text-red-700 font-medium">{error}</Text>
+              </div>
+              <Button variant="destructive" onClick={onClose}>
                 閉じる
               </Button>
             </div>
           ) : !quiz ? (
             <div className="flex items-center justify-center py-12">
-              <Text>クイズが見つかりません</Text>
+              <div className="text-center">
+                <div className="text-6xl mb-4">🔍</div>
+                <Text className="text-gray-500">クイズが見つかりません</Text>
+              </div>
             </div>
           ) : (
             <>
@@ -138,7 +155,7 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                   {/* Quiz Header */}
                   <div className="flex flex-col md:flex-row gap-6">
                     {/* Thumbnail */}
-                    <div className="w-full md:w-48 h-32 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                    <div className="w-full md:w-48 h-32 rounded-xl overflow-hidden bg-gradient-to-br from-blue-200 to-teal-200 flex-shrink-0 shadow-lg">
                       {quiz.thumbnail_url ? (
                         <Image
                           src={quiz.thumbnail_url}
@@ -148,27 +165,34 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-4xl">
+                        <div className="w-full h-full flex items-center justify-center text-4xl text-gray-600">
                           📝
                         </div>
                       )}
                     </div>
 
                     {/* Quiz Info */}
-                    <div className="flex-1 space-y-3">
+                    <div className="flex-1 space-y-4">
                       <div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2">{quiz.title}</h2>
-                        <Text className="text-gray-600">{quiz.description}</Text>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-2">{quiz.title}</h2>
+                        <Text className="text-gray-600 leading-relaxed">{quiz.description}</Text>
                       </div>
 
                       {/* Badges */}
                       <div className="flex flex-wrap gap-2">
-                        <Badge variant="secondary">{quiz.category}</Badge>
-                        <Badge className={getDifficultyColor(quiz.difficulty_level)}>
+                        <Badge className="bg-gray-700 text-white border-0 shadow-md">
+                          {quiz.category}
+                        </Badge>
+                        <Badge
+                          className={cn(
+                            'text-white border-0 shadow-md',
+                            getDifficultyColor(quiz.difficulty_level),
+                          )}
+                        >
                           {getDifficultyLabel(quiz.difficulty_level)}
                         </Badge>
                         {quiz.is_public && (
-                          <Badge variant="outline" className="text-green-600 border-green-600">
+                          <Badge className="bg-gray-700 text-white border-0 shadow-md">
                             <Globe className="w-3 h-3 mr-1" />
                             公開
                           </Badge>
@@ -176,24 +200,28 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                       </div>
 
                       {/* Stats */}
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                        <div className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
-                          {quiz.times_played} 回プレイ
+                      <div className="flex flex-wrap gap-4 text-sm">
+                        <div className="flex items-center gap-2 px-3 py-2 bg-blue-100 rounded-lg">
+                          <Users className="w-4 h-4 text-blue-600" />
+                          <span className="text-gray-800 font-medium">
+                            {quiz.times_played} 回プレイ
+                          </span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Award className="w-4 h-4" />
-                          {quiz.total_questions} 問
+                        <div className="flex items-center gap-2 px-3 py-2 bg-purple-100 rounded-lg">
+                          <Award className="w-4 h-4 text-purple-600" />
+                          <span className="text-gray-800 font-medium">
+                            {quiz.total_questions} 問
+                          </span>
                         </div>
                       </div>
 
                       {/* Tags */}
                       {quiz.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-2">
                           {quiz.tags.map((tag, index) => (
                             <span
                               key={index}
-                              className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full"
+                              className="px-3 py-1 bg-gray-700 text-white text-xs rounded-full shadow-md font-medium"
                             >
                               #{tag}
                             </span>
@@ -204,15 +232,19 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                   </div>
 
                   {/* Creation Info */}
-                  <div className="border-t pt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                      <div>
-                        <strong>作成日:</strong>{' '}
-                        {new Date(quiz.created_at).toLocaleDateString('ja-JP')}
+                  <div className="border-t border-gray-200 pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                        <span className="text-green-700 font-medium">作成日:</span>
+                        <span className="text-green-800">
+                          {new Date(quiz.created_at).toLocaleDateString('ja-JP')}
+                        </span>
                       </div>
-                      <div>
-                        <strong>更新日:</strong>{' '}
-                        {new Date(quiz.updated_at).toLocaleDateString('ja-JP')}
+                      <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg">
+                        <span className="text-orange-700 font-medium">更新日:</span>
+                        <span className="text-orange-800">
+                          {new Date(quiz.updated_at).toLocaleDateString('ja-JP')}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -224,13 +256,14 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                 <div className="space-y-4">
                   {questions.length === 0 ? (
                     <div className="text-center py-8">
+                      <div className="text-6xl mb-4">❓</div>
                       <Text className="text-gray-500">問題がありません</Text>
                     </div>
                   ) : (
                     <>
                       {/* Question Navigation */}
                       <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           <Button
                             variant="outline"
                             size="sm"
@@ -238,12 +271,15 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                               setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))
                             }
                             disabled={currentQuestionIndex === 0}
+                            className="bg-gray-700 text-white border-gray-600 hover:bg-gray-600 disabled:opacity-50"
                           >
                             <ChevronLeft className="w-4 h-4" />
                           </Button>
-                          <Text className="font-medium">
-                            {currentQuestionIndex + 1} / {questions.length}
-                          </Text>
+                          <div className="px-4 py-2 bg-gray-700 rounded-lg">
+                            <Text className="font-semibold text-white">
+                              {currentQuestionIndex + 1} / {questions.length}
+                            </Text>
+                          </div>
                           <Button
                             variant="outline"
                             size="sm"
@@ -253,6 +289,7 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                               )
                             }
                             disabled={currentQuestionIndex === questions.length - 1}
+                            className="bg-gray-700 text-white border-gray-600 hover:bg-gray-600 disabled:opacity-50"
                           >
                             <ChevronRight className="w-4 h-4" />
                           </Button>
@@ -261,8 +298,8 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
 
                       {/* Current Question */}
                       {currentQuestion && (
-                        <Card variant="accent" className="p-6">
-                          <div className="space-y-4">
+                        <Card className="p-6 bg-white border border-gray-200 shadow-lg rounded-xl">
+                          <div className="space-y-6">
                             {/* Question Image */}
                             {currentQuestion.image_url && (
                               <div className="w-full max-w-md mx-auto">
@@ -271,52 +308,56 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                                   alt="Question image"
                                   width={400}
                                   height={300}
-                                  className="w-full h-auto rounded-lg"
+                                  className="w-full h-auto rounded-xl shadow-md"
                                 />
                               </div>
                             )}
 
                             {/* Question Text */}
-                            <div>
-                              <h3 className="text-lg font-semibold mb-4">
+                            <div className="text-center">
+                              <h3 className="text-xl font-bold text-gray-800 mb-4">
                                 Q{currentQuestionIndex + 1}. {currentQuestion.question_text}
                               </h3>
                             </div>
 
                             {/* Answers */}
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                               {currentQuestion.answers.map((answer, index) => (
                                 <div
                                   key={answer.id}
                                   className={cn(
-                                    'p-3 rounded-lg border-2 transition-colors',
+                                    'p-4 rounded-xl border-2 transition-all duration-200 shadow-md',
                                     answer.is_correct
-                                      ? 'border-green-500 bg-green-50'
-                                      : 'border-gray-200 bg-white',
+                                      ? 'border-green-300 bg-green-50'
+                                      : 'border-gray-200 bg-white hover:shadow-md hover:border-gray-300',
                                   )}
                                 >
-                                  <div className="flex items-center gap-3">
-                                    <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-sm font-medium">
+                                  <div className="flex items-center gap-4">
+                                    <span
+                                      className={cn(
+                                        'w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-md',
+                                        answer.is_correct ? 'bg-green-600' : 'bg-gray-600',
+                                      )}
+                                    >
                                       {String.fromCharCode(65 + index)}
                                     </span>
-                                    <span className="flex-1">{answer.answer_text}</span>
+                                    <span className="flex-1 text-gray-800 font-medium">
+                                      {answer.answer_text}
+                                    </span>
                                     {answer.is_correct && (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-green-600 border-green-600"
-                                      >
+                                      <Badge className="bg-green-600 text-white border-0 shadow-md">
                                         正解
                                       </Badge>
                                     )}
                                   </div>
                                   {answer.image_url && (
-                                    <div className="mt-2 ml-9">
+                                    <div className="mt-3 ml-12">
                                       <Image
                                         src={answer.image_url}
                                         alt="Answer image"
                                         width={200}
                                         height={150}
-                                        className="rounded"
+                                        className="rounded-lg shadow-sm"
                                       />
                                     </div>
                                   )}
@@ -326,21 +367,22 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
 
                             {/* Explanation */}
                             {currentQuestion.explanation_text && (
-                              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                                <h4 className="font-medium text-blue-900 mb-2">
+                              <div className="mt-6 p-5 bg-blue-50 border border-blue-200 rounded-xl">
+                                <h4 className="font-bold text-blue-700 mb-3 flex items-center gap-2">
+                                  <span className="text-2xl">💡</span>
                                   {currentQuestion.explanation_title || '解説'}
                                 </h4>
-                                <Text className="text-blue-800">
+                                <Text className="text-gray-700 leading-relaxed">
                                   {currentQuestion.explanation_text}
                                 </Text>
                                 {currentQuestion.explanation_image_url && (
-                                  <div className="mt-2">
+                                  <div className="mt-4">
                                     <Image
                                       src={currentQuestion.explanation_image_url}
                                       alt="Explanation image"
                                       width={300}
                                       height={200}
-                                      className="rounded"
+                                      className="rounded-lg shadow-sm"
                                     />
                                   </div>
                                 )}
@@ -348,12 +390,19 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                             )}
 
                             {/* Question Info */}
-                            <div className="flex items-center gap-4 text-sm text-gray-600 pt-2 border-t">
-                              <div className="flex items-center gap-1">
-                                <Timer className="w-4 h-4" />
-                                解答時間: {currentQuestion.answering_time}秒
+                            <div className="flex items-center gap-6 text-sm pt-4 border-t border-gray-200">
+                              <div className="flex items-center gap-2 px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg">
+                                <Timer className="w-4 h-4 text-orange-600" />
+                                <span className="text-orange-800 font-medium">
+                                  解答時間: {currentQuestion.answering_time}秒
+                                </span>
                               </div>
-                              <div>ポイント: {currentQuestion.points}</div>
+                              <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
+                                <Award className="w-4 h-4 text-purple-600" />
+                                <span className="text-purple-800 font-medium">
+                                  ポイント: {currentQuestion.points}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </Card>
@@ -366,58 +415,81 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
               {/* Settings Tab */}
               {activeTab === 'settings' && quiz && (
                 <div className="space-y-6">
-                  <h3 className="text-lg font-semibold mb-4">ゲーム設定</h3>
+                  <h3 className="text-xl font-bold text-gray-800 mb-6">ゲーム設定</h3>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
-                      <div className="flex justify-between">
-                        <Text className="font-medium">最大プレイヤー数</Text>
-                        <Text>{quiz.play_settings.max_players}</Text>
+                      <div className="flex justify-between items-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <Text className="font-medium text-blue-700">最大プレイヤー数</Text>
+                        <Text className="font-bold text-gray-800">
+                          {quiz.play_settings.max_players}
+                        </Text>
                       </div>
 
-                      <div className="flex justify-between">
-                        <Text className="font-medium">クイズコード</Text>
-                        <Text className="font-mono">{quiz.play_settings.code}</Text>
+                      <div className="flex justify-between items-center p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <Text className="font-medium text-green-700">クイズコード</Text>
+                        <Text className="font-mono font-bold text-gray-800">
+                          {quiz.play_settings.code}
+                        </Text>
                       </div>
                     </div>
 
                     <div className="space-y-4">
-                      <div className="flex justify-between">
-                        <Text className="font-medium">問題のみ表示</Text>
+                      <div className="flex justify-between items-center p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                        <Text className="font-medium text-purple-700">問題のみ表示</Text>
                         <Badge
-                          variant={quiz.play_settings.show_question_only ? 'default' : 'outline'}
+                          className={cn(
+                            'text-white border-0 shadow-md',
+                            quiz.play_settings.show_question_only ? 'bg-green-600' : 'bg-gray-600',
+                          )}
                         >
                           {quiz.play_settings.show_question_only ? '有効' : '無効'}
                         </Badge>
                       </div>
 
-                      <div className="flex justify-between">
-                        <Text className="font-medium">解説表示</Text>
+                      <div className="flex justify-between items-center p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <Text className="font-medium text-yellow-700">解説表示</Text>
                         <Badge
-                          variant={quiz.play_settings.show_explanation ? 'default' : 'outline'}
+                          className={cn(
+                            'text-white border-0 shadow-md',
+                            quiz.play_settings.show_explanation ? 'bg-green-600' : 'bg-gray-600',
+                          )}
                         >
                           {quiz.play_settings.show_explanation ? '有効' : '無効'}
                         </Badge>
                       </div>
 
-                      <div className="flex justify-between">
-                        <Text className="font-medium">時間ボーナス</Text>
-                        <Badge variant={quiz.play_settings.time_bonus ? 'default' : 'outline'}>
+                      <div className="flex justify-between items-center p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+                        <Text className="font-medium text-cyan-700">時間ボーナス</Text>
+                        <Badge
+                          className={cn(
+                            'text-white border-0 shadow-md',
+                            quiz.play_settings.time_bonus ? 'bg-green-600' : 'bg-gray-600',
+                          )}
+                        >
                           {quiz.play_settings.time_bonus ? '有効' : '無効'}
                         </Badge>
                       </div>
 
-                      <div className="flex justify-between">
-                        <Text className="font-medium">連続正解ボーナス</Text>
-                        <Badge variant={quiz.play_settings.streak_bonus ? 'default' : 'outline'}>
+                      <div className="flex justify-between items-center p-3 bg-pink-50 border border-pink-200 rounded-lg">
+                        <Text className="font-medium text-pink-700">連続正解ボーナス</Text>
+                        <Badge
+                          className={cn(
+                            'text-white border-0 shadow-md',
+                            quiz.play_settings.streak_bonus ? 'bg-green-600' : 'bg-gray-600',
+                          )}
+                        >
                           {quiz.play_settings.streak_bonus ? '有効' : '無効'}
                         </Badge>
                       </div>
 
-                      <div className="flex justify-between">
-                        <Text className="font-medium">正解表示</Text>
+                      <div className="flex justify-between items-center p-3 bg-teal-50 border border-teal-200 rounded-lg">
+                        <Text className="font-medium text-teal-700">正解表示</Text>
                         <Badge
-                          variant={quiz.play_settings.show_correct_answer ? 'default' : 'outline'}
+                          className={cn(
+                            'text-white border-0 shadow-md',
+                            quiz.play_settings.show_correct_answer ? 'bg-green-600' : 'bg-gray-600',
+                          )}
                         >
                           {quiz.play_settings.show_correct_answer ? '有効' : '無効'}
                         </Badge>
@@ -432,13 +504,24 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
 
         {/* Footer Actions */}
         {quiz && !isLoading && !error && (
-          <div className="border-t border-gray-200 p-4 bg-gray-50">
+          <div className="border-t border-gray-200 p-6 bg-gradient-to-br from-blue-700 via-blue-800 to-teal-800 rounded-b-3xl">
             <div className="flex flex-col sm:flex-row gap-3 justify-end">
-              <Button variant="outline" onClick={onClose}>
+              <Button
+                variant="outline"
+                onClick={onClose}
+                size="sm"
+                className="bg-white/10 text-white border-white/20 hover:bg-white/20"
+              >
                 閉じる
               </Button>
               {onCloneQuiz && (
-                <Button variant="outline" onClick={() => onCloneQuiz(quiz.id)} disabled={isCloning}>
+                <Button
+                  variant="default"
+                  onClick={() => onCloneQuiz(quiz.id)}
+                  disabled={isCloning}
+                  size="sm"
+                  className="bg-gray-700 hover:bg-gray-600 text-white disabled:opacity-50"
+                >
                   {isCloning ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
@@ -453,7 +536,12 @@ export const PreviewQuizModal: React.FC<PreviewQuizModalProps> = ({
                 </Button>
               )}
               {onStartQuiz && (
-                <Button variant="gradient" onClick={() => onStartQuiz(quiz.id)}>
+                <Button
+                  variant="default"
+                  onClick={() => onStartQuiz(quiz.id)}
+                  size="sm"
+                  className="bg-gray-800 hover:bg-gray-700 text-white font-semibold"
+                >
                   <Play className="w-4 h-4 mr-2" />
                   プレイ開始
                 </Button>
