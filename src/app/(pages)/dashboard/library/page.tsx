@@ -6,7 +6,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { queryClient } from '@/lib/queryClient';
 import { PageContainer } from '@/components/ui/core/page-container';
-import { DashboardHeader } from '@/components/ui/core/dashboard-header';
+import { QuizLibraryHeader } from '@/components/ui/core/quiz-library-header';
 import {
   LibraryTabs,
   TabsContent,
@@ -138,7 +138,7 @@ export default function LibraryPage() {
   return (
     <QueryClientProvider client={queryClient}>
       <PageContainer entrance="fadeIn" className="min-h-screen">
-        <DashboardHeader />
+        <QuizLibraryHeader className="mb-8" />
 
         {/* Page Title and Description */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
