@@ -83,6 +83,12 @@ export const QuestionForm: React.FC<QuestionFormProps> = ({
                         width={300}
                         height={200}
                         className="w-full h-full object-cover rounded-lg border"
+                        onError={(e) => {
+                          console.error('Question image failed to load:', question.image_url, e);
+                        }}
+                        onLoad={() => {
+                          console.log('Question image loaded successfully:', question.image_url);
+                        }}
                       />
                       <button
                         type="button"

@@ -119,6 +119,8 @@ export interface CreateQuizSetForm {
   category: string;
   tags: string[];
   play_settings: Partial<QuizPlaySettings>;
+  // Temporary field to store file before quiz creation
+  _thumbnailFile?: File;
 }
 
 export interface UpdateQuizSetForm extends Partial<CreateQuizSetForm> {
@@ -129,22 +131,22 @@ export interface UpdateQuizSetForm extends Partial<CreateQuizSetForm> {
 export interface CreateQuestionForm {
   question_text: string;
   question_type: QuestionType;
-  image_url?: string;
+  image_url?: string | null;
   show_question_time: number;
   answering_time: number;
   points: number;
   difficulty: DifficultyLevel;
   order_index: number;
-  explanation_title?: string;
-  explanation_text?: string;
-  explanation_image_url?: string;
+  explanation_title?: string | null;
+  explanation_text?: string | null;
+  explanation_image_url?: string | null;
   show_explanation_time: number;
   answers: CreateAnswerForm[];
 }
 
 export interface CreateAnswerForm {
   answer_text: string;
-  image_url?: string;
+  image_url?: string | null;
   is_correct: boolean;
   order_index: number;
 }

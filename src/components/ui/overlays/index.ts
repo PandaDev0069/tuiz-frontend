@@ -4,3 +4,4 @@
 // export { Popover } from './popover';
 export { SidebarFilter } from './sidebar-filter';
 export { ProfileSettingsModal } from './profile-settings-modal';
+export { WarningModal, useWarningModal } from './warning-modal';

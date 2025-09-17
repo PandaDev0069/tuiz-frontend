@@ -3,10 +3,11 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/state/useAuthStore';
+import { useProfile } from '@/hooks/useProfile';
 import { Button } from './button';
 import { AnimatedHeading } from './animated-heading';
 import { cn } from '@/lib/utils';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 
 interface DashboardHeaderProps {
@@ -15,7 +16,8 @@ interface DashboardHeaderProps {
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className, onProfileClick }) => {
-  const { user, logout, loading } = useAuthStore();
+  const { logout, loading } = useAuthStore();
+  const { data: profile, isLoading: profileLoading } = useProfile();
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -92,29 +94,36 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className, onP
                 variant="ghost"
                 size="sm"
                 onClick={handleProfileClick}
-                className="flex items-center space-x-2 px-3 py-2 h-11 rounded-xl hover:bg-accent/50 transition-all duration-200"
+                className="flex items-center space-x-3 px-4 py-2 h-12 rounded-xl hover:bg-gradient-to-r hover:from-primary/10 hover:to-accent/10 transition-all duration-200 border border-transparent hover:border-primary/20 hover:shadow-md"
                 title="Profile Settings"
               >
-                <div className="relative w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 border-2 border-primary/30 flex items-center justify-center overflow-hidden shadow-sm">
-                  {user?.avatarUrl ? (
+                <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 border-2 border-primary flex items-center justify-center overflow-hidden shadow-lg">
+                  {profileLoading ? (
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                  ) : profile?.avatarUrl ? (
                     <Image
-                      src={user.avatarUrl}
-                      alt={`${user.displayName || user.username || 'User'} avatar`}
-                      width={36}
-                      height={36}
+                      src={profile.avatarUrl}
+                      alt={`${profile.displayName || profile.username || 'User'} avatar`}
+                      fill
                       priority
-                      className="rounded-full object-cover w-full h-full"
+                      quality={95}
+                      className="object-cover rounded-full"
+                      style={{ objectFit: 'cover' }}
                     />
                   ) : (
                     <User className="h-5 w-5 text-primary" data-testid="user-icon" />
                   )}
                 </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-foreground leading-tight px-2 py-1 rounded-md bg-gradient-to-r from-primary/10 to-accent/10 border-2 border-primary shadow-md">
+                    {profileLoading ? (
+                      <div className="h-4 w-20 bg-gradient-to-r from-gray-200 to-gray-300 rounded animate-pulse" />
+                    ) : (
+                      profile?.displayName || profile?.username || 'User'
+                    )}
+                  </span>
+                </div>
               </Button>
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold text-foreground leading-tight">
-                  {user?.displayName || user?.username || 'User'}
-                </span>
-              </div>
             </div>
 
             {/* Logout Button - Right side */}
@@ -176,26 +185,33 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({ className, onP
                 variant="ghost"
                 size="sm"
                 onClick={handleProfileClick}
-                className="flex items-center space-x-3 px-4 py-3 h-14 rounded-xl hover:bg-accent/50 transition-all duration-200"
+                className="flex items-center space-x-4 px-5 py-3 h-16 rounded-xl hover:bg-gradient-to-r hover:from-primary/10 hover:to-accent/10 transition-all duration-200 border border-transparent hover:border-primary/20 hover:shadow-lg group"
                 title="Profile Settings"
               >
-                <div className="relative w-11 h-11 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 border-2 border-primary/30 flex items-center justify-center overflow-hidden shadow-md">
-                  {user?.avatarUrl ? (
+                <div className="relative w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 border-2 border-primary flex items-center justify-center overflow-hidden shadow-lg">
+                  {profileLoading ? (
+                    <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                  ) : profile?.avatarUrl ? (
                     <Image
-                      src={user.avatarUrl}
-                      alt={`${user.displayName || user.username || 'User'} avatar`}
-                      width={44}
-                      height={44}
+                      src={profile.avatarUrl}
+                      alt={`${profile.displayName || profile.username || 'User'} avatar`}
+                      fill
                       priority
-                      className="rounded-full object-cover w-full h-full"
+                      quality={95}
+                      className="object-cover rounded-full"
+                      style={{ objectFit: 'cover' }}
                     />
                   ) : (
                     <User className="h-6 w-6 text-primary" data-testid="user-icon" />
                   )}
                 </div>
                 <div className="flex flex-col items-start">
-                  <span className="text-base font-semibold text-foreground leading-tight">
-                    {user?.displayName || user?.username || 'User'}
+                  <span className="text-base font-bold text-foreground leading-tight px-3 py-1.5 rounded-lg bg-gradient-to-r from-primary/10 to-accent/10 border-2 border-primary shadow-md">
+                    {profileLoading ? (
+                      <div className="h-5 w-28 bg-gradient-to-r from-gray-200 to-gray-300 rounded animate-pulse" />
+                    ) : (
+                      profile?.displayName || profile?.username || 'User'
+                    )}
                   </span>
                 </div>
               </Button>

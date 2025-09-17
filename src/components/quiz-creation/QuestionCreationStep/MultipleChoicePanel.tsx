@@ -155,6 +155,12 @@ const ImageUploadSection: React.FC<ImageUploadSectionProps> = ({
                 alt={`Answer option ${index + 1} image`}
                 fill
                 className="object-cover"
+                onError={(e) => {
+                  console.error('Answer image failed to load:', answer.image_url, e);
+                }}
+                onLoad={() => {
+                  console.log('Answer image loaded successfully:', answer.image_url);
+                }}
               />
             </div>
             <button
@@ -274,7 +280,7 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
 
     const newAnswer: CreateAnswerForm = {
       answer_text: '',
-      image_url: undefined,
+      image_url: null,
       is_correct: false,
       order_index: answers.length + 1,
     };
@@ -300,7 +306,7 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
     const updatedAnswers = [...answers];
     updatedAnswers[index] = {
       ...updatedAnswers[index],
-      image_url: undefined,
+      image_url: null,
     };
     onAnswersChange(updatedAnswers);
   };

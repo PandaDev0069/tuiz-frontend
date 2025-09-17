@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { cfg } from '@/config/config';
+import { DebugPanel } from '@/components/debug';
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
@@ -89,29 +90,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {/* Optional: Show connection status in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 10,
-            right: 10,
-            padding: '8px 12px',
-            borderRadius: '4px',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            zIndex: 9999,
-            backgroundColor: isConnected ? '#10b981' : '#ef4444',
-            color: 'white',
-            opacity: 0.3,
-          }}
-        >
-          Socket.IO: {isConnected ? 'Connected' : 'Disconnected'}
-          {connectionError && (
-            <div style={{ fontSize: '10px', marginTop: '2px' }}>{connectionError}</div>
-          )}
-        </div>
-      )}
+      {/* Debug Panel - only in development */}
+      <DebugPanel isSocketConnected={isConnected} socketError={connectionError} />
       {children}
     </>
   );

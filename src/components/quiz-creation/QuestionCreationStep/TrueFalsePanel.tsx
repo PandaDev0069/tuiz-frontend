@@ -20,13 +20,13 @@ export const TrueFalsePanel: React.FC<TrueFalsePanelProps> = ({
     const updatedAnswers: CreateAnswerForm[] = [
       {
         answer_text: 'True',
-        image_url: undefined,
+        image_url: null,
         is_correct: answerText === 'True',
         order_index: 1,
       },
       {
         answer_text: 'False',
-        image_url: undefined,
+        image_url: null,
         is_correct: answerText === 'False',
         order_index: 2,
       },

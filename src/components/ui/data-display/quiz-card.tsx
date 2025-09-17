@@ -5,13 +5,14 @@ import { Text } from '../core/typography';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { QuizSet, QuizStatus } from '@/types/quiz';
-import { Edit3, Play, Trash2, Flame, Globe, Lock } from 'lucide-react';
+import { Edit3, Play, Trash2, Flame, Globe, Lock, Loader2 } from 'lucide-react';
 
 export interface QuizCardProps {
   quiz: QuizSet;
   onEdit?: (id: string) => void;
   onStart?: (id: string) => void;
   onDelete?: (id: string) => void;
+  isDeleting?: boolean;
   className?: string;
 }
 
@@ -20,6 +21,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onEdit,
   onStart,
   onDelete,
+  isDeleting = false,
   className,
 }) => {
   const handleEdit = () => onEdit?.(quiz.id);
@@ -118,20 +120,31 @@ export const QuizCard: React.FC<QuizCardProps> = ({
       </CardContent>
 
       {/* Action Buttons - Fixed at bottom */}
-      <CardFooter className="flex gap-2 pt-0 mt-auto">
+      <CardFooter className="flex gap-0.5 sm:gap-2 pt-0 mt-auto">
         {quiz.status === QuizStatus.DRAFT ? (
           <>
-            <Button variant="gradient2" size="sm" onClick={handleEdit}>
-              <Edit3 className="w-4 h-4 mr-1" />
+            <Button
+              variant="gradient2"
+              size="sm"
+              onClick={handleEdit}
+              disabled={isDeleting}
+              className="flex-1 text-[10px] sm:text-sm px-1 sm:px-3"
+            >
+              <Edit3 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
               編集
             </Button>
             <Button
               variant="destructive"
               size="sm"
               onClick={handleDelete}
-              className="flex-1 bg-red-400 hover:bg-red-500 text-white"
+              disabled={isDeleting}
+              className="flex-1 bg-red-400 hover:bg-red-500 text-white text-[10px] sm:text-sm px-1 sm:px-3"
             >
-              <Trash2 className="w-4 h-4 mr-1" />
+              {isDeleting ? (
+                <Loader2 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1 animate-spin" />
+              ) : (
+                <Trash2 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
+              )}
               削除
             </Button>
           </>
@@ -141,26 +154,33 @@ export const QuizCard: React.FC<QuizCardProps> = ({
               variant="gradient2"
               size="sm"
               onClick={handleEdit}
-              className="flex-1 hover:from-purple-500 hover:to-pink-500 hover:shadow-lg hover:transform-none"
+              disabled={isDeleting}
+              className="flex-1 hover:from-purple-500 hover:to-pink-500 hover:shadow-lg hover:transform-none text-[10px] sm:text-sm px-1 sm:px-3"
             >
-              <Edit3 className="w-4 h-4 mr-1" />
+              <Edit3 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
               編集
             </Button>
             <Button
               size="sm"
               onClick={handleStart}
-              className="flex-1 bg-green-500 hover:bg-green-600 text-white shadow-md hover:shadow-lg"
+              disabled={isDeleting}
+              className="flex-1 bg-green-500 hover:bg-green-600 text-white shadow-md hover:shadow-lg text-[10px] sm:text-sm px-1 sm:px-3"
             >
-              <Play className="w-4 h-4 mr-1" />
+              <Play className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
               ゲーム開始
             </Button>
             <Button
               variant="destructive"
               size="sm"
               onClick={handleDelete}
-              className="flex-1 bg-red-400 hover:bg-red-500 text-white"
+              disabled={isDeleting}
+              className="flex-1 bg-red-400 hover:bg-red-500 text-white text-[10px] sm:text-sm px-1 sm:px-3"
             >
-              <Trash2 className="w-4 h-4 mr-1" />
+              {isDeleting ? (
+                <Loader2 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1 animate-spin" />
+              ) : (
+                <Trash2 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
+              )}
               削除
             </Button>
           </>

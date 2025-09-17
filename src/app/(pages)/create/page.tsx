@@ -1,8 +1,18 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Container, PageContainer, QuizCreationHeader, StepIndicator } from '@/components/ui';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from 'react-hot-toast';
+import {
+  Container,
+  PageContainer,
+  QuizCreationHeader,
+  StepIndicator,
+  AuthGuard,
+  SaveStatusIndicator,
+} from '@/components/ui';
 import { StructuredData } from '@/components/SEO';
+import { QuizCreationDebug } from '@/components/debug';
 import {
   BasicInfoStep,
   QuestionCreationStep,
@@ -10,11 +20,31 @@ import {
   FinalStep,
 } from '@/components/quiz-creation';
 import { CreateQuizSetForm, CreateQuestionForm, DifficultyLevel, FormErrors } from '@/types/quiz';
+import { quizService } from '@/lib/quizService';
+import { toast } from 'react-hot-toast';
 
-export default function CreateQuizPage() {
+// Create a query client instance
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
+
+function CreateQuizPageContent() {
   const [currentStep, setCurrentStep] = useState(1);
+  const [quizId, setQuizId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [formData, setFormData] = useState<Partial<CreateQuizSetForm>>({
     title: '',
     description: '',
@@ -23,7 +53,6 @@ export default function CreateQuizPage() {
     category: '',
     tags: [],
     play_settings: {
-      code: 0,
       show_question_only: true,
       show_explanation: true,
       time_bonus: true,
@@ -35,6 +64,30 @@ export default function CreateQuizPage() {
   const [questions, setQuestions] = useState<CreateQuestionForm[]>([]);
   const [formErrors, setFormErrors] = useState<FormErrors<CreateQuizSetForm>>({});
   const [questionErrors, setQuestionErrors] = useState<FormErrors<CreateQuestionForm>[]>([]);
+
+  // Save functionality
+
+  const saveQuizData = async (data: Partial<CreateQuizSetForm>) => {
+    if (!quizId) return;
+
+    setSaveStatus('saving');
+    try {
+      await quizService.updateQuiz(quizId, {
+        title: data.title,
+        description: data.description,
+        is_public: data.is_public,
+        difficulty_level: data.difficulty_level,
+        category: data.category,
+        tags: data.tags,
+        play_settings: data.play_settings,
+      });
+      setSaveStatus('saved');
+      setLastSaved(new Date());
+    } catch (error) {
+      setSaveStatus('error');
+      console.error('Failed to save quiz data:', error);
+    }
+  };
 
   // Handle screen size detection
   React.useEffect(() => {
@@ -53,22 +106,40 @@ export default function CreateQuizPage() {
   }, []);
 
   const handleSaveDraft = async () => {
+    if (!quizId) {
+      console.log('No quiz ID available for draft save');
+      return;
+    }
+
     setIsSaving(true);
-    // Simulate saving
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsSaving(false);
-    console.log('Draft saved!');
+    try {
+      // Save current step's data based on which step we're on
+      if (currentStep === 1) {
+        // Save basic info (quiz data)
+        await saveQuizData(formData);
+        toast.success('基本情報が保存されました', { duration: 2000 });
+      } else if (currentStep === 2) {
+        // Save questions - this will be handled by QuestionCreationStep component
+        // We just need to trigger the save through the component's internal mechanism
+        toast.success('問題の保存は自動的に行われます', { duration: 2000 });
+      } else if (currentStep === 3) {
+        // Save quiz data (settings)
+        await saveQuizData(formData);
+        toast.success('設定が保存されました', { duration: 2000 });
+      }
+      // Step 4 (Final) doesn't need draft save as it's for publishing
+
+      console.log('Draft saved successfully!');
+    } catch (error) {
+      toast.error('下書きの保存に失敗しました', { duration: 3000 });
+      console.error('Failed to save draft:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleProfileClick = () => {
     console.log('Profile clicked');
-  };
-
-  const handlePublish = () => {
-    console.log('Quiz published!', { formData, questions });
-    // NOTE: Backend API integration required for actual publishing
-    // For now, just show success message
-    alert('クイズが公開されました！');
   };
 
   const handleFormDataChange = (data: Partial<CreateQuizSetForm>) => {
@@ -83,40 +154,43 @@ export default function CreateQuizPage() {
     setQuestionErrors([]);
   };
 
-  const handleNext = () => {
-    // Validate current step
-    const errors: FormErrors<CreateQuizSetForm> = {};
-
-    if (!formData.title?.trim()) {
-      errors.title = 'タイトルは必須です';
-    }
-    if (!formData.description?.trim()) {
-      errors.description = '説明は必須です';
-    }
-    if (!formData.difficulty_level) {
-      errors.difficulty_level = '難易度を選択してください';
-    }
-    if (!formData.category?.trim()) {
-      errors.category = 'カテゴリを選択してください';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
-    }
-
-    setCurrentStep((prev) => Math.min(4, prev + 1));
-
-    // Scroll to top when moving to next step (works on both mobile and PC)
+  // Handle BasicInfoStep completion with quiz ID
+  const handleBasicInfoNext = (createdQuizId: string) => {
+    setQuizId(createdQuizId);
+    setCurrentStep(2);
+    // Scroll to top when moving to next step
     setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }, 100);
   };
 
-  const handlePrevious = () => {
+  const handleNext = async () => {
+    // Save data before moving to next step
+    if (currentStep === 3) {
+      // Save quiz data when leaving settings step
+      await saveQuizData(formData);
+    }
+    // Note: Step 2 (questions) is handled by QuestionCreationStep component itself
+
+    setCurrentStep((prev) => Math.min(4, prev + 1));
+
+    // Scroll to top when moving to next step
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
+  };
+
+  const handlePrevious = async () => {
+    // Save data before moving to previous step
+    if (currentStep === 3) {
+      // Save quiz data when leaving settings step
+      await saveQuizData(formData);
+    }
+    // Note: Step 2 (questions) is handled by QuestionCreationStep component itself
+
     setCurrentStep((prev) => Math.max(1, prev - 1));
 
-    // Scroll to top when moving to previous step (works on both mobile and PC)
+    // Scroll to top when moving to previous step
     setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }, 100);
@@ -128,14 +202,26 @@ export default function CreateQuizPage() {
       <StructuredData type="quiz" />
       <StructuredData type="software" />
 
+      {/* Toast notifications */}
+      <Toaster position="top-right" />
+
       {/* Quiz Creation Header */}
       <QuizCreationHeader
         currentStep={currentStep}
         totalSteps={4}
-        onSaveDraft={handleSaveDraft}
+        onSaveDraft={currentStep < 4 ? handleSaveDraft : undefined}
         isSaving={isSaving}
         onProfileClick={handleProfileClick}
       />
+
+      {/* Save Status Indicator */}
+      <div className="absolute top-4 right-4 z-10">
+        <SaveStatusIndicator
+          status={saveStatus}
+          lastSaved={lastSaved}
+          className="bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-sm border"
+        />
+      </div>
 
       {/* Step Indicator */}
       <StepIndicator
@@ -156,8 +242,9 @@ export default function CreateQuizPage() {
                 <BasicInfoStep
                   formData={formData}
                   onFormDataChange={handleFormDataChange}
-                  onNext={handleNext}
+                  onNext={handleBasicInfoNext}
                   errors={formErrors}
+                  quizId={quizId || undefined}
                 />
               )}
 
@@ -168,6 +255,7 @@ export default function CreateQuizPage() {
                   onNext={handleNext}
                   onPrevious={handlePrevious}
                   errors={questionErrors}
+                  quizId={quizId || undefined}
                 />
               )}
 
@@ -178,6 +266,7 @@ export default function CreateQuizPage() {
                   onNext={handleNext}
                   onPrevious={handlePrevious}
                   errors={formErrors}
+                  quizId={quizId || undefined}
                 />
               )}
 
@@ -186,14 +275,28 @@ export default function CreateQuizPage() {
                   formData={formData}
                   questions={questions}
                   onPrevious={handlePrevious}
-                  onPublish={handlePublish}
                   isMobile={isMobile}
+                  quizId={quizId || undefined}
                 />
               )}
             </div>
           </Container>
         </main>
       </PageContainer>
+
+      {/* Debug Panel for Quiz Creation */}
+      <QuizCreationDebug currentStep={currentStep} quizId={quizId} formData={formData} />
     </>
+  );
+}
+
+// Main component wrapped with QueryClientProvider and AuthGuard
+export default function CreateQuizPage() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthGuard>
+        <CreateQuizPageContent />
+      </AuthGuard>
+    </QueryClientProvider>
   );
 }
