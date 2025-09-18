@@ -128,7 +128,9 @@ export default function LibraryPage() {
   };
 
   const handleStartQuiz = (id: string) => {
-    router.push(`/host?quiz=${id}`);
+    // Generate a 6-digit room code
+    const roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+    router.push(`/host-waiting-room?code=${roomCode}&quizId=${id}`);
   };
 
   const handleDeleteQuiz = (id: string) => {
@@ -214,8 +216,9 @@ export default function LibraryPage() {
   };
 
   const handleStartFromPreview = (quizId: string) => {
-    // Navigate to quiz start page
-    router.push(`/dashboard/quiz/${quizId}/start`);
+    // Generate a 6-digit room code
+    const roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+    router.push(`/host-waiting-room?code=${roomCode}&quizId=${quizId}`);
   };
 
   return (

@@ -451,7 +451,9 @@ function DashboardContent() {
   };
 
   const handleStartQuiz = (id: string) => {
-    router.push(`/play/${id}`);
+    // Generate a 6-digit room code
+    const roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+    router.push(`/host-waiting-room?code=${roomCode}&quizId=${id}`);
   };
 
   const handleDeleteQuiz = (id: string) => {
