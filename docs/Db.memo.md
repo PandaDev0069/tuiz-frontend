@@ -114,7 +114,7 @@ create table public.games (
   quiz_set_id uuid not null,
   game_code varchar(10) not null,
   current_players integer default 0,
-  status varchar(20) default 'waiting',
+  status enum('waiting', 'active', 'paused', 'finished') default 'waiting',
   current_question_index integer default 0,
   current_question_start_time timestamptz,
   game_settings jsonb default '{}'::jsonb,
