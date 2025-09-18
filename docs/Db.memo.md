@@ -56,7 +56,124 @@ create table public.game_flows (
   id uuid not null default gen_random_uuid (),
   game_id uuid not null,
   quiz_set_id uuid not null,
+  total_questions integer not null default 0,
+  current_question_id uuid null,
+  next_question_id uuid null,
+  current_question_index integer null default 0,
+  current_question_start_time timestamp with time zone null,
+  current_question_end_time timestamp with time zone null,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+) TABLESPACE pg_default;
 
-  -- Add more fields later
+```
+
+## Player_data
+
+This table will keep track of scores , leaderboard , etc..
+
+```sql
+create table public.game_player_data (
+  id uuid not null default gen_random_uuid (),
+  player_id uuid not null,
+  player_device_id character varying(100) not null, -- fetch from players table
+  game_id uuid not null,
+  score integer not null default 0, -- Calculate rank from the score
+  answer_report jsonb null default '{}'::jsonb, --(will contain the report for each question and answers serving as analytics for each player and can be used in analytics of dashboard
+ -- {
+ -- "q1": { "answer": "B", "is_correct": true, "time_taken": 4200 },
+ -- "q2": { "answer": "A", "is_correct": false, "time_taken": 7000 }
+ -- })
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now()
+) TABLESPACE pg_default;
+```
+
+# Finalized version
+
+```sql
+-- players: lightweight identity per-session (guest friendly)
+create table public.players (
+  id uuid not null default gen_random_uuid(),
+  device_id varchar(100),
+  game_id uuid not null,
+  player_name varchar(100) not null,
+  is_logged_in boolean not null default false,
+  is_host boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (id)
+);
+
+create index idx_players_game_id on public.players (game_id);
+create index idx_players_device_id on public.players (device_id);
+
+-- games: session lifecycle & settings only (no heavy counters)
+create table public.games (
+  id uuid not null default gen_random_uuid(),
+  quiz_set_id uuid not null,
+  game_code varchar(10) not null,
+  current_players integer default 0,
+  status varchar(20) default 'waiting',
+  current_question_index integer default 0,
+  current_question_start_time timestamptz,
+  game_settings jsonb default '{}'::jsonb,
+  locked boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  started_at timestamptz,
+  paused_at timestamptz,
+  resumed_at timestamptz,
+  ended_at timestamptz,
+  primary key (id)
+);
+
+-- add uniqueness for quick lookups (optional)
+create unique index uq_games_game_code on public.games (game_code);
+
+-- game_flows: pointer to per-game state (minimal)
+create table public.game_flows (
+  id uuid not null default gen_random_uuid(),
+  game_id uuid not null,
+  quiz_set_id uuid not null,
+  total_questions integer not null default 0,
+  current_question_id uuid,
+  next_question_id uuid,
+  current_question_index integer default 0,
+  current_question_start_time timestamptz,
+  current_question_end_time timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (id)
+);
+
+create index idx_game_flows_game_id on public.game_flows (game_id);
+
+-- game_player_data: per-player per-game final/ongoing stats (score + json report)
+create table public.game_player_data (
+  id uuid not null default gen_random_uuid(),
+  player_id uuid not null,
+  player_device_id varchar(100) not null,
+  game_id uuid not null,
+  score integer not null default 0,
+  answer_report jsonb default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (id)
+);
+
+-- indexes for leaderboard queries
+create index idx_gpd_game_score on public.game_player_data (game_id, score desc);
+create index idx_gpd_player_game on public.game_player_data (player_id, game_id);
+
+-- Optional foreign keys (enable if you want referential integrity)
+alter table public.players
+  add constraint fk_players_games foreign key (game_id) references public.games(id) on delete cascade;
+
+alter table public.game_player_data
+  add constraint fk_gpd_players foreign key (player_id) references public.players(id) on delete cascade;
+
+alter table public.game_player_data
+  add constraint fk_gpd_games foreign key (game_id) references public.games(id) on delete cascade;
 
 ```
