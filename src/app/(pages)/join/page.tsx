@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   PageContainer,
   Header,
@@ -18,6 +19,7 @@ import { FaUser } from 'react-icons/fa';
 import { MdPin } from 'react-icons/md';
 
 export default function Page() {
+  const router = useRouter();
   const [name, setName] = React.useState('');
   const [code, setCode] = React.useState('');
   const [touched, setTouched] = React.useState({ name: false, code: false });
@@ -79,8 +81,12 @@ export default function Page() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                // UI-only: no submission logic yet
-                setTouched({ name: true, code: true });
+                if (isFormValid) {
+                  // Redirect to waiting room with name and code as query params
+                  router.push(`/waiting-room?name=${encodeURIComponent(name.trim())}&code=${code}`);
+                } else {
+                  setTouched({ name: true, code: true });
+                }
               }}
               className="space-y-4"
               noValidate
