@@ -3,7 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
-import { Header, Footer, PageContainer, Container, Main } from '@/components/ui';
+import { Header, PageContainer, Container, Main } from '@/components/ui';
 export default function WaitingRoomPage() {
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || '';
@@ -142,11 +142,11 @@ export default function WaitingRoomPage() {
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl blur-lg opacity-30 scale-110"></div>
 
               {/* Main container with 3D effect */}
-              <div className="relative bg-gradient-to-br from-cyan-100 via-blue-50 to-cyan-100 px-8 py-6 rounded-xl border-2 border-cyan-300 shadow-2xl transform hover:scale-105 hover:shadow-cyan-200/50 transition-all duration-300">
+              <div className="relative bg-gradient-to-br from-cyan-100 via-blue-50 to-cyan-100 px-8 py-6 rounded-xl border-2 border-cyan-300  transform hover:scale-105 hover:shadow-cyan-200/50 transition-all duration-300">
                 {/* Inner highlight */}
                 <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl"></div>
 
-                <span className="relative text-3xl md:text-4xl font-mono font-black bg-gradient-to-r from-cyan-700 via-blue-600 to-cyan-700 bg-clip-text text-transparent tracking-wider drop-shadow-sm">
+                <span className="relative text-3xl md:text-4xl font-mono font-black bg-gradient-to-r from-cyan-700 via-blue-600 to-cyan-700 bg-clip-text text-transparent tracking-wider">
                   {roomCode || '------'}
                 </span>
               </div>
@@ -159,37 +159,6 @@ export default function WaitingRoomPage() {
           </div>
         </Container>
       </Main>
-      <Footer className="mt-auto">
-        <Container size="lg">
-          <div className="relative py-3 md:py-4">
-            {/* Background gradient */}
-            <div className="absolute inset-0 bg-gradient-to-r from-cyan-50 via-blue-50 to-purple-50"></div>
-
-            {/* Content with enhanced styling */}
-            <div className="relative text-center space-y-3">
-              {/* Main copyright with gradient */}
-              <div className="flex flex-col items-center space-y-2">
-                <p className="text-sm md:text-base font-medium bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">
-                  &copy; 2025 TUIZ情報王. All rights reserved.
-                </p>
-
-                {/* Tech stack with decorative elements */}
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="w-1 h-1 bg-cyan-400 rounded-full"></div>
-                  <p className="text-xs md:text-sm text-gray-500 font-medium">
-                    Next.js + Socket.IO
-                  </p>
-                  <div className="w-1 h-1 bg-blue-400 rounded-full"></div>
-                  <p className="text-xs md:text-sm text-gray-500 font-medium">
-                    Real-time Quiz Platform
-                  </p>
-                  <div className="w-1 h-1 bg-purple-400 rounded-full"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Container>
-      </Footer>
     </PageContainer>
   );
 }
