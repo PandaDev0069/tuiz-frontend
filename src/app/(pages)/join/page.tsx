@@ -20,11 +20,12 @@ import { MdPin } from 'react-icons/md';
 
 export default function Page() {
   const router = useRouter();
-  const name_length = 1;
   const [name, setName] = React.useState('');
   const [code, setCode] = React.useState('');
   const [touched, setTouched] = React.useState({ name: false, code: false });
 
+  const name_length = 1;
+  // Check if name is valid
   const nameError = React.useMemo(() => {
     const v = name.trim();
     if (!touched.name) return '';
