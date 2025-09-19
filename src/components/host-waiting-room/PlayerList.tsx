@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, Input, Button } from '@/components/ui';
+import { useWarningModal } from '@/components/ui/overlays';
 import { Search, UserX, Users, Crown, Plus } from 'lucide-react';
 
 interface Player {
@@ -26,6 +27,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({
   className = '',
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const { openModal, WarningModalComponent } = useWarningModal();
 
   // Filter players based on search query and exclude banned players
   const filteredPlayers = useMemo(() => {
@@ -47,8 +49,17 @@ export const PlayerList: React.FC<PlayerListProps> = ({
   const handlePlayerClick = (player: Player) => {
     if (player.isHost) return; // Don't allow banning the host
 
-    // Since banned players are filtered out, we only need to ban
-    onPlayerBan(player.id);
+    // Show warning modal before banning
+    openModal({
+      title: 'プレイヤーをBANしますか？',
+      description: `${player.name}をクイズから除外します。この操作は取り消せません。`,
+      confirmText: 'BANする',
+      cancelText: 'キャンセル',
+      variant: 'danger',
+      onConfirm: () => {
+        onPlayerBan(player.id);
+      },
+    });
   };
 
   return (
@@ -149,6 +160,9 @@ export const PlayerList: React.FC<PlayerListProps> = ({
           )}
         </div>
       </CardContent>
+
+      {/* Warning Modal */}
+      <WarningModalComponent />
     </Card>
   );
 };
