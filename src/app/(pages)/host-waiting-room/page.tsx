@@ -24,6 +24,9 @@ export default function HostWaitingRoomPage() {
     max_players: 400,
   });
 
+  // Room lock state
+  const [isRoomLocked, setIsRoomLocked] = useState(false);
+
   // Mock player data for now - will be replaced with real-time data
   const [players, setPlayers] = useState([
     { id: '1', name: 'プレイヤー1', joinedAt: new Date(), isHost: true },
@@ -58,6 +61,12 @@ export default function HostWaitingRoomPage() {
       joinedAt: new Date(),
     };
     setPlayers((prev) => [...prev, newPlayer]);
+  };
+
+  const handleRoomLockToggle = (isLocked: boolean) => {
+    setIsRoomLocked(isLocked);
+    // TODO: Implement actual room lock logic with backend
+    console.log(`Room ${isLocked ? 'locked' : 'unlocked'}`);
   };
 
   return (
@@ -118,9 +127,15 @@ export default function HostWaitingRoomPage() {
               />
             </div>
 
-            {/* Right Panel - Future Features */}
+            {/* Right Panel - Room Management */}
             <div className="lg:col-span-1 h-full">
-              <RightPanel className="h-full" />
+              <RightPanel
+                className="h-full"
+                isRoomLocked={isRoomLocked}
+                onRoomLockToggle={handleRoomLockToggle}
+                playerCount={players.length}
+                maxPlayers={playSettings.max_players || 400}
+              />
             </div>
           </div>
         </Container>
