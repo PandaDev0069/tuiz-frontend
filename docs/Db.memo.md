@@ -2,6 +2,8 @@
 
 This database is going to consist all the basic requirements for the game and some analytics too
 
+This is finalized version of the database schema.
+
 ## Player
 
 This table will keep track of the players, their device id, game id, player name, is logged in, is host etc. When a user hopps into the website, their device id will be fetched via browser, stored in local storage and will be made persistent for future visits. Reconnection of websocket will be done via this device id. This is a separate table from auth users, as we don't want to force users to login/signup to play the game. They can play as guest too.
