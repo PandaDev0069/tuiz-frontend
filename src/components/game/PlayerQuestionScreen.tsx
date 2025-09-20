@@ -3,6 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { PageContainer, Main, QuizBackground } from '@/components/ui';
+import { TimeBar } from './TimeBar';
 
 interface PlayerQuestionScreenProps {
   question: {
@@ -31,20 +32,11 @@ export const PlayerQuestionScreen: React.FC<PlayerQuestionScreenProps> = ({
   totalQuestions,
   isMobile = true,
 }) => {
-  const progress = (currentTime / question.timeLimit) * 100;
-
   return (
     <PageContainer className="h-screen">
       <Main className="h-full relative">
         {/* Timer Bar */}
-        <div className="absolute top-0 left-0 right-0 z-10">
-          <div className="bg-gray-200 h-1 md:h-2 w-full">
-            <div
-              className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full transition-all duration-1000 ease-linear"
-              style={{ width: `${100 - progress}%` }}
-            />
-          </div>
-        </div>
+        <TimeBar currentTime={currentTime} timeLimit={question.timeLimit} />
 
         {/* Default Background */}
         <div className="absolute inset-0">
