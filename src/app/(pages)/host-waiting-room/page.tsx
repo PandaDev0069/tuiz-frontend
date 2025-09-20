@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { HostSettingsModal } from '@/components/ui/overlays/host-settings-modal';
@@ -13,7 +13,7 @@ import {
 import { Settings } from 'lucide-react';
 import { QuizPlaySettings } from '@/types/quiz';
 
-export default function HostWaitingRoomPage() {
+function HostWaitingRoomContent() {
   const searchParams = useSearchParams();
   const roomCode = searchParams.get('code') || '';
   const quizId = searchParams.get('quizId') || '';
@@ -58,7 +58,8 @@ export default function HostWaitingRoomPage() {
   const handleConfirmStartQuiz = () => {
     // TODO: Implement actual quiz start logic
     console.log('Starting quiz with settings:', playSettings);
-    // This will navigate to the quiz game page
+    // Redirect to host control panel
+    window.location.href = `/host-control-panel?code=${roomCode}&quizId=${quizId}`;
   };
 
   const handleOpenScreen = () => {
@@ -131,7 +132,7 @@ export default function HostWaitingRoomPage() {
             </div>
 
             {/* Center Panel - Host Controls */}
-            <div className="lg:col-span-1 h-full flex items-center justify-center">
+            <div className="lg:col-span-1 h-full flex flex-col items-center justify-center space-y-6">
               <HostControls
                 roomCode={roomCode}
                 onStartQuiz={handleStartQuiz}
@@ -174,5 +175,13 @@ export default function HostWaitingRoomPage() {
         playSettings={playSettings}
       />
     </PageContainer>
+  );
+}
+
+export default function HostWaitingRoomPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <HostWaitingRoomContent />
+    </Suspense>
   );
 }

@@ -1,18 +1,65 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { PageContainer, Container, Main } from '@/components/ui';
 import { QRCode } from '@/components/ui/QRCode';
 
-export default function HostScreenPage() {
+function HostScreenContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const roomCode = searchParams.get('code') || '';
+  const quizId = searchParams.get('quizId') || '';
   const [joinUrl, setJoinUrl] = useState('');
+  const [gameStarted, setGameStarted] = useState(false);
 
   useEffect(() => {
     setJoinUrl(`https://tuiz-info-king.vercel.app/join`);
   }, [roomCode]);
+
+  // Listen for game start events (this would be connected to real-time updates)
+  useEffect(() => {
+    const handleGameStart = () => {
+      setGameStarted(true);
+      // Redirect to host question screen
+      router.push(`/host-question-screen?code=${roomCode}&quizId=${quizId}`);
+    };
+
+    // For now, we'll simulate this with a timeout for testing
+    // In real implementation, this would listen to WebSocket events
+    const timer = setTimeout(() => {
+      // Only redirect if we're in the host screen (not already in question screen)
+      if (window.location.pathname === '/host-screen') {
+        handleGameStart();
+      }
+    }, 5000); // 5 second delay for testing
+
+    return () => clearTimeout(timer);
+  }, [roomCode, quizId, router]);
+
+  // Show loading state if game is starting
+  if (gameStarted) {
+    return (
+      <PageContainer>
+        <Main className="flex-1">
+          <Container
+            size="sm"
+            className="flex flex-col items-center justify-center py-4 md:py-2 space-y-4 md:space-y-6"
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-spin">
+                <div className="w-8 h-8 bg-white rounded-full"></div>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">
+                ゲーム開始中...
+              </h1>
+              <p className="text-gray-600 mt-2">クイズ画面に移動しています</p>
+            </div>
+          </Container>
+        </Main>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>
@@ -100,11 +147,29 @@ export default function HostScreenPage() {
                     <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
                   </div>
                 </div>
+
+                {/* Test Button for Development */}
+                <div className="mt-4">
+                  <button
+                    onClick={() => setGameStarted(true)}
+                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white rounded-lg text-sm font-medium transition-all duration-200"
+                  >
+                    テスト: ゲーム開始
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </Container>
       </Main>
     </PageContainer>
+  );
+}
+
+export default function HostScreenPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <HostScreenContent />
+    </Suspense>
   );
 }

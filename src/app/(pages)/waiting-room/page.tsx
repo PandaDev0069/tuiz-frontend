@@ -1,10 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
-export default function WaitingRoomPage() {
+
+function WaitingRoomContent() {
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || '';
   const roomCode = searchParams.get('code') || '';
@@ -157,8 +158,31 @@ export default function WaitingRoomPage() {
               <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
             </div>
           </div>
+
+          {/* Manual Start Game Button for Testing */}
+          <div className="text-center max-w-md">
+            <button
+              onClick={() => {
+                // Navigate to player question screen for testing
+                window.location.href = `/player-question-screen?code=${roomCode}&playerId=test&name=${encodeURIComponent(playerName)}`;
+              }}
+              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center space-x-2"
+            >
+              <span className="text-lg">🚀</span>
+              <span>テスト: ゲーム開始</span>
+            </button>
+            <p className="text-xs text-gray-500 text-center mt-2">開発用: プレイヤー画面に移動</p>
+          </div>
         </Container>
       </Main>
     </PageContainer>
+  );
+}
+
+export default function WaitingRoomPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <WaitingRoomContent />
+    </Suspense>
   );
 }
