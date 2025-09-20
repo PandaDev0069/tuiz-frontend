@@ -4,7 +4,12 @@ import React, { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { HostSettingsModal } from '@/components/ui/overlays/host-settings-modal';
-import { PlayerList, HostControls, RightPanel } from '@/components/host-waiting-room';
+import {
+  PlayerList,
+  HostControls,
+  RightPanel,
+  StartGameConfirmationModal,
+} from '@/components/host-waiting-room';
 import { Settings } from 'lucide-react';
 import { QuizPlaySettings } from '@/types/quiz';
 
@@ -27,6 +32,9 @@ export default function HostWaitingRoomPage() {
   // Room lock state
   const [isRoomLocked, setIsRoomLocked] = useState(false);
 
+  // Start game confirmation modal state
+  const [isStartConfirmOpen, setIsStartConfirmOpen] = useState(false);
+
   // Mock player data for now - will be replaced with real-time data
   const [players, setPlayers] = useState([
     { id: '1', name: 'プレイヤー1', joinedAt: new Date(), isHost: true },
@@ -44,8 +52,13 @@ export default function HostWaitingRoomPage() {
   };
 
   const handleStartQuiz = () => {
+    setIsStartConfirmOpen(true);
+  };
+
+  const handleConfirmStartQuiz = () => {
     // TODO: Implement actual quiz start logic
-    alert('クイズ開始機能は実装予定です');
+    console.log('Starting quiz with settings:', playSettings);
+    // This will navigate to the quiz game page
   };
 
   const handleOpenScreen = () => {
@@ -148,6 +161,17 @@ export default function HostWaitingRoomPage() {
         playSettings={playSettings}
         onPlaySettingsChange={setPlaySettings}
         roomCode={roomCode}
+      />
+
+      {/* Start Game Confirmation Modal */}
+      <StartGameConfirmationModal
+        isOpen={isStartConfirmOpen}
+        onClose={() => setIsStartConfirmOpen(false)}
+        onConfirm={handleConfirmStartQuiz}
+        playerCount={players.length}
+        maxPlayers={playSettings.max_players || 400}
+        roomCode={roomCode}
+        playSettings={playSettings}
       />
     </PageContainer>
   );
