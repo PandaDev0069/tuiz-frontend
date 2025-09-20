@@ -26,8 +26,13 @@ export const HostQuestionScreen: React.FC<HostQuestionScreenProps> = ({
   return (
     <PageContainer className="h-screen">
       <Main className="h-full relative">
-        {/* Timer Bar */}
-        <TimeBar currentTime={currentTime} timeLimit={question.timeLimit} />
+        {/* Timer Bar with Question Counter and Timer Display */}
+        <TimeBar
+          currentTime={currentTime}
+          timeLimit={question.timeLimit}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestions}
+        />
 
         {/* Default Background */}
         <div className="absolute inset-0">
@@ -36,23 +41,6 @@ export const HostQuestionScreen: React.FC<HostQuestionScreenProps> = ({
 
         {/* Question Content */}
         <div className="relative z-10 h-full flex flex-col">
-          {/* Question Counter */}
-          <div className="absolute top-8 left-8">
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2">
-              <span className="text-lg font-semibold text-gray-800">
-                問題 {questionNumber} / {totalQuestions}
-              </span>
-            </div>
-          </div>
-
-          {/* Timer Display */}
-          <div className="absolute top-8 right-8">
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2">
-              <span className="text-2xl font-bold text-gray-800">{Math.ceil(currentTime)}</span>
-              <span className="text-sm text-gray-600 ml-1">秒</span>
-            </div>
-          </div>
-
           {/* Question Text with Image */}
           <div className="flex-1 flex items-center justify-center px-4">
             <div className="text-center max-w-6xl w-full">

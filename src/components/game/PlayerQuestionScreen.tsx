@@ -35,8 +35,13 @@ export const PlayerQuestionScreen: React.FC<PlayerQuestionScreenProps> = ({
   return (
     <PageContainer className="h-screen">
       <Main className="h-full relative">
-        {/* Timer Bar */}
-        <TimeBar currentTime={currentTime} timeLimit={question.timeLimit} />
+        {/* Timer Bar with Question Counter and Timer Display */}
+        <TimeBar
+          currentTime={currentTime}
+          timeLimit={question.timeLimit}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestions}
+        />
 
         {/* Default Background */}
         <div className="absolute inset-0">
@@ -45,21 +50,6 @@ export const PlayerQuestionScreen: React.FC<PlayerQuestionScreenProps> = ({
 
         {/* Question Content */}
         <div className="relative z-10 h-full flex flex-col">
-          {/* Header Info */}
-          <div className="flex justify-between items-center p-4">
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2">
-              <span className={`${isMobile ? 'text-sm' : 'text-base'} font-semibold text-gray-800`}>
-                Q{questionNumber}/{totalQuestions}
-              </span>
-            </div>
-            <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2">
-              <span className={`${isMobile ? 'text-lg' : 'text-xl'} font-bold text-gray-800`}>
-                {Math.ceil(currentTime)}
-              </span>
-              <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-600 ml-1`}>秒</span>
-            </div>
-          </div>
-
           {/* Question Text with Image */}
           <div className="flex-1 flex items-center justify-center px-2">
             <div className="text-center max-w-4xl w-full">
