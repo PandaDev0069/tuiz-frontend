@@ -88,7 +88,9 @@ export const PlayerCountdownScreen: React.FC<PlayerCountdownScreenProps> = ({
         {/* Main Countdown Content */}
         <div className="relative z-10 h-full flex flex-col items-center justify-center px-4">
           {/* Countdown Text/Number - Independent container */}
-          <div className="text-center w-full max-w-sm sm:max-w-md">
+          <div
+            className={`text-center w-full ${isMobile ? 'max-w-sm sm:max-w-md' : 'max-w-4xl lg:max-w-5xl xl:max-w-6xl'}`}
+          >
             <div
               className={`${getCountdownSize()} ${getCountdownColor()} font-bold drop-shadow-2xl transition-all duration-300 ${
                 isAnimating ? 'scale-110' : 'scale-100'

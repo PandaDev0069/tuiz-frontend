@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
@@ -10,6 +10,20 @@ function WaitingRoomContent() {
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || '';
   const roomCode = searchParams.get('code') || '';
+
+  // Mobile detection
+  const [isMobile, setIsMobile] = useState(true);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Countdown state
   const [showCountdown, setShowCountdown] = useState(false);
@@ -34,7 +48,7 @@ function WaitingRoomContent() {
         message="準備してください！"
         questionNumber={1}
         totalQuestions={10}
-        isMobile={true}
+        isMobile={isMobile}
       />
     );
   }
