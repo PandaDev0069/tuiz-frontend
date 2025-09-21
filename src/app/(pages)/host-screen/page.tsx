@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { PageContainer, Container, Main } from '@/components/ui';
 import { QRCode } from '@/components/ui/QRCode';
+import { PublicCountdownScreen } from '@/components/game';
 
 function HostScreenContent() {
   const searchParams = useSearchParams();
@@ -12,6 +13,8 @@ function HostScreenContent() {
   const quizId = searchParams.get('quizId') || '';
   const [joinUrl, setJoinUrl] = useState('');
   const [gameStarted, setGameStarted] = useState(false);
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdownTime] = useState(5);
 
   useEffect(() => {
     setJoinUrl(`https://tuiz-info-king.vercel.app/join`);
@@ -20,9 +23,7 @@ function HostScreenContent() {
   // Listen for game start events (this would be connected to real-time updates)
   useEffect(() => {
     const handleGameStart = () => {
-      setGameStarted(true);
-      // Redirect to host question screen
-      router.push(`/host-question-screen?code=${roomCode}&quizId=${quizId}`);
+      setShowCountdown(true);
     };
 
     // For now, we'll simulate this with a timeout for testing
@@ -36,6 +37,25 @@ function HostScreenContent() {
 
     return () => clearTimeout(timer);
   }, [roomCode, quizId, router]);
+
+  const handleCountdownComplete = () => {
+    setGameStarted(true);
+    // Redirect to host question screen after countdown
+    router.push(`/host-question-screen?code=${roomCode}&quizId=${quizId}`);
+  };
+
+  // Show countdown screen if countdown is active
+  if (showCountdown) {
+    return (
+      <PublicCountdownScreen
+        countdownTime={countdownTime}
+        onCountdownComplete={handleCountdownComplete}
+        message="準備してください！"
+        questionNumber={1}
+        totalQuestions={10}
+      />
+    );
+  }
 
   // Show loading state if game is starting
   if (gameStarted) {
@@ -151,7 +171,7 @@ function HostScreenContent() {
                 {/* Test Button for Development */}
                 <div className="mt-4">
                   <button
-                    onClick={() => setGameStarted(true)}
+                    onClick={() => setShowCountdown(true)}
                     className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white rounded-lg text-sm font-medium transition-all duration-200"
                   >
                     テスト: ゲーム開始

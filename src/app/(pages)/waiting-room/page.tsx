@@ -1,14 +1,43 @@
 'use client';
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useState } from 'react';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
+import { PlayerCountdownScreen } from '@/components/game';
 
 function WaitingRoomContent() {
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || '';
   const roomCode = searchParams.get('code') || '';
+
+  // Countdown state
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdownTime] = useState(5);
+
+  const handleCountdownComplete = () => {
+    // Navigate to player question screen after countdown
+    window.location.href = `/player-question-screen?code=${roomCode}&playerId=test&name=${encodeURIComponent(playerName)}`;
+  };
+
+  const handleManualStart = () => {
+    // Show countdown first
+    setShowCountdown(true);
+  };
+
+  // Show countdown screen if countdown is active
+  if (showCountdown) {
+    return (
+      <PlayerCountdownScreen
+        countdownTime={countdownTime}
+        onCountdownComplete={handleCountdownComplete}
+        message="準備してください！"
+        questionNumber={1}
+        totalQuestions={10}
+        isMobile={true}
+      />
+    );
+  }
 
   return (
     <PageContainer>
@@ -162,16 +191,15 @@ function WaitingRoomContent() {
           {/* Manual Start Game Button for Testing */}
           <div className="text-center max-w-md">
             <button
-              onClick={() => {
-                // Navigate to player question screen for testing
-                window.location.href = `/player-question-screen?code=${roomCode}&playerId=test&name=${encodeURIComponent(playerName)}`;
-              }}
+              onClick={handleManualStart}
               className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center space-x-2"
             >
               <span className="text-lg">🚀</span>
               <span>テスト: ゲーム開始</span>
             </button>
-            <p className="text-xs text-gray-500 text-center mt-2">開発用: プレイヤー画面に移動</p>
+            <p className="text-xs text-gray-500 text-center mt-2">
+              開発用: カウントダウン後にプレイヤー画面に移動
+            </p>
           </div>
         </Container>
       </Main>
