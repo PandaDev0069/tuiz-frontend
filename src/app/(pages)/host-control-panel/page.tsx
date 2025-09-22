@@ -3,7 +3,7 @@
 import React, { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
-import { Settings, Users, BarChart3, Clock, Trophy, Eye, EyeOff } from 'lucide-react';
+import { Users, BarChart3, Clock, Trophy, Eye, EyeOff } from 'lucide-react';
 
 function HostControlPanelContent() {
   const searchParams = useSearchParams();
@@ -14,7 +14,6 @@ function HostControlPanelContent() {
   const [isPublicScreenVisible, setIsPublicScreenVisible] = useState(false);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [totalQuestions] = useState(10);
-  const [timeRemaining, setTimeRemaining] = useState(30);
 
   // Mock player data
   const [players] = useState([
@@ -38,23 +37,11 @@ function HostControlPanelContent() {
     }
   };
 
-  const handleNextQuestion = () => {
+  const handleNext = () => {
     if (currentQuestionIndex < totalQuestions - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setTimeRemaining(30);
     }
   };
-
-  const handleRevealAnswers = () => {
-    // TODO: Implement answer reveal logic
-    console.log('Revealing answers...');
-  };
-
-  const handleShowLeaderboard = () => {
-    // TODO: Implement leaderboard display logic
-    console.log('Showing leaderboard...');
-  };
-
   return (
     <PageContainer>
       {/* Header */}
@@ -86,10 +73,6 @@ function HostControlPanelContent() {
                 )}
                 <span>パブリック画面</span>
               </button>
-
-              <button className="p-2 bg-white/20 backdrop-blur-sm hover:bg-white/30 rounded-lg transition-all duration-200">
-                <Settings className="w-5 h-5" />
-              </button>
             </div>
           </div>
         </Container>
@@ -101,45 +84,26 @@ function HostControlPanelContent() {
             {/* Left Panel - Game Controls */}
             <div className="lg:col-span-1 space-y-4">
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
-                <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                <h3 className="text-lg font-semibold text-blue-600 mb-4 flex items-center">
                   <Clock className="w-5 h-5 mr-2" />
                   ゲーム制御
                 </h3>
 
                 <div className="space-y-4">
                   <div className="text-center">
-                    <div className="text-3xl font-bold text-white">
+                    <div className="text-3xl font-bold text-blue-600">
                       {currentQuestionIndex + 1} / {totalQuestions}
                     </div>
-                    <div className="text-sm text-gray-300">現在の問題</div>
-                  </div>
-
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-cyan-400">{timeRemaining}s</div>
-                    <div className="text-sm text-gray-300">残り時間</div>
+                    <div className="text-sm text-blue-300">現在の問題</div>
                   </div>
 
                   <div className="space-y-2">
                     <button
-                      onClick={handleNextQuestion}
+                      onClick={handleNext}
                       disabled={currentQuestionIndex >= totalQuestions - 1}
                       className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 text-white py-2 px-4 rounded-lg transition-all duration-200 disabled:cursor-not-allowed"
                     >
-                      次の問題
-                    </button>
-
-                    <button
-                      onClick={handleRevealAnswers}
-                      className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white py-2 px-4 rounded-lg transition-all duration-200"
-                    >
-                      答えを表示
-                    </button>
-
-                    <button
-                      onClick={handleShowLeaderboard}
-                      className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white py-2 px-4 rounded-lg transition-all duration-200"
-                    >
-                      リーダーボード
+                      次のへ
                     </button>
                   </div>
                 </div>
@@ -149,7 +113,7 @@ function HostControlPanelContent() {
             {/* Center Panel - Player Rankings */}
             <div className="lg:col-span-2 space-y-4">
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20 h-full">
-                <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                <h3 className="text-lg font-semibold text-blue-600 mb-4 flex items-center">
                   <Trophy className="w-5 h-5 mr-2" />
                   プレイヤーランキング
                 </h3>
@@ -186,7 +150,7 @@ function HostControlPanelContent() {
                           </div>
                           <div>
                             <div className="text-white font-medium">{player.name}</div>
-                            <div className="text-xs text-gray-300">
+                            <div className="text-xs text-blue-400">
                               {player.isConnected ? 'オンライン' : 'オフライン'}
                               {player.currentAnswer && ` • 回答: ${player.currentAnswer}`}
                             </div>
@@ -196,7 +160,7 @@ function HostControlPanelContent() {
                           <div className="text-white font-bold">
                             {player.score.toLocaleString()}
                           </div>
-                          <div className="text-xs text-gray-300">ポイント</div>
+                          <div className="text-xs text-blue-400">ポイント</div>
                         </div>
                       </div>
                     ))}
@@ -217,14 +181,14 @@ function HostControlPanelContent() {
                     <div className="text-2xl font-bold text-white">
                       {players.filter((p) => p.isConnected).length}
                     </div>
-                    <div className="text-sm text-gray-300">接続中プレイヤー</div>
+                    <div className="text-sm text-blue-400">接続中プレイヤー</div>
                   </div>
 
                   <div className="text-center">
                     <div className="text-2xl font-bold text-cyan-400">
                       {players.filter((p) => p.currentAnswer).length}
                     </div>
-                    <div className="text-sm text-gray-300">回答済み</div>
+                    <div className="text-sm text-blue-400">回答済み</div>
                   </div>
 
                   <div className="text-center">
@@ -234,7 +198,7 @@ function HostControlPanelContent() {
                       )}
                       %
                     </div>
-                    <div className="text-sm text-gray-300">回答率</div>
+                    <div className="text-sm text-blue-400">回答率</div>
                   </div>
                 </div>
               </div>
@@ -254,13 +218,13 @@ function HostControlPanelContent() {
                       <div key={option} className="space-y-1">
                         <div className="flex justify-between text-sm">
                           <span className="text-white">選択肢 {option}</span>
-                          <span className="text-gray-300">
+                          <span className="text-blue-400">
                             {count}人 ({Math.round(percentage)}%)
                           </span>
                         </div>
-                        <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div className="w-full bg-gray-700  h-2">
                           <div
-                            className="bg-gradient-to-r from-cyan-400 to-blue-400 h-2 rounded-full transition-all duration-300"
+                            className="bg-gradient-to-r from-cyan-400 to-blue-400 h-2 transition-all duration-300"
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
