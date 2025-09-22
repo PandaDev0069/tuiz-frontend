@@ -13,13 +13,13 @@ This document outlines the complete user experience flow for the TUIZ quiz game 
    ├── Host Control Panel (analytics, controls, rankings)
    └── Public Screen (question display for audience)
 
-2. COUNTDOWN SCREEN
+2. COUNTDOWN SCREEN [x]
    ├── "Get Ready!" message
    ├── 3... 2... 1... countdown
    ├── Breathing room before questions
    └── Auto-transition to Question Display
 
-3. QUESTION DISPLAY
+3. QUESTION DISPLAY [x]
    ├── Host Question Screen (question + timer)
    ├── Player Answering Screen (question + choices + timer)
    └── Time Up → Move to Answer Reveal
