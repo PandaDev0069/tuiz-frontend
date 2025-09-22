@@ -33,7 +33,7 @@ function HostScreenContent() {
       if (window.location.pathname === '/host-screen') {
         handleGameStart();
       }
-    }, 5000); // 5 second delay for testing
+    }, 500000); // 5 second delay for testing
 
     return () => clearTimeout(timer);
   }, [roomCode, quizId, router]);
