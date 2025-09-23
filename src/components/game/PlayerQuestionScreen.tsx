@@ -20,8 +20,6 @@ interface PlayerQuestionScreenProps {
   currentTime: number;
   questionNumber: number;
   totalQuestions: number;
-  selectedAnswer?: string;
-  onAnswerSelect: (answerId: string) => void;
   isMobile?: boolean;
 }
 

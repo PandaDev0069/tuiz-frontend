@@ -24,13 +24,12 @@ export default function Page() {
   const [code, setCode] = React.useState('');
   const [touched, setTouched] = React.useState({ name: false, code: false });
 
-  const name_length = 1;
   // Check if name is valid
   const nameError = React.useMemo(() => {
     const v = name.trim();
     if (!touched.name) return '';
     if (v.length === 0) return '名前を入力してください。';
-    if (v.length < name_length) return '名前は1文字以上で入力してください。';
+    if (v.length < 1) return '名前は1文字以上で入力してください。';
     if (/[<>]/.test(v)) return '無効な文字が含まれています。';
     return '';
   }, [name, touched.name]);
@@ -42,7 +41,7 @@ export default function Page() {
   }, [code, touched.code]);
 
   const isFormValid =
-    !nameError && !codeError && name.trim().length >= name_length && /^[0-9]{6}$/.test(code);
+    !nameError && !codeError && name.trim().length >= 1 && /^[0-9]{6}$/.test(code);
 
   // stable ids for inputs so labels can reference them
   const nameId = React.useId();
