@@ -24,38 +24,43 @@ This document outlines the complete user experience flow for the TUIZ quiz game 
    ├── Player Answering Screen (question + choices + timer)
    └── Time Up → Move to Answer Reveal
 
-4. ANSWER REVEAL
+4. Answering Phase
+   ├── Players select answers
+   ├── Submit answers before timer ends
+   └── Real-time answer tracking
+
+5. ANSWER REVEAL
    ├── Show correct answer
    ├── Show statistics (how many chose each option)
    └── Show individual player results
 
-5. LEADERBOARD (if not final question)
+6. LEADERBOARD (if not final question)
    ├── Current rankings
    ├── Score updates
    └── Next question button
 
-6. EXPLANATION (if available)
+7. EXPLANATION (if available)
    ├── Question explanation
    ├── Additional context
    └── Continue button
 
-7. REPEAT LOOP
+8. REPEAT LOOP
    ├── Back to Countdown Screen
    └── Continue until final question
 
-8. FINAL QUESTION
+9. FINAL QUESTION
    ├── Countdown Screen
    ├── Question Display
    ├── Answer Reveal
    ├── Explanation (if available)
    └── NO Leaderboard → Go to Podium
 
-9. PODIUM
+10. PODIUM
    ├── Winner reveal animations
    ├── 1st, 2nd, 3rd place reveals
    └── Final celebrations
 
-10. GAME END
+11. GAME END
     ├── Final results summary
     ├── Restart quiz option
     ├── New quiz option

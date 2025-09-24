@@ -1,4 +1,6 @@
 export { HostQuestionScreen } from './HostQuestionScreen';
+export { HostAnswerScreen } from './HostAnswerScreen';
+export { HostAnswerRevealScreen } from './HostAnswerRevealScreen';
 export { PlayerQuestionScreen } from './PlayerQuestionScreen';
 export { PlayerAnswerScreen } from './PlayerAnswerScreen';
 export { PlayerAnswerRevealScreen } from './PlayerAnswerRevealScreen';
