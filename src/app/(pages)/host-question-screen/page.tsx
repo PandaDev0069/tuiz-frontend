@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { HostQuestionScreen } from '@/components/game';
 import { Question } from '@/types/game';
 
 function HostQuestionScreenContent() {
+  const router = useRouter();
+
   // Mock question data - will be replaced with real data
   const [currentQuestion] = useState<Question>({
     id: '1',
@@ -32,16 +35,17 @@ function HostQuestionScreenContent() {
     const timer = setInterval(() => {
       setCurrentTime((prev) => {
         if (prev <= 1) {
-          // Time's up - move to answering phase or next question
-          console.log('Question time up! Move to answering phase...');
-          return currentQuestion.timeLimit;
+          // Time's up - auto-navigate to answering phase
+          console.log('Question time up! Auto-navigating to host answer screen...');
+          router.push('/host-answer-screen');
+          return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentQuestion.timeLimit]);
+  }, [currentQuestion.timeLimit, router]);
 
   return (
     <HostQuestionScreen

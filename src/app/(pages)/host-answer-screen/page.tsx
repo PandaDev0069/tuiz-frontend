@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { HostAnswerScreen } from '@/components/game';
 import { Question } from '@/types/game';
 
 function HostAnswerScreenContent() {
+  const router = useRouter();
+
   // Mock question data - will be replaced with real data
   const [currentQuestion] = useState<Question>({
     id: '1',
@@ -36,16 +39,17 @@ function HostAnswerScreenContent() {
     const timer = setInterval(() => {
       setCurrentTime((prev) => {
         if (prev <= 1) {
-          // Answer time's up - move to answer reveal
-          console.log('Answer time up! Move to answer reveal phase...');
-          return currentQuestion.timeLimit;
+          // Answer time's up - auto-navigate to answer reveal phase
+          console.log('Answer time up! Auto-navigating to host answer reveal screen...');
+          router.push('/host-answer-reveal-screen');
+          return 0;
         }
         return prev - 1;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentQuestion.timeLimit]);
+  }, [currentQuestion.timeLimit, router]);
 
   // Simulate answers coming in during answering phase
   useEffect(() => {
