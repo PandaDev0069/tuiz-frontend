@@ -121,7 +121,7 @@ export const HostAnswerScreen: React.FC<HostAnswerScreenProps> = ({
                   {choice.letter}
                 </span>
               </div>
-              <div className="text-xl md:text-2xl font-medium text-white flex-1 leading-tight">
+              <div className="text-3xl md:text-2xl font-medium text-white flex-1 leading-tight">
                 {choice.text}
               </div>
             </div>
@@ -154,7 +154,7 @@ export const HostAnswerScreen: React.FC<HostAnswerScreenProps> = ({
                   {choice.letter}
                 </span>
               </div>
-              <div className="text-lg md:text-xl font-medium text-white leading-tight">
+              <div className="text-3xl md:text-xl font-medium text-white leading-tight">
                 {choice.text}
               </div>
             </div>
