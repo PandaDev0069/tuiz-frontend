@@ -24,12 +24,12 @@ This document outlines the complete user experience flow for the TUIZ quiz game 
    ├── Player Answering Screen (question + choices + timer)
    └── Time Up → Move to Answer Reveal
 
-4. Answering Phase
+4. Answering Phase[x]
    ├── Players select answers
    ├── Submit answers before timer ends
    └── Real-time answer tracking
 
-5. ANSWER REVEAL
+5. ANSWER REVEAL (Ongoing)
    ├── Show correct answer
    ├── Show statistics (how many chose each option)
    └── Show individual player results
