@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { HostAnswerScreen } from '@/components/game';
 import { Question } from '@/types/game';
@@ -14,7 +14,7 @@ function HostAnswerScreenContent() {
     text: '現在のネパールの首相は誰ですか？',
     image:
       'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=600&fit=crop&crop=face', // Test image
-    timeLimit: 30,
+    timeLimit: 10,
     choices: [
       { id: 'a', text: 'プラチャンダ', letter: 'A' },
       { id: 'b', text: 'シェル・バハドゥル・デウバ', letter: 'B' },
@@ -34,22 +34,31 @@ function HostAnswerScreenContent() {
   const [totalPlayers] = useState(200);
   const [answeredCount, setAnsweredCount] = useState(0);
 
+  // Track if we already navigated to avoid duplicate pushes
+  const hasNavigatedRef = useRef(false);
+
   // Timer countdown for answering phase
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime((prev) => {
-        if (prev <= 1) {
-          // Answer time's up - auto-navigate to answer reveal phase
-          console.log('Answer time up! Auto-navigating to host answer reveal screen...');
-          router.push('/host-answer-reveal-screen');
+      setCurrentTime((previousTime) => {
+        if (previousTime <= 1) {
           return 0;
         }
-        return prev - 1;
+        return previousTime - 1;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentQuestion.timeLimit, router]);
+  }, [currentQuestion.timeLimit]);
+
+  // Navigate when time hits zero (side-effect outside of state updater)
+  useEffect(() => {
+    if (currentTime === 0 && !hasNavigatedRef.current) {
+      hasNavigatedRef.current = true;
+      console.log('Answer time up! Auto-navigating to host answer reveal screen...');
+      router.push('/host-answer-reveal-screen');
+    }
+  }, [currentTime, router]);
 
   // Simulate answers coming in during answering phase
   useEffect(() => {

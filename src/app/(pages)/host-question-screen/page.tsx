@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { HostQuestionScreen } from '@/components/game';
 import { Question } from '@/types/game';
@@ -30,22 +30,31 @@ function HostQuestionScreenContent() {
   const [questionNumber] = useState(1);
   const totalQuestions = 10;
 
+  // Track if we already navigated to avoid duplicate pushes
+  const hasNavigatedRef = useRef(false);
+
   // Timer countdown for question phase
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime((prev) => {
-        if (prev <= 1) {
-          // Time's up - auto-navigate to answering phase
-          console.log('Question time up! Auto-navigating to host answer screen...');
-          router.push('/host-answer-screen');
+      setCurrentTime((previousTime) => {
+        if (previousTime <= 1) {
           return 0;
         }
-        return prev - 1;
+        return previousTime - 1;
       });
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentQuestion.timeLimit, router]);
+  }, [currentQuestion.timeLimit]);
+
+  // Navigate when time hits zero (side-effect outside of state updater)
+  useEffect(() => {
+    if (currentTime === 0 && !hasNavigatedRef.current) {
+      hasNavigatedRef.current = true;
+      console.log('Question time up! Auto-navigating to host answer screen...');
+      router.push('/host-answer-screen');
+    }
+  }, [currentTime, router]);
 
   return (
     <HostQuestionScreen
