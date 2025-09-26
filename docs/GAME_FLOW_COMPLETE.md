@@ -37,6 +37,8 @@ This document outlines the complete user experience flow for the TUIZ quiz game 
 
 6. LEADERBOARD (if not final question)
    ├── Current rankings
+   ├── Animations Reveal 
+   ├── Show Change in Ranking (Top 5 only)
    ├── Score updates
    └── Next question button
 
