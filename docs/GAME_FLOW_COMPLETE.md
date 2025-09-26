@@ -30,9 +30,10 @@ This document outlines the complete user experience flow for the TUIZ quiz game 
    └── Real-time answer tracking
 
 5. ANSWER REVEAL (Ongoing)
-   ├── Show correct answer
-   ├── Show statistics (how many chose each option)
-   └── Show individual player results
+   ├── Show the question
+   ├── Show statistics (how many chose each option) Like a bar chart
+   ├── Show the correct answer
+   └── Show individual player result (correct or incorrect) for player screen only
 
 6. LEADERBOARD (if not final question)
    ├── Current rankings
