@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageContainer, Main, QuizBackground } from '@/components/ui';
 import { TimeBar } from './TimeBar';
 import { CheckCircle } from 'lucide-react';
@@ -8,15 +9,26 @@ import { AnswerResult, Choice, AnswerStatistic } from '@/types/game';
 
 interface PlayerAnswerRevealScreenProps {
   answerResult: AnswerResult;
+  timeLimit?: number;
+  questionNumber?: number;
+  totalQuestions?: number;
+  onTimeExpired?: () => void;
 }
 
 export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> = ({
   answerResult,
+  timeLimit = 5,
+  questionNumber = 1,
+  totalQuestions = 10,
+  onTimeExpired,
 }) => {
   const { question, correctAnswer, statistics } = answerResult;
+  const router = useRouter();
 
   // Animation state
   const [isAnimationStarted, setIsAnimationStarted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(timeLimit);
+  const timeoutTriggered = useRef(false);
 
   // Start animation after component mounts
   useEffect(() => {
@@ -26,6 +38,36 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
 
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    timeoutTriggered.current = false;
+    setCurrentTime(timeLimit);
+  }, [timeLimit, questionNumber]);
+
+  useEffect(() => {
+    if (!timeLimit || timeLimit <= 0) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setCurrentTime((prev) => {
+        if (prev <= 1) {
+          if (!timeoutTriggered.current) {
+            timeoutTriggered.current = true;
+            if (onTimeExpired) {
+              onTimeExpired();
+            } else {
+              router.push('/player-leaderboard-screen');
+            }
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [onTimeExpired, router, timeLimit]);
 
   // Animated Bar Component
   const AnimatedBar: React.FC<{
@@ -191,10 +233,10 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
       <Main className="h-full relative">
         {/* Timer Bar */}
         <TimeBar
-          currentTime={0} // No timer for reveal screen
-          timeLimit={1}
-          questionNumber={1}
-          totalQuestions={10}
+          currentTime={currentTime}
+          timeLimit={timeLimit}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestions}
         />
 
         {/* Same background as question screen */}

@@ -36,7 +36,14 @@ function PlayerAnswerRevealScreenContent() {
     totalAnswered: 200,
   });
 
-  return <PlayerAnswerRevealScreen answerResult={answerResult} />;
+  return (
+    <PlayerAnswerRevealScreen
+      answerResult={answerResult}
+      timeLimit={6}
+      questionNumber={2}
+      totalQuestions={30}
+    />
+  );
 }
 
 export default function PlayerAnswerRevealScreenPage() {
