@@ -33,7 +33,8 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({ 
     maxPercentage: number;
     colorClass: string;
     shouldAnimate: boolean;
-  }> = ({ choice, index, stat, maxPercentage, colorClass, shouldAnimate }) => {
+    correctAnswer: Choice;
+  }> = ({ choice, index, stat, maxPercentage, colorClass, shouldAnimate, correctAnswer }) => {
     const percentage = stat?.percentage || 0;
     const count = stat?.count || 0;
 
@@ -100,55 +101,66 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({ 
         </div>
 
         {/* Bar Container */}
-        <div className="w-full max-w-20 md:max-w-24 flex-1 flex flex-col justify-end">
+        <div className="w-full max-w-20 md:max-w-24 flex-1 flex flex-col justify-end relative">
           <div
-            className={`w-full ${colorClass} rounded-t-lg shadow-lg will-change-transform`}
+            className={`w-full ${colorClass} rounded-t-lg shadow-lg will-change-transform relative`}
             style={{
               height: `${barHeightPercent}%`,
               minHeight: animatedHeight > 0 ? '8px' : '0px',
               transform: 'translateZ(0)', // Force GPU acceleration
             }}
-          />
+          >
+            {/* Correct Answer Checkmark on Bar */}
+            {choice.id === correctAnswer.id && barHeightPercent > 20 && (
+              <div className="absolute top-2 right-2 w-5 h-5 md:w-6 md:h-6">
+                <CheckCircle className="w-full h-full text-white drop-shadow-lg opacity-90" />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Choice letter */}
-        <div className="mt-4 text-xl md:text-2xl font-bold text-white h-8 flex items-center">
-          {question.type === 'true_false'
-            ? choice.text === 'True' || choice.text === '正しい' || choice.text === 'はい'
-              ? '○'
-              : '×'
-            : choice.letter}
+        <div className="mt-4 h-8 flex items-center justify-center">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-white/20 flex items-center justify-center rounded-full">
+            <span className="text-lg md:text-xl font-bold text-white drop-shadow-lg">
+              {question.type === 'true_false'
+                ? choice.text === 'True' || choice.text === '正しい' || choice.text === 'はい'
+                  ? '○'
+                  : '×'
+                : choice.letter}
+            </span>
+          </div>
         </div>
       </div>
     );
   };
 
-  // Get color classes for each choice
+  // Get color classes for each choice - matching HostAnswerScreen exactly
   const getChoiceColors = () => {
     switch (question.type) {
       case 'true_false':
         return [
-          'bg-gradient-to-br from-green-500 to-green-600', // True/○
-          'bg-gradient-to-br from-red-500 to-red-600', // False/×
+          'bg-gradient-to-br from-green-500 to-green-600 border-green-400', // True/○
+          'bg-gradient-to-br from-red-500 to-red-600 border-red-400', // False/×
         ];
       case 'multiple_choice_2':
         return [
-          'bg-gradient-to-r from-purple-500 to-purple-600',
-          'bg-gradient-to-r from-orange-500 to-orange-600',
+          'bg-gradient-to-r from-purple-500 to-purple-600 border-purple-400',
+          'bg-gradient-to-r from-orange-500 to-orange-600 border-orange-400',
         ];
       case 'multiple_choice_3':
         return [
-          'bg-gradient-to-r from-emerald-500 to-emerald-600',
-          'bg-gradient-to-r from-pink-500 to-pink-600',
-          'bg-gradient-to-r from-cyan-500 to-cyan-600',
+          'bg-gradient-to-r from-emerald-500 to-emerald-600 border-emerald-400',
+          'bg-gradient-to-r from-pink-500 to-pink-600 border-pink-400',
+          'bg-gradient-to-r from-cyan-500 to-cyan-600 border-cyan-400',
         ];
       case 'multiple_choice_4':
       default:
         return [
-          'bg-gradient-to-br from-red-500 to-red-600', // A
-          'bg-gradient-to-br from-yellow-500 to-yellow-600', // B
-          'bg-gradient-to-br from-green-500 to-green-600', // C
-          'bg-gradient-to-br from-blue-500 to-blue-600', // D
+          'bg-gradient-to-br from-red-500 to-red-600 border-red-400', // A
+          'bg-gradient-to-br from-yellow-500 to-yellow-600 border-yellow-400', // B
+          'bg-gradient-to-br from-green-500 to-green-600 border-green-400', // C
+          'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-400', // D
         ];
     }
   };
@@ -218,6 +230,7 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({ 
                         maxPercentage={maxPercentage}
                         colorClass={colorClasses[index]}
                         shouldAnimate={isAnimationStarted}
+                        correctAnswer={correctAnswer}
                       />
                     );
                   })}
@@ -245,23 +258,19 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({ 
             <div className="grid grid-cols-2 gap-4 md:gap-6 max-w-4xl mx-auto">
               {question.choices.map((choice, index) => {
                 const isCorrect = correctAnswer.id === choice.id;
-                const baseColorClass = colorClasses[index];
 
-                // Make correct answer lighter, others darker
-                const colorClass = isCorrect
-                  ? baseColorClass
-                      .replace(/from-(\w+)-500/g, 'from-$1-400')
-                      .replace(/to-(\w+)-600/g, 'to-$1-500')
-                  : baseColorClass
-                      .replace(/from-(\w+)-500/g, 'from-$1-600')
-                      .replace(/to-(\w+)-600/g, 'to-$1-700');
+                // Use the same colors as HostAnswerScreen with dimming for incorrect answers
+                const colorClass = colorClasses[index];
+                const borderClass = isCorrect ? 'border-white/60' : 'border-4';
 
                 return (
                   <div
                     key={choice.id}
-                    className={`relative p-4 md:p-6 rounded-3xl border-4 ${
-                      isCorrect ? 'border-white/50' : 'border-white/20'
-                    } ${colorClass} shadow-xl backdrop-blur-sm`}
+                    className={`relative p-4 md:p-6 rounded-3xl ${borderClass} ${colorClass} backdrop-blur-sm transition-all duration-300 ${
+                      isCorrect
+                        ? 'ring-2 ring-white/50 shadow-2xl brightness-110'
+                        : 'opacity-40 shadow-lg'
+                    }`}
                   >
                     {/* Correct answer checkmark */}
                     {isCorrect && (
@@ -272,8 +281,8 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({ 
 
                     {/* Choice Content */}
                     <div className="flex items-center space-x-3 md:space-x-4">
-                      <div className="w-10 h-10 md:w-12 md:h-12 bg-white/20 flex items-center justify-center">
-                        <span className="text-lg md:text-xl font-bold text-white">
+                      <div className="w-10 h-10 md:w-12 md:h-12 bg-white/20 flex items-center justify-center rounded-full">
+                        <span className="text-lg md:text-xl font-bold text-white drop-shadow-lg">
                           {question.type === 'true_false'
                             ? choice.text === 'True' ||
                               choice.text === '正しい' ||
@@ -283,7 +292,7 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({ 
                             : choice.letter}
                         </span>
                       </div>
-                      <div className="text-sm md:text-base font-medium text-white flex-1 leading-tight">
+                      <div className="text-sm md:text-base font-medium text-white/95 flex-1 leading-tight">
                         {choice.text}
                       </div>
                     </div>
