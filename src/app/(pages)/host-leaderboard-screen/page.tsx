@@ -1,10 +1,13 @@
 'use client';
 
 import React, { Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { HostLeaderboardScreen } from '@/components/game';
 import { LeaderboardData } from '@/types/game';
 
 function HostLeaderboardScreenContent() {
+  const router = useRouter();
+
   // Mock leaderboard data - will be replaced with real data
   const leaderboardData: LeaderboardData = {
     entries: [
@@ -55,10 +58,13 @@ function HostLeaderboardScreenContent() {
     timeLimit: 10,
   };
 
-  // TODO: Add navigation logic when timer expires
-  // Component now manages its own timer internally
+  const handleTimeExpired = () => {
+    router.push('/host-explanation-screen');
+  };
 
-  return <HostLeaderboardScreen leaderboardData={leaderboardData} />;
+  return (
+    <HostLeaderboardScreen leaderboardData={leaderboardData} onTimeExpired={handleTimeExpired} />
+  );
 }
 
 export default function HostLeaderboardScreenPage() {

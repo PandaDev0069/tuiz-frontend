@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PageContainer, Main, QuizBackground } from '@/components/ui';
 import { TimeBar } from './TimeBar';
 import { TrendingUp, TrendingDown, Minus, Trophy, Medal, Award } from 'lucide-react';
@@ -177,12 +177,14 @@ interface HostLeaderboardScreenProps {
 
 export const HostLeaderboardScreen: React.FC<HostLeaderboardScreenProps> = ({
   leaderboardData,
+  onTimeExpired,
 }) => {
   const { entries, questionNumber, totalQuestions, timeLimit } = leaderboardData;
 
   // Animation state
   const [isAnimationStarted, setIsAnimationStarted] = useState(false);
   const [currentTime, setCurrentTime] = useState(timeLimit);
+  const timeoutTriggered = useRef(false);
 
   // Start animation after component mounts
   useEffect(() => {
@@ -195,10 +197,18 @@ export const HostLeaderboardScreen: React.FC<HostLeaderboardScreenProps> = ({
 
   // Internal timer countdown
   useEffect(() => {
+    timeoutTriggered.current = false;
+    setCurrentTime(timeLimit);
+  }, [timeLimit, questionNumber]);
+
+  useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime((prev) => {
         if (prev <= 1) {
-          // Timer expired - could trigger navigation here
+          if (!timeoutTriggered.current) {
+            timeoutTriggered.current = true;
+            onTimeExpired?.();
+          }
           return 0;
         }
         return prev - 1;
@@ -206,7 +216,7 @@ export const HostLeaderboardScreen: React.FC<HostLeaderboardScreenProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []); // Run once on mount
+  }, [onTimeExpired, timeLimit]);
 
   return (
     <PageContainer className="h-screen">

@@ -2,6 +2,7 @@ export { HostQuestionScreen } from './HostQuestionScreen';
 export { HostAnswerScreen } from './HostAnswerScreen';
 export { HostAnswerRevealScreen } from './HostAnswerRevealScreen';
 export { HostLeaderboardScreen } from './HostLeaderboardScreen';
+export { HostExplanationScreen } from './HostExplanationScreen';
 export { PlayerQuestionScreen } from './PlayerQuestionScreen';
 export { PlayerAnswerScreen } from './PlayerAnswerScreen';
 export { PlayerAnswerRevealScreen } from './PlayerAnswerRevealScreen';

@@ -83,3 +83,13 @@ export interface LeaderboardData {
   timeRemaining: number;
   timeLimit: number;
 }
+
+export interface ExplanationData {
+  questionNumber: number;
+  totalQuestions: number;
+  timeLimit: number;
+  title: string;
+  body: string;
+  image?: string;
+  subtitle?: string;
+}

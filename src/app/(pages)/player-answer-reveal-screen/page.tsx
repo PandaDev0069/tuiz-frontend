@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import { PlayerAnswerRevealScreen } from '@/components/game';
 import { AnswerResult } from '@/types/game';
 
@@ -36,21 +36,7 @@ function PlayerAnswerRevealScreenContent() {
     totalAnswered: 200,
   });
 
-  // Detect if mobile device
-  const [isMobile, setIsMobile] = useState(true);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  return <PlayerAnswerRevealScreen answerResult={answerResult} isMobile={isMobile} />;
+  return <PlayerAnswerRevealScreen answerResult={answerResult} />;
 }
 
 export default function PlayerAnswerRevealScreenPage() {
