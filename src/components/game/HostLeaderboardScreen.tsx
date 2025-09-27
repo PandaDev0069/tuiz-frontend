@@ -278,9 +278,7 @@ export const HostLeaderboardScreen: React.FC<HostLeaderboardScreenProps> = ({
 
                 {/* Footer info */}
                 <div className="mt-3 text-center">
-                  <p className="text-base md:text-lg text-white/80 font-medium">
-                    トップ 5 プレイヤー
-                  </p>
+                  <p className="text-2xl md:text-3xl text-white/80 font-medium">上位5名</p>
                 </div>
               </div>
             </div>
