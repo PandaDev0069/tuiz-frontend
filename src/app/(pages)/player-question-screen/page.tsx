@@ -38,7 +38,7 @@ function PlayerQuestionScreenContent() {
   const totalQuestions = 10;
 
   // Answer time limit for answering phase
-  const answerTimeLimit = 30;
+  const answerTimeLimit = 10;
   const [answerTime, setAnswerTime] = useState(answerTimeLimit);
 
   // Timer countdown for question phase
@@ -162,7 +162,7 @@ function PlayerQuestionScreenContent() {
       );
 
     case 'answer_reveal':
-      return <PlayerAnswerRevealScreen answerResult={mockAnswerResult} isMobile={isMobile} />;
+      return <PlayerAnswerRevealScreen answerResult={mockAnswerResult} />;
 
     default:
       return null;

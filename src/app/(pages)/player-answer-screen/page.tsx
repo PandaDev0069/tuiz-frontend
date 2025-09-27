@@ -11,7 +11,7 @@ function PlayerAnswerScreenContent() {
     text: '現在のネパールの首相は誰ですか？',
     image:
       'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=600&fit=crop&crop=face',
-    timeLimit: 100,
+    timeLimit: 10,
     choices: [
       { id: 'a', text: 'プラチャンダ', letter: 'A' },
       { id: 'b', text: 'シェル・バハドゥル・デウバ', letter: 'B' },

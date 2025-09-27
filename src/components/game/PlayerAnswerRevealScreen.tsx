@@ -1,325 +1,433 @@
 'use client';
 
-import React from 'react';
-import Image from 'next/image';
+import React, { useState, useEffect } from 'react';
 import { PageContainer, Main, QuizBackground } from '@/components/ui';
-import { CheckCircle, XCircle, Trophy, TrendingUp } from 'lucide-react';
-import { AnswerResult } from '@/types/game';
+import { TimeBar } from './TimeBar';
+import { CheckCircle } from 'lucide-react';
+import { AnswerResult, Choice, AnswerStatistic } from '@/types/game';
 
 interface PlayerAnswerRevealScreenProps {
   answerResult: AnswerResult;
-  isMobile?: boolean;
 }
 
 export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> = ({
   answerResult,
-  isMobile = true,
 }) => {
-  const { question, correctAnswer, playerAnswer, isCorrect, statistics, totalAnswered } =
-    answerResult;
+  const { question, correctAnswer, statistics } = answerResult;
 
-  const renderAnswerLayout = () => {
+  // Animation state
+  const [isAnimationStarted, setIsAnimationStarted] = useState(false);
+
+  // Start animation after component mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsAnimationStarted(true);
+    }, 200); // Reduced initial delay
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Animated Bar Component
+  const AnimatedBar: React.FC<{
+    choice: Choice;
+    index: number;
+    stat: AnswerStatistic | undefined;
+    maxPercentage: number;
+    colorClass: string;
+    shouldAnimate: boolean;
+    correctAnswer: Choice;
+  }> = ({ choice, index, stat, maxPercentage, colorClass, shouldAnimate, correctAnswer }) => {
+    const percentage = stat?.percentage || 0;
+    const count = stat?.count || 0;
+
+    const [animatedCount, setAnimatedCount] = useState(0);
+    const [animatedHeight, setAnimatedHeight] = useState(0);
+
+    useEffect(() => {
+      if (!shouldAnimate) {
+        // Reset to initial state when animation hasn't started
+        setAnimatedCount(0);
+        setAnimatedHeight(0);
+        return;
+      }
+
+      // Simplified single RAF animation with staggered delay
+      const delay = 300 + index * 150; // Reduced stagger delay
+
+      const timer = setTimeout(() => {
+        let startTime: number;
+        let animationFrame: number;
+        const totalDuration = 2000; // Reduced total duration
+
+        const animate = (timestamp: number) => {
+          if (!startTime) startTime = timestamp;
+          const elapsed = timestamp - startTime;
+          const progress = Math.min(elapsed / totalDuration, 1);
+
+          // Use easeOutQuart for snappier animation
+          const easeOut = 1 - Math.pow(1 - progress, 4);
+
+          // Update both values in single RAF call
+          setAnimatedCount(Math.round(count * easeOut));
+          setAnimatedHeight(percentage * easeOut);
+
+          if (progress < 1) {
+            animationFrame = requestAnimationFrame(animate);
+          }
+        };
+
+        animationFrame = requestAnimationFrame(animate);
+
+        return () => {
+          if (animationFrame) {
+            cancelAnimationFrame(animationFrame);
+          }
+        };
+      }, delay);
+
+      return () => clearTimeout(timer);
+    }, [shouldAnimate, count, percentage, index]);
+
+    // Calculate bar height - memoized to avoid re-calculation
+    const barHeightPercent = React.useMemo(() => {
+      if (animatedHeight <= 0) return 0;
+      const scaledPercent = maxPercentage > 0 ? (animatedHeight / maxPercentage) * 100 : 0;
+      return Math.min(Math.max(scaledPercent, 8), 100);
+    }, [animatedHeight, maxPercentage]);
+
+    return (
+      <div className="flex flex-col items-center flex-1 h-full">
+        {/* Animated Number on top of bar - mobile optimized */}
+        <div className="text-sm md:text-lg lg:text-xl font-bold text-white mb-1 md:mb-2 h-6 md:h-8 flex items-center">
+          <span className="tabular-nums">{animatedCount}</span>
+        </div>
+
+        {/* Bar Container - slimmer bars */}
+        <div className="w-full max-w-12 md:max-w-14 lg:max-w-12 xl:max-w-14 flex-1 flex flex-col justify-end relative">
+          <div
+            className={`w-full ${colorClass} rounded-t-lg shadow-lg will-change-transform relative`}
+            style={{
+              height: `${barHeightPercent}%`,
+              minHeight: animatedHeight > 0 ? '6px' : '0px',
+              transform: 'translateZ(0)', // Force GPU acceleration
+            }}
+          >
+            {/* Correct Answer Checkmark on Bar - mobile optimized */}
+            {choice.id === correctAnswer.id && barHeightPercent > 20 && (
+              <div className="absolute top-1 right-1 md:top-2 md:right-2 w-4 h-4 md:w-5 md:h-5 lg:w-6 lg:h-6">
+                <CheckCircle className="w-full h-full text-white drop-shadow-lg opacity-90" />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Choice letter - mobile optimized */}
+        <div className="mt-2 md:mt-4 h-6 md:h-8 flex items-center justify-center">
+          <div className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 bg-white/20 flex items-center justify-center rounded-full">
+            <span className="text-sm md:text-lg lg:text-xl font-bold text-white drop-shadow-lg">
+              {question.type === 'true_false'
+                ? choice.text === 'True' || choice.text === '正しい' || choice.text === 'はい'
+                  ? '○'
+                  : '×'
+                : choice.letter}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Get color classes for each choice - matching HostAnswerScreen exactly
+  const getChoiceColors = () => {
     switch (question.type) {
       case 'true_false':
-        return <TrueFalseLayout />;
+        return [
+          'bg-gradient-to-br from-green-500 to-green-600 border-green-400', // True/○
+          'bg-gradient-to-br from-red-500 to-red-600 border-red-400', // False/×
+        ];
       case 'multiple_choice_2':
-        return <TwoOptionLayout />;
+        return [
+          'bg-gradient-to-r from-purple-500 to-purple-600 border-purple-400',
+          'bg-gradient-to-r from-orange-500 to-orange-600 border-orange-400',
+        ];
       case 'multiple_choice_3':
-        return <ThreeOptionLayout />;
+        return [
+          'bg-gradient-to-r from-emerald-500 to-emerald-600 border-emerald-400',
+          'bg-gradient-to-r from-pink-500 to-pink-600 border-pink-400',
+          'bg-gradient-to-r from-cyan-500 to-cyan-600 border-cyan-400',
+        ];
       case 'multiple_choice_4':
       default:
-        return <FourOptionLayout />;
+        return [
+          'bg-gradient-to-br from-red-500 to-red-600 border-red-400', // A
+          'bg-gradient-to-br from-yellow-500 to-yellow-600 border-yellow-400', // B
+          'bg-gradient-to-br from-green-500 to-green-600 border-green-400', // C
+          'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-400', // D
+        ];
     }
   };
 
-  const TrueFalseLayout = () => (
-    <div className="grid grid-cols-2 gap-3 md:gap-4 w-full max-w-2xl mx-auto">
-      {question.choices.map((choice) => {
-        const stat = statistics.find((s) => s.choiceId === choice.id);
-        const isPlayerChoice = playerAnswer?.id === choice.id;
-        const isCorrectChoice = correctAnswer.id === choice.id;
+  const colorClasses = getChoiceColors();
 
-        return (
-          <div
-            key={choice.id}
-            className={`relative p-4 md:p-6 rounded-2xl border-4 transition-all duration-500 ${
-              isCorrectChoice
-                ? 'bg-green-500 border-green-400 shadow-green-500/50 shadow-xl'
-                : isPlayerChoice && !isCorrectChoice
-                  ? 'bg-red-500 border-red-400 shadow-red-500/50 shadow-xl'
-                  : 'bg-gray-700/80 border-gray-600'
-            } backdrop-blur-sm`}
-          >
-            {/* Result Icon */}
-            <div className="absolute -top-3 -right-3 w-8 h-8 md:w-10 md:h-10">
-              {isCorrectChoice ? (
-                <CheckCircle className="w-full h-full text-green-300 drop-shadow-lg" />
-              ) : isPlayerChoice && !isCorrectChoice ? (
-                <XCircle className="w-full h-full text-red-300 drop-shadow-lg" />
-              ) : null}
-            </div>
+  // Find max percentage for scaling bars (guard against empty or zero)
+  const maxPercentage = Math.max(0, ...statistics.map((stat) => stat.percentage)) || 1;
 
-            {/* Choice Content */}
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-white mb-2">
-                {choice.text === 'True' || choice.text === '正しい' || choice.text === 'はい'
-                  ? '○'
-                  : '×'}
-              </div>
-              <div className="text-lg md:text-xl font-medium text-white/90 mb-3">{choice.text}</div>
+  // Check if it's mobile (you can adjust this breakpoint as needed)
+  const [isMobile, setIsMobile] = useState(false);
 
-              {/* Statistics */}
-              <div className="text-sm md:text-base text-white/80">
-                {stat?.count || 0}人 ({stat?.percentage.toFixed(1) || 0}%)
-              </div>
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
 
-              {/* Progress Bar */}
-              <div className="w-full bg-white/20  h-2 md:h-3 mt-2">
-                <div
-                  className="bg-white/60 h-full rounded-full transition-all duration-1000 ease-out"
-                  style={{ width: `${stat?.percentage || 0}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
 
-  const TwoOptionLayout = () => (
-    <div className="grid grid-cols-1 gap-3 md:gap-4 w-full max-w-xl mx-auto">
-      {question.choices.map((choice) => {
-        const stat = statistics.find((s) => s.choiceId === choice.id);
-        const isPlayerChoice = playerAnswer?.id === choice.id;
-        const isCorrectChoice = correctAnswer.id === choice.id;
-
-        return (
-          <div
-            key={choice.id}
-            className={`relative p-4 md:p-6 rounded-2xl border-4 transition-all duration-500 ${
-              isCorrectChoice
-                ? 'bg-green-500 border-green-400 shadow-green-500/50 shadow-xl'
-                : isPlayerChoice && !isCorrectChoice
-                  ? 'bg-red-500 border-red-400 shadow-red-500/50 shadow-xl'
-                  : 'bg-gray-700/80 border-gray-600'
-            } backdrop-blur-sm`}
-          >
-            {/* Result Icon */}
-            <div className="absolute -top-3 -right-3 w-8 h-8 md:w-10 md:h-10">
-              {isCorrectChoice ? (
-                <CheckCircle className="w-full h-full text-green-300 drop-shadow-lg" />
-              ) : isPlayerChoice && !isCorrectChoice ? (
-                <XCircle className="w-full h-full text-red-300 drop-shadow-lg" />
-              ) : null}
-            </div>
-
-            {/* Choice Content */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3 md:space-x-4">
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-white/20 flex items-center justify-center">
-                  <span className="text-lg md:text-xl font-bold text-white">{choice.letter}</span>
-                </div>
-                <div className="text-lg md:text-xl font-medium text-white flex-1">
-                  {choice.text}
-                </div>
-              </div>
-
-              <div className="text-right">
-                <div className="text-sm md:text-base text-white/80 mb-1">{stat?.count || 0}人</div>
-                <div className="text-lg md:text-xl font-bold text-white">
-                  {stat?.percentage.toFixed(1) || 0}%
-                </div>
-              </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="w-full bg-white/20 rounded-full h-2 md:h-3 mt-3">
-              <div
-                className="bg-white/60 h-full rounded-full transition-all duration-1000 ease-out"
-                style={{ width: `${stat?.percentage || 0}%` }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const ThreeOptionLayout = () => (
-    <div className="space-y-3 md:space-y-4 w-full max-w-2xl mx-auto">
-      {question.choices.map((choice) => {
-        const stat = statistics.find((s) => s.choiceId === choice.id);
-        const isPlayerChoice = playerAnswer?.id === choice.id;
-        const isCorrectChoice = correctAnswer.id === choice.id;
-
-        return (
-          <div
-            key={choice.id}
-            className={`relative p-4 md:p-5 rounded-2xl border-4 transition-all duration-500 ${
-              isCorrectChoice
-                ? 'bg-green-500 border-green-400 shadow-green-500/50 shadow-xl'
-                : isPlayerChoice && !isCorrectChoice
-                  ? 'bg-red-500 border-red-400 shadow-red-500/50 shadow-xl'
-                  : 'bg-gray-700/80 border-gray-600'
-            } backdrop-blur-sm`}
-          >
-            {/* Result Icon */}
-            <div className="absolute -top-3 -right-3 w-8 h-8 md:w-10 md:h-10">
-              {isCorrectChoice ? (
-                <CheckCircle className="w-full h-full text-green-300 drop-shadow-lg" />
-              ) : isPlayerChoice && !isCorrectChoice ? (
-                <XCircle className="w-full h-full text-red-300 drop-shadow-lg" />
-              ) : null}
-            </div>
-
-            {/* Choice Content */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3 md:space-x-4 flex-1">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 flex items-center justify-center">
-                  <span className="text-xl md:text-2xl font-bold text-white">{choice.letter}</span>
-                </div>
-                <div className="text-base md:text-lg font-medium text-white flex-1 leading-tight">
-                  {choice.text}
-                </div>
-              </div>
-
-              <div className="text-right ml-4">
-                <div className="text-sm text-white/80 mb-1">{stat?.count || 0}人</div>
-                <div className="text-lg md:text-xl font-bold text-white">
-                  {stat?.percentage.toFixed(1) || 0}%
-                </div>
-              </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="w-full bg-white/20 rounded-full h-2 md:h-3 mt-3">
-              <div
-                className="bg-white/60 h-full rounded-full transition-all duration-1000 ease-out"
-                style={{ width: `${stat?.percentage || 0}%` }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const FourOptionLayout = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 w-full max-w-4xl mx-auto">
-      {question.choices.map((choice) => {
-        const stat = statistics.find((s) => s.choiceId === choice.id);
-        const isPlayerChoice = playerAnswer?.id === choice.id;
-        const isCorrectChoice = correctAnswer.id === choice.id;
-
-        return (
-          <div
-            key={choice.id}
-            className={`relative p-4 md:p-6 rounded-2xl border-4 transition-all duration-500 ${
-              isCorrectChoice
-                ? 'bg-green-500 border-green-400 shadow-green-500/50 shadow-xl'
-                : isPlayerChoice && !isCorrectChoice
-                  ? 'bg-red-500 border-red-400 shadow-red-500/50 shadow-xl'
-                  : 'bg-gray-700/80 border-gray-600'
-            } backdrop-blur-sm`}
-          >
-            {/* Result Icon */}
-            <div className="absolute -top-3 -right-3 w-8 h-8 md:w-10 md:h-10">
-              {isCorrectChoice ? (
-                <CheckCircle className="w-full h-full text-green-300 drop-shadow-lg" />
-              ) : isPlayerChoice && !isCorrectChoice ? (
-                <XCircle className="w-full h-full text-red-300 drop-shadow-lg" />
-              ) : null}
-            </div>
-
-            {/* Choice Content */}
-            <div className="text-center">
-              <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <span className="text-xl md:text-2xl font-bold text-white">{choice.letter}</span>
-              </div>
-              <div className="text-sm md:text-base font-medium text-white mb-3 leading-tight">
-                {choice.text}
-              </div>
-
-              {/* Statistics */}
-              <div className="text-sm text-white/80 mb-2">{stat?.count || 0}人</div>
-              <div className="text-lg md:text-xl font-bold text-white mb-3">
-                {stat?.percentage.toFixed(1) || 0}%
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-white/20 rounded-full h-2 md:h-3">
-                <div
-                  className="bg-white/60 h-full rounded-full transition-all duration-1000 ease-out"
-                  style={{ width: `${stat?.percentage || 0}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   return (
     <PageContainer className="h-screen">
       <Main className="h-full relative">
+        {/* Timer Bar */}
+        <TimeBar
+          currentTime={0} // No timer for reveal screen
+          timeLimit={1}
+          questionNumber={1}
+          totalQuestions={10}
+        />
+
         {/* Same background as question screen */}
         <div className="absolute inset-0">
           <QuizBackground variant="question" animated={false} />
         </div>
 
-        {/* Content */}
-        <div className="relative z-10 h-full flex flex-col">
-          {/* Header with Result Status */}
-          <div className="px-4 py-6 text-center">
-            <div
-              className={`inline-flex items-center space-x-2 px-4 py-2 rounded-full ${
-                isCorrect ? 'bg-green-500/80 text-green-100' : 'bg-red-500/80 text-red-100'
-              } backdrop-blur-sm`}
-            >
-              {isCorrect ? <Trophy className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
-              <span className="font-bold text-lg">{isCorrect ? '正解！' : '不正解'}</span>
-            </div>
-          </div>
-
-          {/* Question Text and Image */}
-          <div className="px-4 mb-6">
-            <div className="text-center max-w-4xl mx-auto">
-              {/* Question Image (if available) */}
-              {question.image && (
-                <div className="mb-4 flex justify-center">
-                  <div className="relative w-full max-w-md h-32 md:h-40 rounded-lg overflow-hidden shadow-xl">
-                    <Image src={question.image} alt="Question" fill className="object-cover" />
-                    <div className="absolute inset-0 bg-black/10" />
-                  </div>
-                </div>
-              )}
-
-              {/* Question Text */}
-              <h2
-                className={`${isMobile ? 'text-lg md:text-xl' : 'text-xl md:text-2xl'} font-bold text-white drop-shadow-lg leading-tight mb-4`}
-              >
+        {isMobile ? (
+          /* Mobile Layout - Optimized for smaller screens */
+          <div className="relative z-10 h-full flex flex-col pt-40">
+            {/* Question Text - mobile optimized */}
+            <div className="px-4 py-2 text-center">
+              <h2 className="text-2xl font-bold text-white drop-shadow-lg leading-tight">
                 {question.text}
               </h2>
             </div>
-          </div>
 
-          {/* Answer Results */}
-          <div className="flex-1 flex items-center justify-center px-4 pb-8">
-            <div className="w-full">{renderAnswerLayout()}</div>
-          </div>
+            {/* Bar Chart Section - mobile optimized */}
+            <div className="flex-1 flex items-center justify-center px-3 py-2">
+              <div className="w-full max-w-5xl">
+                {/* Chart Title/Label - mobile optimized */}
+                <div className="text-center mb-2">
+                  <h3 className="text-2xl font-bold text-white/90 mb-0">回答結果</h3>
+                </div>
 
-          {/* Bottom Stats */}
-          <div className="px-4 pb-6 text-center">
-            <div className="bg-black/20 backdrop-blur-sm rounded-full px-6 py-3 inline-flex items-center space-x-4 text-white/80">
-              <div className="flex items-center space-x-2">
-                <TrendingUp className="w-4 h-4" />
-                <span className="text-sm font-medium">{totalAnswered}人が回答</span>
+                {/* Chart Container with Background - mobile optimized */}
+                <div className="relative bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-3 shadow-xl">
+                  {/* Decorative corner elements - mobile optimized */}
+                  <div className="absolute top-1 left-1 w-3 h-3 border-l-2 border-t-2 border-white/20 rounded-tl-lg"></div>
+                  <div className="absolute top-1 right-1 w-3 h-3 border-r-2 border-t-2 border-white/20 rounded-tr-lg"></div>
+                  <div className="absolute bottom-1 left-1 w-3 h-3 border-l-2 border-b-2 border-white/20 rounded-bl-lg"></div>
+                  <div className="absolute bottom-1 right-1 w-3 h-3 border-r-2 border-b-2 border-white/20 rounded-br-lg"></div>
+
+                  <div
+                    className="flex items-end justify-center space-x-2"
+                    style={{ height: '200px' }}
+                  >
+                    {question.choices.map((choice, index) => {
+                      const stat = statistics.find((s) => s.choiceId === choice.id);
+
+                      return (
+                        <AnimatedBar
+                          key={choice.id}
+                          choice={choice}
+                          index={index}
+                          stat={stat}
+                          maxPercentage={maxPercentage}
+                          colorClass={colorClasses[index]}
+                          shouldAnimate={isAnimationStarted}
+                          correctAnswer={correctAnswer}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Chart bottom decoration - mobile optimized */}
+                  <div className="mt-2 flex justify-center items-center space-x-1">
+                    <div className="w-1.5 h-1.5 bg-white/30 rounded-full"></div>
+                    <div className="w-2 h-2 bg-gradient-to-r from-[#BFF098] to-[#6FD6FF] rounded-full"></div>
+                    <div className="w-1.5 h-1.5 bg-white/30 rounded-full"></div>
+                  </div>
+
+                  {/* Statistics summary - mobile optimized */}
+                  <div className="mt-2 text-center">
+                    <p className="text-xs text-white/70">
+                      総回答数: {statistics.reduce((sum, stat) => sum + stat.count, 0)}人
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Options Grid 2x2 - mobile optimized */}
+            <div className="px-2 pb-6">
+              <div className="grid grid-cols-2 gap-2 max-w-3xl mx-auto">
+                {question.choices.map((choice, index) => {
+                  const isCorrect = correctAnswer.id === choice.id;
+                  const colorClass = colorClasses[index];
+                  const borderClass = isCorrect ? 'border-white/60' : 'border-2';
+
+                  return (
+                    <div
+                      key={choice.id}
+                      className={`relative p-3 rounded-2xl ${borderClass} ${colorClass} backdrop-blur-sm transition-all duration-300 ${
+                        isCorrect
+                          ? 'ring-1 ring-white/50 shadow-xl brightness-110'
+                          : 'opacity-40 shadow-md'
+                      }`}
+                    >
+                      {/* Correct answer checkmark - mobile optimized */}
+                      {isCorrect && (
+                        <div className="absolute -top-1 -right-1 w-6 h-6">
+                          <CheckCircle className="w-full h-full text-white drop-shadow-2xl" />
+                        </div>
+                      )}
+
+                      {/* Choice Content - mobile optimized */}
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 bg-white/20 flex items-center justify-center rounded-full">
+                          <span className="text-sm font-bold text-white drop-shadow-lg">
+                            {question.type === 'true_false'
+                              ? choice.text === 'True' ||
+                                choice.text === '正しい' ||
+                                choice.text === 'はい'
+                                ? '○'
+                                : '×'
+                              : choice.letter}
+                          </span>
+                        </div>
+                        <div className="text-xs font-medium text-white/95 flex-1 leading-tight">
+                          {choice.text}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          /* PC Layout - Optimized and Compact */
+          <div className="relative z-10 h-full flex flex-col pt-16">
+            {/* Question Text */}
+            <div className="px-6 py-3 text-center">
+              <h2 className="text-2xl lg:text-3xl font-bold text-white drop-shadow-lg leading-tight">
+                {question.text}
+              </h2>
+            </div>
+
+            {/* Bar Chart Section */}
+            <div className="flex-1 flex items-center justify-center px-6 py-4">
+              <div className="w-full max-w-4xl">
+                {/* Chart Title/Label */}
+                <div className="text-center mb-4">
+                  <h3 className="text-3xl lg:text-4xl font-bold text-white/90 mb-1">回答結果</h3>
+                  <div className="w-20 h-0.5 bg-gradient-to-r from-[#BFF098] to-[#6FD6FF] mx-auto rounded-full"></div>
+                </div>
+
+                {/* Chart Container with Background */}
+                <div className="relative bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 p-4 lg:p-6 shadow-xl">
+                  {/* Decorative corner elements */}
+                  <div className="absolute top-2 left-2 w-3 h-3 border-l-2 border-t-2 border-white/20 rounded-tl-lg"></div>
+                  <div className="absolute top-2 right-2 w-3 h-3 border-r-2 border-t-2 border-white/20 rounded-tr-lg"></div>
+                  <div className="absolute bottom-2 left-2 w-3 h-3 border-l-2 border-b-2 border-white/20 rounded-bl-lg"></div>
+                  <div className="absolute bottom-2 right-2 w-3 h-3 border-r-2 border-b-2 border-white/20 rounded-br-lg"></div>
+
+                  <div
+                    className="flex items-end justify-center space-x-6"
+                    style={{ height: '280px' }}
+                  >
+                    {question.choices.map((choice, index) => {
+                      const stat = statistics.find((s) => s.choiceId === choice.id);
+
+                      return (
+                        <AnimatedBar
+                          key={choice.id}
+                          choice={choice}
+                          index={index}
+                          stat={stat}
+                          maxPercentage={maxPercentage}
+                          colorClass={colorClasses[index]}
+                          shouldAnimate={isAnimationStarted}
+                          correctAnswer={correctAnswer}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  {/* Chart bottom decoration */}
+                  <div className="mt-4 flex justify-center items-center space-x-2">
+                    <div className="w-2 h-2 bg-white/30 rounded-full"></div>
+                    <div className="w-2.5 h-2.5 bg-gradient-to-r from-[#BFF098] to-[#6FD6FF] rounded-full"></div>
+                    <div className="w-2 h-2 bg-white/30 rounded-full"></div>
+                  </div>
+
+                  {/* Statistics summary */}
+                  <div className="mt-3 text-center">
+                    <p className="text-sm text-white/70">
+                      総回答数: {statistics.reduce((sum, stat) => sum + stat.count, 0)}人
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Options Grid 2x2 */}
+            <div className="px-6 pb-6">
+              <div className="grid grid-cols-2 gap-3 lg:gap-4 max-w-3xl mx-auto">
+                {question.choices.map((choice, index) => {
+                  const isCorrect = correctAnswer.id === choice.id;
+                  const colorClass = colorClasses[index];
+                  const borderClass = isCorrect ? 'border-white/60' : 'border-2';
+
+                  return (
+                    <div
+                      key={choice.id}
+                      className={`relative p-3 lg:p-4 rounded-2xl ${borderClass} ${colorClass} backdrop-blur-sm transition-all duration-300 ${
+                        isCorrect
+                          ? 'ring-2 ring-white/50 shadow-xl brightness-110'
+                          : 'opacity-40 shadow-lg'
+                      }`}
+                    >
+                      {/* Correct answer checkmark */}
+                      {isCorrect && (
+                        <div className="absolute -top-1 -right-1 w-7 h-7 lg:w-8 lg:h-8">
+                          <CheckCircle className="w-full h-full text-white drop-shadow-2xl" />
+                        </div>
+                      )}
+
+                      {/* Choice Content */}
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 lg:w-11 lg:h-11 bg-white/20 flex items-center justify-center rounded-full">
+                          <span className="text-base lg:text-lg font-bold text-white drop-shadow-lg">
+                            {question.type === 'true_false'
+                              ? choice.text === 'True' ||
+                                choice.text === '正しい' ||
+                                choice.text === 'はい'
+                                ? '○'
+                                : '×'
+                              : choice.letter}
+                          </span>
+                        </div>
+                        <div className="text-sm lg:text-base font-medium text-white/95 flex-1 leading-tight">
+                          {choice.text}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </Main>
     </PageContainer>
   );

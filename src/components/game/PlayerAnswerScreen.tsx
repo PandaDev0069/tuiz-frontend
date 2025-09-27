@@ -28,12 +28,14 @@ export const PlayerAnswerScreen: React.FC<PlayerAnswerScreenProps> = ({
   isSubmitted = false,
 }) => {
   const [hasAnswered, setHasAnswered] = useState(false);
+  const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
 
   const handleAnswerSelect = (answerId: string) => {
     if (isSubmitted || hasAnswered) {
       return; // Prevent changes after submission
     }
 
+    setSelectedAnswerId(answerId);
     setHasAnswered(true);
     onAnswerSelect(answerId);
     onAnswerSubmit();
@@ -67,13 +69,22 @@ export const PlayerAnswerScreen: React.FC<PlayerAnswerScreenProps> = ({
           'bg-gradient-to-br from-red-500 to-red-600 border-red-400', // False/×
         ];
 
+        const isSelected = selectedAnswerId === choice.id;
+        const isOtherSelected = selectedAnswerId && selectedAnswerId !== choice.id;
+
         return (
           <button
             key={choice.id}
             onClick={() => handleAnswerSelect(choice.id)}
             disabled={isSubmitted || hasAnswered}
             className={`relative p-8 md:p-10 rounded-3xl border-4 transition-all duration-300 transform ${colorClasses[index]} hover:scale-105 shadow-xl backdrop-blur-sm ${
-              isSubmitted || hasAnswered ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'
+              isSubmitted || hasAnswered
+                ? isSelected
+                  ? 'brightness-110 ring-4 ring-white/50 cursor-not-allowed'
+                  : isOtherSelected
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'opacity-70 cursor-not-allowed'
+                : 'active:scale-95'
             }`}
           >
             {/* Choice Content */}
@@ -98,13 +109,22 @@ export const PlayerAnswerScreen: React.FC<PlayerAnswerScreenProps> = ({
           'bg-gradient-to-r from-orange-500 to-orange-600 border-orange-400',
         ];
 
+        const isSelected = selectedAnswerId === choice.id;
+        const isOtherSelected = selectedAnswerId && selectedAnswerId !== choice.id;
+
         return (
           <button
             key={choice.id}
             onClick={() => handleAnswerSelect(choice.id)}
             disabled={isSubmitted || hasAnswered}
             className={`relative w-full p-7 md:p-8 rounded-3xl border-4 transition-all duration-300 transform ${colorClasses[index]} hover:scale-102 shadow-xl backdrop-blur-sm ${
-              isSubmitted || hasAnswered ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'
+              isSubmitted || hasAnswered
+                ? isSelected
+                  ? 'brightness-110 ring-4 ring-white/50 cursor-not-allowed'
+                  : isOtherSelected
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'opacity-70 cursor-not-allowed'
+                : 'active:scale-95'
             }`}
           >
             {/* Choice Content */}
@@ -132,13 +152,22 @@ export const PlayerAnswerScreen: React.FC<PlayerAnswerScreenProps> = ({
           'bg-gradient-to-r from-cyan-500 to-cyan-600 border-cyan-400',
         ];
 
+        const isSelected = selectedAnswerId === choice.id;
+        const isOtherSelected = selectedAnswerId && selectedAnswerId !== choice.id;
+
         return (
           <button
             key={choice.id}
             onClick={() => handleAnswerSelect(choice.id)}
             disabled={isSubmitted || hasAnswered}
             className={`relative w-full p-6 md:p-7 rounded-3xl border-4 transition-all duration-300 transform ${colorClasses[index]} hover:scale-102 shadow-xl backdrop-blur-sm ${
-              isSubmitted || hasAnswered ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'
+              isSubmitted || hasAnswered
+                ? isSelected
+                  ? 'brightness-110 ring-4 ring-white/50 cursor-not-allowed'
+                  : isOtherSelected
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'opacity-70 cursor-not-allowed'
+                : 'active:scale-95'
             }`}
           >
             {/* Choice Content */}
@@ -167,13 +196,22 @@ export const PlayerAnswerScreen: React.FC<PlayerAnswerScreenProps> = ({
           'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-400', // D
         ];
 
+        const isSelected = selectedAnswerId === choice.id;
+        const isOtherSelected = selectedAnswerId && selectedAnswerId !== choice.id;
+
         return (
           <button
             key={choice.id}
             onClick={() => handleAnswerSelect(choice.id)}
             disabled={isSubmitted || hasAnswered}
             className={`relative p-6 md:p-8 rounded-3xl border-4 transition-all duration-300 transform ${colorClasses[index]} hover:scale-105 shadow-xl backdrop-blur-sm ${
-              isSubmitted || hasAnswered ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'
+              isSubmitted || hasAnswered
+                ? isSelected
+                  ? 'brightness-110 ring-4 ring-white/50 cursor-not-allowed'
+                  : isOtherSelected
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'opacity-70 cursor-not-allowed'
+                : 'active:scale-95'
             }`}
           >
             {/* Choice Content */}
