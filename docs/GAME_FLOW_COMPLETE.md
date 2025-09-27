@@ -37,12 +37,12 @@ This document outlines the complete user experience flow for the TUIZ quiz game 
 
 6. LEADERBOARD (if not final question)
    ├── Current rankings
-   ├── Animations Reveal 
+   ├── Animations Reveal
    ├── Show Change in Ranking (Top 5 only)
    ├── Score updates
    └── Next question button
 
-7. EXPLANATION (if available)
+7. EXPLANATION [x]
    ├── Question explanation
    ├── Additional context
    └── Continue button
@@ -58,7 +58,7 @@ This document outlines the complete user experience flow for the TUIZ quiz game 
    ├── Explanation (if available)
    └── NO Leaderboard → Go to Podium
 
-10. PODIUM
+10. PODIUM (ongoing)
    ├── Winner reveal animations
    ├── 1st, 2nd, 3rd place reveals
    └── Final celebrations
