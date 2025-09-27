@@ -1,10 +1,12 @@
 'use client';
 
 import React, { Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { PlayerLeaderboardScreen } from '@/components/game';
 import { LeaderboardData } from '@/types/game';
 
 function PlayerLeaderboardScreenContent() {
+  const router = useRouter();
   const leaderboardData: LeaderboardData = {
     entries: [
       { playerId: '11', playerName: 'ゆき', score: 640, rank: 1, rankChange: 'up' },
@@ -21,6 +23,7 @@ function PlayerLeaderboardScreenContent() {
 
   const handleTimeExpired = () => {
     console.log('Player leaderboard time expired');
+    router.push('/player-explanation-screen');
   };
 
   return (

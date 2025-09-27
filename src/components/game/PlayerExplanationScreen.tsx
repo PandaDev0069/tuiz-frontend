@@ -62,10 +62,6 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
 
         <div className="relative z-10 flex h-full flex-col pt-20 pb-8">
           <div className="px-5 text-center">
-            <p className="text-sm text-white/70">
-              問題 {questionNumber} / {totalQuestions} ・ 残り {Math.max(0, Math.ceil(currentTime))}
-              秒
-            </p>
             <h1 className="mt-3 text-3xl font-bold tracking-[0.2em] text-white">解説</h1>
             <h2 className="mt-2 text-xl font-semibold leading-snug text-white/90">{title}</h2>
           </div>
