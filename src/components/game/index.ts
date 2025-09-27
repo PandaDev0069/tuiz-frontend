@@ -9,3 +9,5 @@ export { PlayerAnswerRevealScreen } from './PlayerAnswerRevealScreen';
 export { PublicCountdownScreen } from './PublicCountdownScreen';
 export { PlayerCountdownScreen } from './PlayerCountdownScreen';
 export { TimeBar } from './TimeBar';
+export { PlayerLeaderboardScreen } from './PlayerLeaderboardScreen';
+export { PlayerExplanationScreen } from './PlayerExplanationScreen';
