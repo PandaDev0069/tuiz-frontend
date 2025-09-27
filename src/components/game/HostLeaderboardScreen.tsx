@@ -150,7 +150,6 @@ const LeaderboardEntryComponent: React.FC<{
             <h3 className="text-base md:text-lg font-bold text-white drop-shadow-lg">
               {entry.playerName}
             </h3>
-            <p className="text-xs md:text-sm text-white/80">プレイヤー</p>
           </div>
         </div>
 

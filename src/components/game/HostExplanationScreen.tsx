@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PageContainer, Main, QuizBackground } from '@/components/ui';
 import { TimeBar } from './TimeBar';
 import { ExplanationData } from '@/types/game';
@@ -15,7 +15,7 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
   explanation,
   onTimeExpired,
 }) => {
-  const { questionNumber, totalQuestions, timeLimit, title, body, image, subtitle } = explanation;
+  const { questionNumber, totalQuestions, timeLimit, title, body, image } = explanation;
   const [currentTime, setCurrentTime] = useState(timeLimit);
   const [isIntroVisible, setIsIntroVisible] = useState(false);
   const hasTriggeredTimeout = useRef(false);
@@ -58,10 +58,6 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
     hasTriggeredTimeout.current = false;
   }, [onTimeExpired, questionNumber]);
 
-  const formattedProgressLabel = useMemo(() => {
-    return `${questionNumber} / ${totalQuestions}問`;
-  }, [questionNumber, totalQuestions]);
-
   return (
     <PageContainer className="h-screen">
       <Main className="h-full relative">
@@ -79,28 +75,17 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
         <div className="relative z-10 h-full flex flex-col pt-16 pb-10 px-6">
           <div className="text-center mb-8">
             <div
-              className={`inline-flex items-center gap-3 px-4 py-2 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white/80 text-sm md:text-base transition-all duration-700 ${
-                isIntroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
-              }`}
-            >
-              <span className="font-semibold tracking-wide">{formattedProgressLabel}</span>
-              <span className="w-1 h-1 rounded-full bg-white/70" />
-              <span className="font-semibold">残り {Math.max(0, Math.ceil(currentTime))} 秒</span>
-            </div>
-
-            <div
               className={`mt-6 transition-all duration-700 delay-100 transform ${
                 isIntroVisible
                   ? 'opacity-100 translate-y-0 scale-100'
                   : 'opacity-0 translate-y-4 scale-95'
               }`}
             >
-              <div className="text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-[0.25em] drop-shadow-xl">
-                解説
+              <div className="relative">
+                <span className="text-5xl md:text-8xl font-mono font-black bg-gradient-to-r from-cyan-700 via-blue-600 to-cyan-700 bg-clip-text text-transparent tracking-wider drop-shadow-sm">
+                  解説
+                </span>
               </div>
-              {subtitle && (
-                <p className="mt-3 text-lg md:text-xl text-white/80 tracking-wide">{subtitle}</p>
-              )}
             </div>
 
             <h2
@@ -122,9 +107,6 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
                 >
                   <Image src={image} alt="解説イメージ" fill className="object-cover" priority />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
-                  <div className="absolute bottom-4 left-4 bg-black/30 px-4 py-2 rounded-full text-sm text-white/90 backdrop-blur-sm">
-                    ビジュアル解説
-                  </div>
                 </div>
               )}
 
@@ -137,7 +119,7 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
                 <div className="absolute -bottom-6 -right-6 w-16 h-16 bg-white/10 rounded-full blur-3xl" />
 
                 <div className="max-h-[40vh] min-h-[200px] overflow-y-auto pr-2 md:pr-4 scrollbar-thin scrollbar-thumb-white/40 scrollbar-track-transparent">
-                  <p className="text-lg md:text-xl lg:text-2xl leading-relaxed text-white/90 whitespace-pre-wrap">
+                  <p className="text-2xl md:text-xl lg:text-2xl leading-relaxed text-white/90 whitespace-pre-wrap">
                     {body}
                   </p>
                 </div>
