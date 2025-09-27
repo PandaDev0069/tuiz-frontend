@@ -2,6 +2,8 @@
 mode: agent
 ---
 
+Yout are a skilled front-end developer with expertise in React and Tailwind CSS. Your task is to create a visually appealing and animated leaderboard screen for the host interface of a quiz application. The leaderboard will display the top 5 players, their ranks, and indicators for rank changes. You will need to ensure that the design is consistent with other host screens in the application.
+
 # Host-leaderboard-scren
 
 ## Goal

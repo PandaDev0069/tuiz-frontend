@@ -23,9 +23,16 @@ function HostAnswerRevealScreenContent() {
     type: 'multiple_choice_4',
   });
 
+  // Mock game state
+  const [questionNumber] = useState(2);
+  const [totalQuestions] = useState(30);
+
   // Mock player statistics
   const [totalPlayers] = useState(200);
   const [answeredCount] = useState(195);
+
+  // TODO: Add navigation logic when timer expires
+  // Component now manages its own timer internally
 
   // Mock answer result for reveal phase
   const mockAnswerResult: AnswerResult = {
@@ -43,7 +50,14 @@ function HostAnswerRevealScreenContent() {
     totalAnswered: answeredCount,
   };
 
-  return <HostAnswerRevealScreen answerResult={mockAnswerResult} />;
+  return (
+    <HostAnswerRevealScreen
+      answerResult={mockAnswerResult}
+      timeLimit={5}
+      questionNumber={questionNumber}
+      totalQuestions={totalQuestions}
+    />
+  );
 }
 
 export default function HostAnswerRevealScreenPage() {

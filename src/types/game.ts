@@ -63,3 +63,23 @@ export interface GameSession {
     isConnected: boolean;
   }>;
 }
+
+// Leaderboard-specific types
+export type RankChange = 'up' | 'down' | 'same';
+
+export interface LeaderboardEntry {
+  playerId: string;
+  playerName: string;
+  score: number;
+  rank: number;
+  previousRank?: number;
+  rankChange: RankChange;
+}
+
+export interface LeaderboardData {
+  entries: LeaderboardEntry[];
+  questionNumber: number;
+  totalQuestions: number;
+  timeRemaining: number;
+  timeLimit: number;
+}
