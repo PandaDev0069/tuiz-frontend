@@ -6,7 +6,7 @@ This document outlines the complete user experience flow for the TUIZ quiz game 
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        QUIZ GAME FLOW                          │
+│                         QUIZ GAME FLOW                          │
 └─────────────────────────────────────────────────────────────────┘
 
 1. HOST STARTS QUIZ
