@@ -1,10 +1,12 @@
 'use client';
 
 import React, { Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { HostExplanationScreen } from '@/components/game';
 import { ExplanationData } from '@/types/game';
 
 function HostExplanationScreenContent() {
+  const router = useRouter();
   const explanation: ExplanationData = {
     questionNumber: 2,
     totalQuestions: 30,
@@ -21,6 +23,7 @@ function HostExplanationScreenContent() {
   const handleTimeExpired = () => {
     console.log('time up for explanation screen');
     // Todo: Add redirect later
+    router.push('/host-podium-screen');
   };
 
   return <HostExplanationScreen explanation={explanation} onTimeExpired={handleTimeExpired} />;
