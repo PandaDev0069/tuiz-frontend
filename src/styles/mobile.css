@@ -98,9 +98,9 @@
   }
 
   /* Preserve icon container styling */
-  [class*='icon'],
-  div[class*='w-16'],
-  div[class*='h-16'] {
+  /* Removed overly broad width/height override that was breaking podium layout */
+  /* Individual components should handle their own responsive sizing */
+  [class*='icon']:not([class*='podium']) {
     max-width: none !important;
     overflow: visible !important;
   }
@@ -152,13 +152,11 @@
   }
 
   /* Preserve icon container styling on small screens */
-  [class*='icon'],
-  div[class*='w-16'],
-  div[class*='h-16'] {
+  /* Removed overly broad width/height override that was breaking podium layout */
+  /* Individual components should handle their own responsive sizing */
+  [class*='icon']:not([class*='podium']) {
     max-width: none !important;
     overflow: visible !important;
-    width: 4rem !important;
-    height: 4rem !important;
   }
 
   /* Ensure header has proper spacing on small screens */
@@ -194,9 +192,8 @@
   }
 
   /* Preserve icon styling on iOS */
-  [class*='icon'],
-  div[class*='w-16'],
-  div[class*='h-16'] {
+  /* Removed overly broad width/height override that was breaking podium layout */
+  [class*='icon']:not([class*='podium']) {
     max-width: none !important;
     overflow: visible !important;
   }
@@ -228,9 +225,8 @@
   }
 
   /* Preserve icon styling on Android */
-  [class*='icon'],
-  div[class*='w-16'],
-  div[class*='h-16'] {
+  /* Removed overly broad width/height override that was breaking podium layout */
+  [class*='icon']:not([class*='podium']) {
     max-width: none !important;
     overflow: visible !important;
   }
@@ -263,9 +259,8 @@ body > * {
 }
 
 /* Preserve icon containers globally */
-[class*='icon'],
-div[class*='w-16'],
-div[class*='h-16'] {
+/* Removed overly broad width/height override that was breaking podium layout */
+[class*='icon']:not([class*='podium']) {
   max-width: none !important;
   overflow: visible !important;
 }
