@@ -5,3 +5,4 @@
 export { SidebarFilter } from './sidebar-filter';
 export { ProfileSettingsModal } from './profile-settings-modal';
 export { WarningModal, useWarningModal } from './warning-modal';
+export { HostSettingsModal } from './host-settings-modal';

@@ -165,6 +165,82 @@ Important rules:
 - Public Screen: read-only client consuming same events; no presence updates from Screen to reduce load.
 - Analytics: minimal event counters and a lightweight analytics table to avoid heavy writes.
 
+## Component Architecture Standards
+
+**ALWAYS use modular, reusable components** following the established patterns from the create page:
+
+### Component Structure Pattern
+
+- **Main Page Component**: Handles state management, data flow, and orchestration
+- **Step/Feature Components**: Break down complex features into logical steps (like BasicInfoStep, QuestionCreationStep)
+- **Sub-components**: Create focused, single-responsibility components within each step
+- **Shared UI Components**: Use existing UI components from `@/components/ui`
+
+### Component Organization
+
+```
+src/components/feature-name/
+├── MainComponent.tsx           # Main orchestrating component
+├── StepComponents/             # Individual step components
+│   ├── StepOne.tsx
+│   ├── StepTwo.tsx
+│   └── index.ts
+├── SubComponents/              # Reusable sub-components
+│   ├── SubComponentOne.tsx
+│   ├── SubComponentTwo.tsx
+│   └── index.ts
+├── constants.ts               # Feature-specific constants
+└── index.ts                   # Export all components
+```
+
+### Component Design Principles
+
+1. **Single Responsibility**: Each component should have one clear purpose
+2. **Props Interface**: Define clear, typed interfaces for all props
+3. **State Management**: Use React hooks + TanStack Query for data, Zustand for global state
+4. **Error Handling**: Include loading states, error states, and validation
+5. **Responsive Design**: Mobile-first approach with Tailwind CSS
+6. **Accessibility**: Include proper ARIA labels and keyboard navigation
+7. **Japanese Localization**: All user-facing text in Japanese
+
+### Example Component Pattern
+
+```typescript
+interface ComponentProps {
+  data: SomeType;
+  onDataChange: (data: SomeType) => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  errors?: FormErrors<SomeType>;
+  isLoading?: boolean;
+}
+
+export const Component: React.FC<ComponentProps> = ({
+  data,
+  onDataChange,
+  onNext,
+  onPrevious,
+  errors = {},
+  isLoading = false,
+}) => {
+  // Component logic here
+  return (
+    <div className="space-y-4 md:space-y-6">
+      {/* Component JSX */}
+    </div>
+  );
+};
+```
+
+### Required Features for All Components
+
+- **Loading States**: Show spinners/indicators during async operations
+- **Error States**: Display user-friendly error messages
+- **Validation**: Client-side validation with clear error messages
+- **Mobile Optimization**: Responsive design for all screen sizes
+- **Debug Support**: Include debug logging for development
+- **TypeScript**: Full type safety with proper interfaces
+
 ## Future Note
 
 Unit & integration tests will be added after a working, stable model exists. For now prioritize manual verification and delivery speed.

@@ -36,3 +36,5 @@ export { WarningModal, useWarningModal } from './overlays/warning-modal';
 export { AuthProvider } from '../providers/AuthProvider';
 export { AuthGuard, withAuthGuard } from '../auth/AuthGuard';
 export { SaveStatusIndicator } from './indicators/save-status-indicator';
+export { QRCode } from './QRCode';
+export { QuizBackground } from './QuizBackground';

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   PageContainer,
   Header,
@@ -18,15 +19,17 @@ import { FaUser } from 'react-icons/fa';
 import { MdPin } from 'react-icons/md';
 
 export default function Page() {
+  const router = useRouter();
   const [name, setName] = React.useState('');
   const [code, setCode] = React.useState('');
   const [touched, setTouched] = React.useState({ name: false, code: false });
 
+  // Check if name is valid
   const nameError = React.useMemo(() => {
     const v = name.trim();
     if (!touched.name) return '';
     if (v.length === 0) return '名前を入力してください。';
-    if (v.length < 4) return '名前は4文字以上で入力してください。';
+    if (v.length < 1) return '名前は1文字以上で入力してください。';
     if (/[<>]/.test(v)) return '無効な文字が含まれています。';
     return '';
   }, [name, touched.name]);
@@ -38,7 +41,7 @@ export default function Page() {
   }, [code, touched.code]);
 
   const isFormValid =
-    !nameError && !codeError && name.trim().length >= 4 && /^[0-9]{6}$/.test(code);
+    !nameError && !codeError && name.trim().length >= 1 && /^[0-9]{6}$/.test(code);
 
   // stable ids for inputs so labels can reference them
   const nameId = React.useId();
@@ -79,8 +82,12 @@ export default function Page() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                // UI-only: no submission logic yet
-                setTouched({ name: true, code: true });
+                if (isFormValid) {
+                  // Redirect to waiting room with name and code as query params
+                  router.push(`/waiting-room?name=${encodeURIComponent(name.trim())}&code=${code}`);
+                } else {
+                  setTouched({ name: true, code: true });
+                }
               }}
               className="space-y-4"
               noValidate
