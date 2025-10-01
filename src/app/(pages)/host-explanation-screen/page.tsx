@@ -21,8 +21,8 @@ function HostExplanationScreenContent() {
   };
 
   const handleTimeExpired = () => {
-    console.log('time up for explanation screen');
-    // Todo: Add redirect later
+    console.log('Host explanation time expired');
+    // Redirect to host podium screen for final results
     router.push('/host-podium-screen');
   };
 

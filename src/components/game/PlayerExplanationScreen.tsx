@@ -51,8 +51,7 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
 
   // Handle timeout navigation in separate effect
   useEffect(() => {
-    if (isTimeExpired && !timeoutTriggered.current) {
-      timeoutTriggered.current = true;
+    if (isTimeExpired) {
       // Use setTimeout to ensure navigation happens after current render cycle
       const timeoutId = setTimeout(() => {
         onTimeExpired?.();
@@ -61,7 +60,6 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
       return () => clearTimeout(timeoutId);
     }
   }, [isTimeExpired, onTimeExpired]);
-
   return (
     <PageContainer className="h-screen">
       <Main className="h-full relative">

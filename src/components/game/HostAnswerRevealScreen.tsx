@@ -222,8 +222,7 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({
 
   // Handle timeout navigation in separate effect
   useEffect(() => {
-    if (isTimeExpired && !timeoutTriggered.current) {
-      timeoutTriggered.current = true;
+    if (isTimeExpired) {
       // Use setTimeout to ensure navigation happens after current render cycle
       const timeoutId = setTimeout(() => {
         if (onTimeExpired) {

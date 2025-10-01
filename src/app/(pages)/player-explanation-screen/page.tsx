@@ -1,10 +1,12 @@
 'use client';
 
 import React, { Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { PlayerExplanationScreen } from '@/components/game';
 import { ExplanationData } from '@/types/game';
 
 function PlayerExplanationScreenContent() {
+  const router = useRouter();
   const explanation: ExplanationData = {
     questionNumber: 2,
     totalQuestions: 30,
@@ -21,6 +23,8 @@ function PlayerExplanationScreenContent() {
 
   const handleTimeExpired = () => {
     console.log('Player explanation time expired');
+    // Redirect to player podium screen for final results
+    router.push('/player-podium-screen');
   };
 
   return <PlayerExplanationScreen explanation={explanation} onTimeExpired={handleTimeExpired} />;

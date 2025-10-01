@@ -61,8 +61,7 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
 
   // Handle timeout navigation in separate effect
   useEffect(() => {
-    if (isTimeExpired && !hasTriggeredTimeout.current) {
-      hasTriggeredTimeout.current = true;
+    if (isTimeExpired) {
       // Use setTimeout to ensure navigation happens after current render cycle
       const timeoutId = setTimeout(() => {
         onTimeExpired?.();
@@ -71,7 +70,6 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
       return () => clearTimeout(timeoutId);
     }
   }, [isTimeExpired, onTimeExpired]);
-
   return (
     <PageContainer className="h-screen">
       <Main className="h-full relative">
