@@ -17,13 +17,17 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
 }) => {
   const { questionNumber, totalQuestions, timeLimit, title, body, image } = explanation;
   const [currentTime, setCurrentTime] = useState(timeLimit);
+  const [isTimeExpired, setIsTimeExpired] = useState(false);
   const timeoutTriggered = useRef(false);
 
+  // Reset timer when data changes
   useEffect(() => {
     timeoutTriggered.current = false;
     setCurrentTime(timeLimit);
+    setIsTimeExpired(false);
   }, [timeLimit, questionNumber]);
 
+  // Internal timer countdown
   useEffect(() => {
     if (!timeLimit || timeLimit <= 0) {
       return;
@@ -34,7 +38,7 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
         if (prev <= 1) {
           if (!timeoutTriggered.current) {
             timeoutTriggered.current = true;
-            onTimeExpired?.();
+            setIsTimeExpired(true);
           }
           return 0;
         }
@@ -43,7 +47,20 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [onTimeExpired, timeLimit]);
+  }, [timeLimit]);
+
+  // Handle timeout navigation in separate effect
+  useEffect(() => {
+    if (isTimeExpired && !timeoutTriggered.current) {
+      timeoutTriggered.current = true;
+      // Use setTimeout to ensure navigation happens after current render cycle
+      const timeoutId = setTimeout(() => {
+        onTimeExpired?.();
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isTimeExpired, onTimeExpired]);
 
   return (
     <PageContainer className="h-screen">

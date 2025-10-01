@@ -18,11 +18,15 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
   const { questionNumber, totalQuestions, timeLimit, title, body, image } = explanation;
   const [currentTime, setCurrentTime] = useState(timeLimit);
   const [isIntroVisible, setIsIntroVisible] = useState(false);
+  const [isTimeExpired, setIsTimeExpired] = useState(false);
   const hasTriggeredTimeout = useRef(false);
 
+  // Reset state when data changes
   useEffect(() => {
     setCurrentTime(timeLimit);
     setIsIntroVisible(false);
+    setIsTimeExpired(false);
+    hasTriggeredTimeout.current = false;
   }, [timeLimit, questionNumber]);
 
   useEffect(() => {
@@ -33,6 +37,7 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
     return () => clearTimeout(introTimer);
   }, [questionNumber]);
 
+  // Internal timer countdown
   useEffect(() => {
     if (timeLimit <= 0) {
       return;
@@ -43,7 +48,7 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
         if (prev <= 1) {
           if (!hasTriggeredTimeout.current) {
             hasTriggeredTimeout.current = true;
-            onTimeExpired?.();
+            setIsTimeExpired(true);
           }
           return 0;
         }
@@ -52,11 +57,20 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLimit, onTimeExpired]);
+  }, [timeLimit]);
 
+  // Handle timeout navigation in separate effect
   useEffect(() => {
-    hasTriggeredTimeout.current = false;
-  }, [onTimeExpired, questionNumber]);
+    if (isTimeExpired && !hasTriggeredTimeout.current) {
+      hasTriggeredTimeout.current = true;
+      // Use setTimeout to ensure navigation happens after current render cycle
+      const timeoutId = setTimeout(() => {
+        onTimeExpired?.();
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isTimeExpired, onTimeExpired]);
 
   return (
     <PageContainer className="h-screen">

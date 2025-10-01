@@ -57,7 +57,14 @@ export const PlayerQuestionScreen: React.FC<PlayerQuestionScreenProps> = ({
                   <div
                     className={`relative w-full ${isMobile ? 'max-w-lg h-48' : 'max-w-xl h-56'} rounded-lg overflow-hidden shadow-xl mx-auto`}
                   >
-                    <Image src={question.image} alt="Question" fill className="object-cover" />
+                    <Image
+                      src={question.image}
+                      alt="Question"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      priority
+                    />
                     {/* Subtle overlay for better text readability */}
                     <div className="absolute inset-0 bg-black/10" />
                   </div>

@@ -183,6 +183,7 @@ export const HostLeaderboardScreen: React.FC<HostLeaderboardScreenProps> = ({
   // Animation state
   const [isAnimationStarted, setIsAnimationStarted] = useState(false);
   const [currentTime, setCurrentTime] = useState(timeLimit);
+  const [isTimeExpired, setIsTimeExpired] = useState(false);
   const timeoutTriggered = useRef(false);
 
   // Start animation after component mounts
@@ -194,19 +195,21 @@ export const HostLeaderboardScreen: React.FC<HostLeaderboardScreenProps> = ({
     return () => clearTimeout(timer);
   }, []); // Empty dependency array
 
-  // Internal timer countdown
+  // Reset timer when data changes
   useEffect(() => {
     timeoutTriggered.current = false;
     setCurrentTime(timeLimit);
+    setIsTimeExpired(false);
   }, [timeLimit, questionNumber]);
 
+  // Internal timer countdown
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime((prev) => {
         if (prev <= 1) {
           if (!timeoutTriggered.current) {
             timeoutTriggered.current = true;
-            onTimeExpired?.();
+            setIsTimeExpired(true);
           }
           return 0;
         }
@@ -215,7 +218,20 @@ export const HostLeaderboardScreen: React.FC<HostLeaderboardScreenProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [onTimeExpired, timeLimit]);
+  }, [timeLimit]);
+
+  // Handle timeout navigation in separate effect
+  useEffect(() => {
+    if (isTimeExpired && !timeoutTriggered.current) {
+      timeoutTriggered.current = true;
+      // Use setTimeout to ensure navigation happens after current render cycle
+      const timeoutId = setTimeout(() => {
+        onTimeExpired?.();
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isTimeExpired, onTimeExpired]);
 
   return (
     <PageContainer className="h-screen">

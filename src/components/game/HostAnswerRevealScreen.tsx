@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageContainer, Main, QuizBackground } from '@/components/ui';
 import { TimeBar } from './TimeBar';
@@ -183,6 +183,8 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({
   // Animation state
   const [isAnimationStarted, setIsAnimationStarted] = useState(false);
   const [currentTime, setCurrentTime] = useState(timeLimit);
+  const [isTimeExpired, setIsTimeExpired] = useState(false);
+  const timeoutTriggered = useRef(false);
 
   // Start animation after component mounts
   useEffect(() => {
@@ -193,17 +195,21 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({
     return () => clearTimeout(timer);
   }, []); // Empty dependency array
 
+  // Reset timer when timeLimit changes
+  useEffect(() => {
+    setCurrentTime(timeLimit);
+    setIsTimeExpired(false);
+    timeoutTriggered.current = false;
+  }, [timeLimit]);
+
   // Internal timer countdown
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime((prev) => {
         if (prev <= 1) {
-          // Timer expired - trigger navigation
-          if (onTimeExpired) {
-            onTimeExpired();
-          } else {
-            // Default navigation to leaderboard screen
-            router.push('/host-leaderboard-screen');
+          if (!timeoutTriggered.current) {
+            timeoutTriggered.current = true;
+            setIsTimeExpired(true);
           }
           return 0;
         }
@@ -212,7 +218,25 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [onTimeExpired, router]); // Include dependencies for navigation
+  }, [timeLimit]);
+
+  // Handle timeout navigation in separate effect
+  useEffect(() => {
+    if (isTimeExpired && !timeoutTriggered.current) {
+      timeoutTriggered.current = true;
+      // Use setTimeout to ensure navigation happens after current render cycle
+      const timeoutId = setTimeout(() => {
+        if (onTimeExpired) {
+          onTimeExpired();
+        } else {
+          // Default navigation to leaderboard screen
+          router.push('/host-leaderboard-screen');
+        }
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isTimeExpired, onTimeExpired, router]);
 
   const colorClasses = getChoiceColors(question.type);
 

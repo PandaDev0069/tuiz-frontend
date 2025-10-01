@@ -259,7 +259,13 @@ export const PlayerAnswerScreen: React.FC<PlayerAnswerScreenProps> = ({
                   <div
                     className={`relative w-full ${isMobile ? 'max-w-md h-40 md:h-48' : 'max-w-lg h-48 md:h-56'} rounded-lg overflow-hidden shadow-xl`}
                   >
-                    <Image src={question.image} alt="Question" fill className="object-cover" />
+                    <Image
+                      src={question.image}
+                      alt="Question"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    />
                     <div className="absolute inset-0 bg-black/10" />
                   </div>
                 </div>
