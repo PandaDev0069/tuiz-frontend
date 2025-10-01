@@ -12,3 +12,4 @@ export { PlayerCountdownScreen } from './PlayerCountdownScreen';
 export { TimeBar } from './TimeBar';
 export { PlayerLeaderboardScreen } from './PlayerLeaderboardScreen';
 export { PlayerExplanationScreen } from './PlayerExplanationScreen';
+export { PlayerPodiumScreen } from './PlayerPodiumScreen';
