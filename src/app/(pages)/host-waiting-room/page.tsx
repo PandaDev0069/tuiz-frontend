@@ -56,7 +56,8 @@ function HostWaitingRoomContent() {
   };
 
   const handleConfirmStartQuiz = () => {
-    // TODO: Implement actual quiz start logic
+    // FIXME: Implement actual quiz start logic with backend integration
+    // Required: WebSocket event to notify all players, database state update
     console.log('Starting quiz with settings:', playSettings);
     // Redirect to host control panel
     window.location.href = `/host-control-panel?code=${roomCode}&quizId=${quizId}`;
@@ -79,7 +80,8 @@ function HostWaitingRoomContent() {
 
   const handleRoomLockToggle = (isLocked: boolean) => {
     setIsRoomLocked(isLocked);
-    // TODO: Implement actual room lock logic with backend
+    // FIXME: Implement actual room lock logic with backend API call
+    // Required: Update room status in database, emit WebSocket event to prevent new joins
     console.log(`Room ${isLocked ? 'locked' : 'unlocked'}`);
   };
 

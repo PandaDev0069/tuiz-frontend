@@ -31,8 +31,8 @@ function HostAnswerRevealScreenContent() {
   const [totalPlayers] = useState(200);
   const [answeredCount] = useState(195);
 
-  // TODO: Add navigation logic when timer expires
-  // Component now manages its own timer internally
+  // FIXME: Implement navigation logic when timer expires - component currently manages its own timer internally
+  // Future: Navigate to next question or leaderboard screen based on game state
 
   // Mock answer result for reveal phase
   const mockAnswerResult: AnswerResult = {
