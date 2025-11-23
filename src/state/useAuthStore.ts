@@ -1,6 +1,7 @@
 // src/state/useAuthStore.ts
 import { create } from 'zustand';
 import { authService } from '@/lib/auth';
+import { getOrCreateDeviceId } from '@/lib/deviceId';
 import type { User, Session, AuthState, LoginRequest, RegisterRequest } from '@/types/auth';
 import { useQuizLibraryStore } from './useQuizLibraryStore';
 import { clearUserSpecificQueries } from '@/lib/queryClient';
@@ -14,6 +15,7 @@ interface AuthActions {
   setLoading: (loading: boolean) => void;
   clearAuth: () => void;
   initializeAuth: () => void;
+  getDeviceId: () => string;
 }
 
 // Helper function to clear all user-specific data
@@ -142,5 +144,11 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
         session: null,
       });
     }
+  },
+
+  // Get or create device ID
+  // This ensures device ID is always available for WebSocket connections and game sessions
+  getDeviceId: () => {
+    return getOrCreateDeviceId();
   },
 }));
