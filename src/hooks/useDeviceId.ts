@@ -37,12 +37,19 @@ interface UseDeviceIdReturn {
 export function useDeviceId(): UseDeviceIdReturn {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [deviceInfo, setDeviceInfo] = useState<ReturnType<typeof getDeviceInfo>>({
+    deviceId: null,
+    version: null,
+    hasDeviceId: false,
+    isValid: false,
+  });
 
   useEffect(() => {
     // Initialize device ID on mount
     try {
       const id = getOrCreateDeviceId();
       setDeviceId(id);
+      setDeviceInfo(getDeviceInfo());
     } catch (error) {
       console.error('[useDeviceId] Failed to initialize device ID:', error);
     } finally {
@@ -54,13 +61,12 @@ export function useDeviceId(): UseDeviceIdReturn {
     try {
       const newId = resetDeviceId();
       setDeviceId(newId);
+      setDeviceInfo(getDeviceInfo());
       console.info('[useDeviceId] Device ID reset successfully');
     } catch (error) {
       console.error('[useDeviceId] Failed to reset device ID:', error);
     }
   };
-
-  const deviceInfo = getDeviceInfo();
 
   return {
     deviceId,
