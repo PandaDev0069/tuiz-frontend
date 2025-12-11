@@ -48,7 +48,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { socket, isConnected } = useSocket();
+  const { isConnected } = useSocket();
   const { session } = useAuthStore();
 
   // Load game data from API
