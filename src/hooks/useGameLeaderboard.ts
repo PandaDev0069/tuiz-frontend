@@ -67,29 +67,6 @@ export interface UseGameLeaderboardReturn {
   lastUpdateTime: Date | null;
 }
 
-interface ScoreUpdateEvent {
-  gameId: string;
-  playerId: string;
-  displayName: string;
-  newScore: number;
-  pointsAdded: number;
-  newRank: number;
-  previousRank: number;
-}
-
-interface RankChangeEvent {
-  gameId: string;
-  playerId: string;
-  displayName: string;
-  fromRank: number;
-  toRank: number;
-}
-
-interface FinalResultsEvent {
-  gameId: string;
-  leaderboard?: LeaderboardEntry[];
-}
-
 interface QuestionEndEvent {
   gameId: string;
 }
@@ -236,95 +213,23 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
     listenersSetupRef.current = true;
 
     // Join game room
-    socket.emit('room:join', { gameId });
+    socket.emit('room:join', { roomId: gameId });
 
     /**
-     * Score update event - single player score changed
+     * Leaderboard update event - trigger refresh to fetch full data
      */
-    const handleScoreUpdate = (data: ScoreUpdateEvent) => {
-      if (data.gameId !== gameId) return;
-
-      console.log('useGameLeaderboard: Score update', data);
-
-      const scoreUpdate: ScoreUpdate = {
-        playerId: data.playerId,
-        displayName: data.displayName,
-        newScore: data.newScore,
-        pointsAdded: data.pointsAdded,
-        newRank: data.newRank,
-        previousRank: data.previousRank,
-        timestamp: new Date(),
-      };
-
-      // Add to recent updates
-      setRecentScoreUpdates((prev) => [...prev.slice(-9), scoreUpdate]); // Keep last 10
-
-      // Update leaderboard entry
-      setLeaderboard((prev) =>
-        prev
-          .map((entry) =>
-            entry.player_id === data.playerId
-              ? {
-                  ...entry,
-                  score: data.newScore,
-                  rank: data.newRank,
-                }
-              : entry,
-          )
-          .sort((a, b) => a.rank - b.rank),
-      );
-
+    const handleLeaderboardUpdate = () => {
+      console.log('useGameLeaderboard: Leaderboard update received');
+      refreshLeaderboard();
       setLastUpdateTime(new Date());
-
-      events?.onScoreUpdate?.(scoreUpdate);
-    };
-
-    /**
-     * Rank change event - player moved up or down
-     */
-    const handleRankChange = (data: RankChangeEvent) => {
-      if (data.gameId !== gameId) return;
-
-      console.log('useGameLeaderboard: Rank change', data);
-
-      const rankChange: RankChange = {
-        playerId: data.playerId,
-        displayName: data.displayName,
-        fromRank: data.fromRank,
-        toRank: data.toRank,
-        isMovingUp: data.toRank < data.fromRank,
-      };
-
-      setRecentRankChanges((prev) => [...prev, rankChange]);
-
-      // Clear after animation (3 seconds)
-      setTimeout(() => {
-        setRecentRankChanges((prev) => prev.filter((c) => c !== rankChange));
-      }, 3000);
-
-      events?.onRankChange?.(rankChange);
-    };
-
-    /**
-     * Final results event - game ended
-     */
-    const handleFinalResults = (data: FinalResultsEvent) => {
-      if (data.gameId !== gameId) return;
-
-      console.log('useGameLeaderboard: Final results', data);
-
-      if (data.leaderboard) {
-        setLeaderboard(data.leaderboard);
-        setLastUpdateTime(new Date());
-        events?.onFinalResults?.(data.leaderboard);
-      }
     };
 
     /**
      * Question end - refresh leaderboard if auto-refresh enabled
      */
     const handleQuestionEnd = (data: QuestionEndEvent) => {
-      if (data.gameId !== gameId) return;
+      if (data.gameId !== gameId && (data as unknown as { roomId?: string }).roomId !== gameId)
+        return;
 
       console.log('useGameLeaderboard: Question ended, refreshing leaderboard');
 
@@ -334,24 +239,20 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
     };
 
     // Register listeners
-    socket.on('game:scores-update', handleScoreUpdate);
-    socket.on('game:rank-change', handleRankChange);
-    socket.on('game:final-results', handleFinalResults);
-    socket.on('game:question-end', handleQuestionEnd);
+    socket.on('game:leaderboard:update', handleLeaderboardUpdate);
+    socket.on('game:question:ended', handleQuestionEnd);
 
     return () => {
       console.log(`useGameLeaderboard: Cleaning up listeners for game ${gameId}`);
 
-      socket.off('game:scores-update', handleScoreUpdate);
-      socket.off('game:rank-change', handleRankChange);
-      socket.off('game:final-results', handleFinalResults);
-      socket.off('game:question-end', handleQuestionEnd);
+      socket.off('game:leaderboard:update', handleLeaderboardUpdate);
+      socket.off('game:question:ended', handleQuestionEnd);
 
-      socket.emit('room:leave', { gameId });
+      socket.emit('room:leave', { roomId: gameId });
 
       listenersSetupRef.current = false;
     };
-  }, [socket, isConnected, gameId, autoRefresh, refreshLeaderboard, events]);
+  }, [socket, isConnected, gameId, autoRefresh, refreshLeaderboard]);
 
   // ========================================================================
   // POLLING (if interval specified)

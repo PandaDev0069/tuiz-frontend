@@ -5,6 +5,19 @@ import { io, Socket } from 'socket.io-client';
 import { cfg } from '@/config/config';
 import { DebugPanel } from '@/components/debug';
 
+const DEVICE_ID_KEY = 'tuiz_device_id';
+const HEARTBEAT_INTERVAL_MS = 30000;
+
+function getOrCreateDeviceId(): string {
+  if (typeof window === 'undefined') return 'server-side';
+  const existing = localStorage.getItem(DEVICE_ID_KEY);
+  if (existing) return existing;
+
+  const generated = `device_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  localStorage.setItem(DEVICE_ID_KEY, generated);
+  return generated;
+}
+
 // Socket context type
 interface SocketContextType {
   socket: Socket | null;
@@ -32,6 +45,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
+  const deviceIdRef = useRef<string>(getOrCreateDeviceId());
+
+  const clearHeartbeat = () => {
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+  };
 
   useEffect(() => {
     // Use the configured API base URL instead of hardcoded localhost
@@ -52,12 +74,29 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     socketInstance.on('connect', () => {
       console.log('Socket.IO connected successfully');
+      socketInstance.emit('ws:connect', {
+        deviceId: deviceIdRef.current,
+        metadata: {
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+          connectedAt: new Date().toISOString(),
+        },
+      });
+      heartbeatRef.current = setInterval(() => {
+        socketInstance.emit('ws:heartbeat');
+      }, HEARTBEAT_INTERVAL_MS);
+      setIsConnected(true);
+      setConnectionError(null);
+    });
+
+    socketInstance.on('ws:connected', (data) => {
+      console.log('Socket.IO registration confirmed', data);
       setIsConnected(true);
       setConnectionError(null);
     });
 
     socketInstance.on('disconnect', (reason) => {
       console.log('Socket.IO disconnected:', reason);
+      clearHeartbeat();
       setIsConnected(false);
     });
 
@@ -91,6 +130,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setConnectionError('Reconnection failed after all attempts');
     });
 
+    socketInstance.on('ws:error', (data) => {
+      console.error('Socket.IO server error:', data);
+      setConnectionError(data.message);
+    });
+
+    socketInstance.on('ws:pong', () => {
+      // Heartbeat acknowledgement
+    });
+
     socketInstance.on('server:hello', () => {
       console.log('Received server hello message');
       // no-op; just verifying connectivity
@@ -101,6 +149,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       console.log('Cleaning up Socket.IO connection');
+      clearHeartbeat();
       socketInstance.close();
       socketRef.current = null;
       setIsConnected(false);

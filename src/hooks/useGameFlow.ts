@@ -10,6 +10,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSocket } from '@/components/providers/SocketProvider';
 import { gameApi, type GameFlow } from '@/services/gameApi';
 
+const DEFAULT_QUESTION_DURATION_MS = 30000;
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -65,22 +67,19 @@ export interface UseGameFlowReturn {
   isConnected: boolean;
 }
 
-interface QuestionStartEvent {
-  gameId: string;
-  questionId: string;
-  questionIndex: number;
-  startTime: string;
+interface SocketQuestionStartedEvent {
+  roomId: string;
+  question: { id: string };
+  endsAt?: number;
 }
 
-interface QuestionEndEvent {
-  gameId: string;
-  questionId: string;
+interface SocketQuestionChangedEvent {
+  roomId: string;
+  question: { id: string };
 }
 
-interface AnswerRevealEvent {
-  gameId: string;
-  questionId: string;
-  correctAnswer: string;
+interface SocketQuestionEndedEvent {
+  roomId: string;
 }
 
 interface GamePauseEvent {
@@ -129,7 +128,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       questionId: string,
       questionIndex: number,
       startTime: string,
-      durationMs: number = 30000, // Default 30 seconds
+      durationMs: number = DEFAULT_QUESTION_DURATION_MS,
     ) => {
       const start = new Date(startTime);
       const end = new Date(start.getTime() + durationMs);
@@ -235,14 +234,28 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         }
 
         setGameFlow(data);
+        const startIso = data.current_question_start_time || new Date().toISOString();
+        const durationMs =
+          data.current_question_end_time && data.current_question_start_time
+            ? new Date(data.current_question_end_time).getTime() -
+              new Date(data.current_question_start_time).getTime()
+            : DEFAULT_QUESTION_DURATION_MS;
+
+        updateTimerState(
+          questionId,
+          data.current_question_index ?? questionIndex ?? 0,
+          startIso,
+          durationMs,
+        );
 
         // Emit WebSocket event
         if (socket && isConnected) {
-          socket.emit('game:question-start', {
-            gameId,
+          const startsAt = new Date(startIso).getTime();
+          socket.emit('game:flow:start', {
+            roomId: gameId,
             questionId,
-            questionIndex: questionIndex || 0,
-            startTime: new Date().toISOString(),
+            startsAt,
+            endsAt: startsAt + durationMs,
           });
         }
 
@@ -257,7 +270,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         setLoading(false);
       }
     },
-    [isHost, gameId, socket, isConnected, events],
+    [isHost, gameId, socket, isConnected, events, updateTimerState],
   );
 
   /**
@@ -288,11 +301,9 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       }
 
       // Emit WebSocket event
-      if (socket && isConnected && gameFlow?.current_question_id) {
-        socket.emit('game:reveal-answer', {
-          gameId,
-          questionId: gameFlow.current_question_id,
-          timestamp: new Date().toISOString(),
+      if (socket && isConnected) {
+        socket.emit('game:flow:end', {
+          roomId: gameId,
         });
       }
 
@@ -323,14 +334,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       setLoading(true);
       setError(null);
 
-      // This will be implemented when we know the next question ID
-      // For now, just emit event
-      if (socket && isConnected) {
-        socket.emit('game:next-question', {
-          gameId,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      console.warn('useGameFlow: nextQuestion called but flow progression is not implemented yet');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to advance question';
       setError(errorMessage);
@@ -340,7 +344,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     } finally {
       setLoading(false);
     }
-  }, [isHost, gameId, socket, isConnected, events]);
+  }, [isHost, gameId, events]);
 
   /**
    * Pause the game (Host only)
@@ -489,35 +493,45 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     listenersSetupRef.current = true;
 
     // Join game room
-    socket.emit('room:join', { gameId });
+    socket.emit('room:join', { roomId: gameId });
 
     // Question start event
-    const handleQuestionStart = (data: QuestionStartEvent) => {
-      if (data.gameId !== gameId) return;
+    const handleQuestionStarted = (data: SocketQuestionStartedEvent) => {
+      if (data.roomId !== gameId) return;
       console.log('useGameFlow: Question started', data);
 
-      updateTimerState(data.questionId, data.questionIndex, data.startTime);
-      events?.onQuestionStart?.(data.questionId, data.questionIndex);
+      const durationMs = data.endsAt
+        ? Math.max(0, data.endsAt - Date.now())
+        : DEFAULT_QUESTION_DURATION_MS;
+      updateTimerState(
+        data.question.id,
+        gameFlow?.current_question_index ?? 0,
+        new Date().toISOString(),
+        durationMs,
+      );
+      events?.onQuestionStart?.(data.question.id, gameFlow?.current_question_index ?? 0);
+      refreshFlow();
+    };
+
+    const handleQuestionChanged = (data: SocketQuestionChangedEvent) => {
+      if (data.roomId !== gameId) return;
+      console.log('useGameFlow: Question changed', data);
+      events?.onQuestionStart?.(data.question.id, gameFlow?.current_question_index ?? 0);
+      refreshFlow();
     };
 
     // Question end event
-    const handleQuestionEnd = (data: QuestionEndEvent) => {
-      if (data.gameId !== gameId) return;
+    const handleQuestionEnd = (data: SocketQuestionEndedEvent) => {
+      if (data.roomId !== gameId) return;
       console.log('useGameFlow: Question ended', data);
 
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
       }
-      events?.onQuestionEnd?.(data.questionId);
-    };
-
-    // Answer reveal event
-    const handleAnswerReveal = (data: AnswerRevealEvent) => {
-      if (data.gameId !== gameId) return;
-      console.log('useGameFlow: Answer revealed', data);
-
-      events?.onAnswerReveal?.(data.questionId, data.correctAnswer);
+      setTimerState((prev) => (prev ? { ...prev, isActive: false, remainingMs: 0 } : null));
+      events?.onQuestionEnd?.(gameFlow?.current_question_id || '');
+      refreshFlow();
     };
 
     // Game pause event
@@ -543,22 +557,22 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     };
 
     // Register listeners
-    socket.on('game:question-start', handleQuestionStart);
-    socket.on('game:question-end', handleQuestionEnd);
-    socket.on('game:reveal-answer', handleAnswerReveal);
+    socket.on('game:question:started', handleQuestionStarted);
+    socket.on('game:question:changed', handleQuestionChanged);
+    socket.on('game:question:ended', handleQuestionEnd);
     socket.on('game:pause', handleGamePause);
     socket.on('game:resume', handleGameResume);
 
     return () => {
       console.log(`useGameFlow: Cleaning up listeners for game ${gameId}`);
 
-      socket.off('game:question-start', handleQuestionStart);
-      socket.off('game:question-end', handleQuestionEnd);
-      socket.off('game:reveal-answer', handleAnswerReveal);
+      socket.off('game:question:started', handleQuestionStarted);
+      socket.off('game:question:changed', handleQuestionChanged);
+      socket.off('game:question:ended', handleQuestionEnd);
       socket.off('game:pause', handleGamePause);
       socket.off('game:resume', handleGameResume);
 
-      socket.emit('room:leave', { gameId });
+      socket.emit('room:leave', { roomId: gameId });
 
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -566,7 +580,16 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
       listenersSetupRef.current = false;
     };
-  }, [socket, isConnected, gameId, events, updateTimerState]);
+  }, [
+    socket,
+    isConnected,
+    gameId,
+    events,
+    updateTimerState,
+    refreshFlow,
+    gameFlow?.current_question_index,
+    gameFlow?.current_question_id,
+  ]);
 
   // ========================================================================
   // INITIALIZATION

@@ -69,31 +69,22 @@ export interface UseGameAnswerReturn {
   isConnected: boolean;
 }
 
-interface AnswerConfirmedEvent {
-  gameId: string;
-  playerId: string;
-  answerId: string;
-}
-
-interface AnswerResultEvent {
-  gameId: string;
+interface AnswerAcceptedEvent {
+  roomId: string;
   playerId: string;
   questionId: string;
-  isCorrect: boolean;
-  pointsEarned: number;
-  correctAnswer?: string;
-  responseTimeMs?: number;
+  submittedAt: string;
 }
 
-interface RevealAnswerEvent {
-  gameId: string;
+interface AnswerStatsUpdateEvent {
+  roomId: string;
   questionId: string;
-  correctAnswer: string;
+  counts: Record<string, number>;
 }
 
-interface QuestionStartEvent {
-  gameId: string;
-  questionId: string;
+interface SocketQuestionStartedEvent {
+  roomId: string;
+  question: { id: string };
 }
 
 // ============================================================================
@@ -168,13 +159,11 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
 
         // Emit WebSocket event
         if (socket && isConnected) {
-          socket.emit('player:answer-submit', {
-            gameId,
+          socket.emit('game:answer:submit', {
+            roomId: gameId,
             playerId,
             questionId,
-            selectedOption,
-            responseTimeMs,
-            timestamp: new Date().toISOString(),
+            answer: selectedOption,
           });
         }
 
@@ -273,86 +262,54 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
     listenersSetupRef.current = true;
 
     // Join game room
-    socket.emit('room:join', { gameId });
+    socket.emit('room:join', { roomId: gameId });
 
     /**
      * Answer confirmation from server
      */
-    const handleAnswerConfirmed = (data: AnswerConfirmedEvent) => {
-      if (data.gameId !== gameId || data.playerId !== playerId) return;
+    const handleAnswerAccepted = (data: AnswerAcceptedEvent) => {
+      if (data.roomId !== gameId || data.playerId !== playerId) return;
 
-      console.log('useGameAnswer: Answer confirmed', data.answerId);
-      events?.onAnswerConfirmed?.(data.answerId);
+      console.log('useGameAnswer: Answer accepted', data.questionId);
+      events?.onAnswerConfirmed?.(data.questionId);
     };
 
     /**
-     * Answer result from server (correctness + points)
+     * Answer stats update from server (aggregate counts)
      */
-    const handleAnswerResult = (data: AnswerResultEvent) => {
-      if (data.gameId !== gameId || data.playerId !== playerId) return;
-
-      console.log('useGameAnswer: Answer result received', data);
-
-      const result: AnswerResult = {
-        questionId: data.questionId,
-        selectedOption: submittedOptionRef.current || '',
-        isCorrect: data.isCorrect,
-        pointsEarned: data.pointsEarned,
-        correctAnswer: data.correctAnswer || '',
-        responseTimeMs: data.responseTimeMs || 0,
-      };
-
-      setAnswerResult(result);
-
-      events?.onAnswerResult?.(result);
-    };
-
-    /**
-     * Answer reveal event (shows correct answer to all)
-     */
-    const handleRevealAnswer = (data: RevealAnswerEvent) => {
-      if (data.gameId !== gameId || data.questionId !== currentQuestionIdRef.current) return;
-
-      console.log('useGameAnswer: Answer revealed', data.correctAnswer);
-
-      // Update result with correct answer if we have a result
-      if (answerResult) {
-        setAnswerResult((prev) => (prev ? { ...prev, correctAnswer: data.correctAnswer } : null));
-      }
-
-      events?.onRevealAnswer?.(data.correctAnswer);
+    const handleAnswerStatsUpdate = (data: AnswerStatsUpdateEvent) => {
+      if (data.roomId !== gameId) return;
+      console.log('useGameAnswer: Answer stats update', data);
     };
 
     /**
      * New question started - clear previous answer
      */
-    const handleQuestionStart = (data: QuestionStartEvent) => {
-      if (data.gameId !== gameId) return;
+    const handleQuestionStart = (data: SocketQuestionStartedEvent) => {
+      if (data.roomId !== gameId) return;
 
       console.log('useGameAnswer: New question started, clearing answer');
       clearAnswer();
-      currentQuestionIdRef.current = data.questionId;
+      currentQuestionIdRef.current = data.question.id;
     };
 
     // Register listeners
-    socket.on('player:answer-confirmed', handleAnswerConfirmed);
-    socket.on('player:answer-result', handleAnswerResult);
-    socket.on('game:reveal-answer', handleRevealAnswer);
-    socket.on('game:question-start', handleQuestionStart);
+    socket.on('game:answer:accepted', handleAnswerAccepted);
+    socket.on('game:answer:stats:update', handleAnswerStatsUpdate);
+    socket.on('game:question:started', handleQuestionStart);
 
     return () => {
       console.log(`useGameAnswer: Cleaning up listeners for player ${playerId}`);
 
-      socket.off('player:answer-confirmed', handleAnswerConfirmed);
-      socket.off('player:answer-result', handleAnswerResult);
-      socket.off('game:reveal-answer', handleRevealAnswer);
-      socket.off('game:question-start', handleQuestionStart);
+      socket.off('game:answer:accepted', handleAnswerAccepted);
+      socket.off('game:answer:stats:update', handleAnswerStatsUpdate);
+      socket.off('game:question:started', handleQuestionStart);
 
-      socket.emit('room:leave', { gameId });
+      socket.emit('room:leave', { roomId: gameId });
 
       listenersSetupRef.current = false;
     };
-  }, [socket, isConnected, gameId, playerId, answerResult, clearAnswer, events]);
+  }, [socket, isConnected, gameId, playerId, clearAnswer, events]);
 
   // ========================================================================
   // QUESTION CHANGE HANDLING
