@@ -1,13 +1,37 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { cfg } from '@/config/config';
 import { DebugPanel } from '@/components/debug';
+
+// Socket context type
+interface SocketContextType {
+  socket: Socket | null;
+  isConnected: boolean;
+  connectionError: string | null;
+}
+
+// Create Socket context
+const SocketContext = createContext<SocketContextType>({
+  socket: null,
+  isConnected: false,
+  connectionError: null,
+});
+
+// Hook to access socket instance
+export function useSocket() {
+  const context = useContext(SocketContext);
+  if (!context) {
+    throw new Error('useSocket must be used within a SocketProvider');
+  }
+  return context;
+}
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     // Use the configured API base URL instead of hardcoded localhost
@@ -23,6 +47,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       reconnectionDelay: 1000,
       forceNew: true,
     });
+
+    socketRef.current = socketInstance;
 
     socketInstance.on('connect', () => {
       console.log('Socket.IO connected successfully');
@@ -76,6 +102,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     return () => {
       console.log('Cleaning up Socket.IO connection');
       socketInstance.close();
+      socketRef.current = null;
       setIsConnected(false);
       setConnectionError(null);
     };
