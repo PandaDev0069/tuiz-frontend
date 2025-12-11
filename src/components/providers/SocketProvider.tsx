@@ -116,10 +116,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [connectionError]);
 
   return (
-    <>
+    <SocketContext.Provider value={{ socket: socketRef.current, isConnected, connectionError }}>
       {/* Debug Panel - only in development */}
       <DebugPanel isSocketConnected={isConnected} socketError={connectionError} />
       {children}
-    </>
+    </SocketContext.Provider>
   );
 }
