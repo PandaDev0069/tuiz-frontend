@@ -24,6 +24,7 @@ function HostWaitingRoomContent() {
   const { socket } = useSocket();
 
   const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
+  const [gameCode, setGameCode] = useState<string | null>(roomCode || null);
   const [gameIdError, setGameIdError] = useState<string | null>(null);
   const isCreatingGameRef = useRef(false);
 
@@ -72,8 +73,27 @@ function HostWaitingRoomContent() {
     // Priority 1: gameId from URL params
     if (gameIdParam) {
       setGameId(gameIdParam);
-      if (roomCode) {
-        sessionStorage.setItem(`game_${roomCode}`, gameIdParam);
+      // If we don't yet have a gameCode, fetch the game to obtain the authoritative code
+      if (!gameCode) {
+        gameApi
+          .getGame(gameIdParam)
+          .then(({ data: game }) => {
+            if (game) {
+              const actualGameCode = game.game_code || game.room_code || '';
+              if (actualGameCode) {
+                setGameCode(actualGameCode);
+                sessionStorage.setItem(`game_${actualGameCode}`, gameIdParam);
+                router.replace(
+                  `/host-waiting-room?code=${actualGameCode}&quizId=${quizId}&gameId=${gameIdParam}`,
+                );
+              }
+            }
+          })
+          .catch((err) => {
+            console.error('Failed to fetch game:', err);
+          });
+      } else {
+        sessionStorage.setItem(`game_${gameCode}`, gameIdParam);
       }
       setGameIdError(null);
       return;
@@ -84,6 +104,7 @@ function HostWaitingRoomContent() {
       const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
       if (storedGameId) {
         setGameId(storedGameId);
+        setGameCode(roomCode);
         setGameIdError(null);
         return;
       }
@@ -108,14 +129,19 @@ function HostWaitingRoomContent() {
             throw new Error(createError?.message || 'Failed to create game');
           }
 
-          setGameId(newGame.id);
-          if (roomCode) {
-            sessionStorage.setItem(`game_${roomCode}`, newGame.id);
+          // Use backend-generated game_code as the canonical code
+          const actualGameCode = newGame.game_code || newGame.room_code || '';
+          if (!actualGameCode) {
+            throw new Error('Game created but no game_code returned from backend');
           }
-          // Update URL with gameId
-          const gameCode = newGame.game_code || newGame.room_code || roomCode;
+
+          setGameId(newGame.id);
+          setGameCode(actualGameCode);
+          sessionStorage.setItem(`game_${actualGameCode}`, newGame.id);
+
+          // Update URL with canonical game_code and gameId
           router.replace(
-            `/host-waiting-room?code=${gameCode}&quizId=${quizId}&gameId=${newGame.id}`,
+            `/host-waiting-room?code=${actualGameCode}&quizId=${quizId}&gameId=${newGame.id}`,
           );
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : 'ゲームの作成に失敗しました';
@@ -148,12 +174,14 @@ function HostWaitingRoomContent() {
         const errorMessage = error?.message || 'ゲームの開始に失敗しました';
         setGameIdError(errorMessage);
         console.error('Failed to start game:', error);
+        setIsStartConfirmOpen(false);
         return;
       }
 
       // Emit WebSocket event to notify all players
+      const actualGameCode = gameCode || roomCode;
       if (socket) {
-        socket.emit('game:started', { roomId: gameId, roomCode });
+        socket.emit('game:started', { roomId: gameId, roomCode: actualGameCode });
       }
 
       // Redirect to game host page
@@ -163,12 +191,16 @@ function HostWaitingRoomContent() {
         err instanceof Error ? err.message : 'ゲームの開始中にエラーが発生しました';
       setGameIdError(errorMessage);
       console.error('Error starting game:', err);
+      setIsStartConfirmOpen(false);
     }
   };
 
   const handleOpenScreen = () => {
     // Open host screen in new window
-    const hostScreenUrl = `/host-screen?code=${roomCode}&quizId=${quizId}`;
+    const actualGameCode = gameCode || roomCode;
+    const hostScreenUrl = `/host-screen?code=${actualGameCode}&quizId=${quizId}${
+      gameId ? `&gameId=${gameId}` : ''
+    }`;
     window.open(hostScreenUrl, 'host-screen', 'width=1200,height=800,scrollbars=yes,resizable=yes');
   };
 
@@ -247,7 +279,7 @@ function HostWaitingRoomContent() {
                 </div>
               )}
               <HostControls
-                roomCode={roomCode}
+                roomCode={gameCode || roomCode}
                 onStartQuiz={handleStartQuiz}
                 onOpenScreen={handleOpenScreen}
                 className="w-full max-w-md h-fit"
@@ -274,7 +306,7 @@ function HostWaitingRoomContent() {
         onClose={() => setIsSettingsOpen(false)}
         playSettings={playSettings}
         onPlaySettingsChange={setPlaySettings}
-        roomCode={roomCode}
+        roomCode={gameCode || roomCode}
       />
 
       {/* Start Game Confirmation Modal */}
@@ -284,7 +316,7 @@ function HostWaitingRoomContent() {
         onConfirm={handleConfirmStartQuiz}
         playerCount={players.length}
         maxPlayers={playSettings.max_players || 400}
-        roomCode={roomCode}
+        roomCode={gameCode || roomCode}
         playSettings={playSettings}
       />
     </PageContainer>

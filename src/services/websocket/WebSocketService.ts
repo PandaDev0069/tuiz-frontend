@@ -8,8 +8,8 @@ import {
   WebSocketServiceEvents,
   ConnectionEvent,
 } from './types';
+import { getOrCreateDeviceId, resetDeviceId } from '@/lib/deviceId';
 
-const DEVICE_ID_KEY = 'tuiz_device_id';
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 
 /**
@@ -39,7 +39,7 @@ export class WebSocketService {
       ...config,
     };
 
-    this.deviceId = this.getOrCreateDeviceId();
+    this.deviceId = getOrCreateDeviceId();
     this.connectionStatus = {
       connected: false,
       deviceId: this.deviceId,
@@ -65,21 +65,6 @@ export class WebSocketService {
       WebSocketService.instance.disconnect();
       WebSocketService.instance = null;
     }
-  }
-
-  private getOrCreateDeviceId(): string {
-    if (typeof window === 'undefined') return 'server-side';
-
-    let deviceId = localStorage.getItem(DEVICE_ID_KEY);
-    if (!deviceId) {
-      deviceId = this.generateDeviceId();
-      localStorage.setItem(DEVICE_ID_KEY, deviceId);
-    }
-    return deviceId;
-  }
-
-  private generateDeviceId(): string {
-    return `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
   private addConnectionEvent(type: ConnectionEvent['type'], data?: unknown): void {
@@ -309,9 +294,8 @@ export class WebSocketService {
 
   // Testing/Debug API
   public clearDeviceId(): void {
-    localStorage.removeItem(DEVICE_ID_KEY);
-    this.deviceId = this.generateDeviceId();
-    localStorage.setItem(DEVICE_ID_KEY, this.deviceId);
+    // Use the library function to reset device ID
+    this.deviceId = resetDeviceId();
   }
 
   public simulateDisconnect(): void {

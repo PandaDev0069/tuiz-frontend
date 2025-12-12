@@ -4,19 +4,9 @@ import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { cfg } from '@/config/config';
 import { DebugPanel } from '@/components/debug';
+import { getOrCreateDeviceId } from '@/lib/deviceId';
 
-const DEVICE_ID_KEY = 'tuiz_device_id';
 const HEARTBEAT_INTERVAL_MS = 30000;
-
-function getOrCreateDeviceId(): string {
-  if (typeof window === 'undefined') return 'server-side';
-  const existing = localStorage.getItem(DEVICE_ID_KEY);
-  if (existing) return existing;
-
-  const generated = `device_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-  localStorage.setItem(DEVICE_ID_KEY, generated);
-  return generated;
-}
 
 // Socket context type
 interface SocketContextType {

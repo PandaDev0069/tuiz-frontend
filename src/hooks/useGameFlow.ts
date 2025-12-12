@@ -53,7 +53,7 @@ export interface UseGameFlowReturn {
   error: string | null;
 
   // Host Actions (only available if isHost=true)
-  startQuestion: (questionId: string, questionIndex?: number) => Promise<void>;
+  startQuestion: (questionId: string, questionIndex?: number) => Promise<GameFlow | void>;
   revealAnswer: () => Promise<void>;
   nextQuestion: () => Promise<void>;
   pauseGame: () => Promise<void>;
@@ -69,7 +69,7 @@ export interface UseGameFlowReturn {
 
 interface SocketQuestionStartedEvent {
   roomId: string;
-  question: { id: string };
+  question: { id: string; index?: number };
   endsAt?: number;
 }
 
@@ -248,18 +248,19 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
           durationMs,
         );
 
-        // Emit WebSocket event
+        // Emit WebSocket event (align with listener: game:question:started)
         if (socket && isConnected) {
           const startsAt = new Date(startIso).getTime();
-          socket.emit('game:flow:start', {
+          socket.emit('game:question:started', {
             roomId: gameId,
-            questionId,
+            question: { id: questionId, index: data.current_question_index ?? questionIndex ?? 0 },
             startsAt,
             endsAt: startsAt + durationMs,
           });
         }
 
         events?.onQuestionStart?.(questionId, questionIndex || 0);
+        return data;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to start question';
         setError(errorMessage);
@@ -300,10 +301,11 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         timerIntervalRef.current = null;
       }
 
-      // Emit WebSocket event
+      // Emit WebSocket event (align with listener: game:question:ended)
       if (socket && isConnected) {
-        socket.emit('game:flow:end', {
+        socket.emit('game:question:ended', {
           roomId: gameId,
+          questionId: gameFlow?.current_question_id,
         });
       }
 
@@ -503,13 +505,13 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       const durationMs = data.endsAt
         ? Math.max(0, data.endsAt - Date.now())
         : DEFAULT_QUESTION_DURATION_MS;
-      updateTimerState(
-        data.question.id,
-        gameFlow?.current_question_index ?? 0,
-        new Date().toISOString(),
-        durationMs,
-      );
-      events?.onQuestionStart?.(data.question.id, gameFlow?.current_question_index ?? 0);
+      const idx =
+        typeof data.question?.index === 'number'
+          ? data.question.index
+          : (gameFlow?.current_question_index ?? 0);
+
+      updateTimerState(data.question.id, idx, new Date().toISOString(), durationMs);
+      events?.onQuestionStart?.(data.question.id, idx);
       refreshFlow();
     };
 
@@ -600,6 +602,20 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       refreshFlow();
     }
   }, [autoSync, gameId, refreshFlow]);
+
+  // Re-sync on socket reconnect
+  useEffect(() => {
+    if (!socket) return;
+    const handleReconnect = () => {
+      if (!gameId) return;
+      socket.emit('room:join', { roomId: gameId });
+      refreshFlow();
+    };
+    socket.on('connect', handleReconnect);
+    return () => {
+      socket.off('connect', handleReconnect);
+    };
+  }, [socket, gameId, refreshFlow]);
 
   // ========================================================================
   // RETURN

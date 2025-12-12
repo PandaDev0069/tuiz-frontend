@@ -110,7 +110,13 @@ function HostQuestionScreenContent() {
         <span className="text-sm text-gray-500">gameId: {gameId || '未指定'}</span>
         <button
           className="px-4 py-2 rounded bg-indigo-600 text-white disabled:bg-gray-400"
-          onClick={() => startQuestion(questionIdParam, questionIndexParam)}
+          onClick={async () => {
+            try {
+              await startQuestion(questionIdParam, questionIndexParam);
+            } catch (e) {
+              console.error('Failed to start question:', e);
+            }
+          }}
           disabled={!gameId}
         >
           質問を開始
@@ -126,7 +132,7 @@ function HostQuestionScreenContent() {
       <HostQuestionScreen
         question={currentQuestion}
         currentTime={currentTimeSeconds}
-        questionNumber={gameFlow?.current_question_index ?? questionIndexParam}
+        questionNumber={(gameFlow?.current_question_index ?? questionIndexParam) + 1}
         totalQuestions={questions.length || 10}
       />
     </div>

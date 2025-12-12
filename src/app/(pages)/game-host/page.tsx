@@ -66,6 +66,14 @@ function HostGameContent() {
 
   const { socket } = useSocket();
 
+  const emitPhaseChange = useCallback(
+    (phase: HostPhase) => {
+      if (!socket || !gameId) return;
+      socket.emit('game:phase:change', { roomId: gameId, phase });
+    },
+    [socket, gameId],
+  );
+
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
 
@@ -199,14 +207,12 @@ function HostGameContent() {
   const handleStartQuestion = useCallback(async () => {
     if (!gameId || !currentQuestion.id) return;
     try {
-      await startQuestion(
-        currentQuestion.id,
-        gameFlow?.current_question_index ?? questionIndexParam,
-      );
+      const nextIndex = gameFlow?.current_question_index ?? questionIndexParam;
+      const flow = await startQuestion(currentQuestion.id, nextIndex);
+      const effectiveIndex =
+        flow?.current_question_index ?? gameFlow?.current_question_index ?? nextIndex;
       setCurrentPhase('question');
-      router.replace(
-        `/game-host?gameId=${gameId}&phase=question&questionIndex=${gameFlow?.current_question_index ?? questionIndexParam}`,
-      );
+      router.replace(`/game-host?gameId=${gameId}&phase=question&questionIndex=${effectiveIndex}`);
     } catch (e) {
       console.error('Failed to start question:', e);
     }
@@ -241,27 +247,33 @@ function HostGameContent() {
         if (currentQuestion.explanation) {
           setCurrentPhase('explanation');
           router.replace(`/game-host?gameId=${gameId}&phase=explanation`);
+          emitPhaseChange('explanation');
         } else {
           setCurrentPhase('podium');
           router.replace(`/game-host?gameId=${gameId}&phase=podium`);
+          emitPhaseChange('podium');
         }
       } else {
         setCurrentPhase('leaderboard');
         router.replace(`/game-host?gameId=${gameId}&phase=leaderboard`);
+        emitPhaseChange('leaderboard');
       }
     } else if (currentPhase === 'leaderboard') {
       if (currentQuestion.explanation) {
         setCurrentPhase('explanation');
         router.replace(`/game-host?gameId=${gameId}&phase=explanation`);
+        emitPhaseChange('explanation');
       } else {
         // Move to next question countdown
         const nextIdx = currentIdx + 1;
         if (nextIdx < totalQ) {
           setCurrentPhase('countdown');
           router.replace(`/game-host?gameId=${gameId}&phase=countdown&questionIndex=${nextIdx}`);
+          emitPhaseChange('countdown');
         } else {
           setCurrentPhase('podium');
           router.replace(`/game-host?gameId=${gameId}&phase=podium`);
+          emitPhaseChange('podium');
         }
       }
     } else if (currentPhase === 'explanation') {
@@ -270,9 +282,11 @@ function HostGameContent() {
       if (nextIdx < totalQ) {
         setCurrentPhase('countdown');
         router.replace(`/game-host?gameId=${gameId}&phase=countdown&questionIndex=${nextIdx}`);
+        emitPhaseChange('countdown');
       } else {
         setCurrentPhase('podium');
         router.replace(`/game-host?gameId=${gameId}&phase=podium`);
+        emitPhaseChange('podium');
       }
     }
   }, [
@@ -284,6 +298,7 @@ function HostGameContent() {
     currentQuestion.explanation,
     gameId,
     router,
+    emitPhaseChange,
   ]);
 
   // Update phase when URL changes
@@ -365,7 +380,7 @@ function HostGameContent() {
         <HostQuestionScreen
           question={currentQuestion}
           currentTime={currentTimeSeconds}
-          questionNumber={gameFlow?.current_question_index ?? questionIndexParam}
+          questionNumber={(gameFlow?.current_question_index ?? questionIndexParam) + 1}
           totalQuestions={questions.length || totalQuestionsParam}
           onStartQuestion={handleStartQuestion}
           onRevealAnswer={handleRevealAnswer}
