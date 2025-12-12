@@ -8,6 +8,7 @@ import {
   HostLeaderboardScreen,
   HostExplanationScreen,
   HostPodiumScreen,
+  PublicCountdownScreen,
 } from '@/components/game';
 import { Question, LeaderboardData } from '@/types/game';
 import { useGameFlow } from '@/hooks/useGameFlow';
@@ -291,6 +292,22 @@ function HostGameContent() {
   }, [phaseParam]);
 
   switch (currentPhase) {
+    case 'countdown':
+      return (
+        <PublicCountdownScreen
+          countdownTime={3}
+          questionNumber={(gameFlow?.current_question_index ?? questionIndexParam) + 1}
+          totalQuestions={questions.length || totalQuestionsParam}
+          onCountdownComplete={() => {
+            // Auto-transition to question phase when countdown completes
+            // The host can then start the question manually
+            setCurrentPhase('question');
+            router.replace(
+              `/game-host?gameId=${gameId}&phase=question&questionIndex=${gameFlow?.current_question_index ?? questionIndexParam}`,
+            );
+          }}
+        />
+      );
     case 'answer_reveal': {
       const totalAnswered = Object.values(answerStats).reduce((sum, count) => sum + count, 0);
       const statistics = currentQuestion.choices.map((choice) => {
