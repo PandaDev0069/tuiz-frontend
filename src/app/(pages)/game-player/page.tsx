@@ -1,7 +1,7 @@
 'use client';
 
-import React, { Suspense, useMemo, useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { Suspense, useMemo, useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   PlayerCountdownScreen,
   PlayerAnswerScreen,
@@ -32,9 +32,10 @@ type PlayerPhase =
   | 'ended';
 
 function PlayerGameContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const gameId = searchParams.get('gameId') || '';
-  const phaseParam = (searchParams.get('phase') as PlayerPhase) || 'question';
+  const phaseParam = (searchParams.get('phase') as PlayerPhase) || 'countdown';
   const questionIdParam = searchParams.get('questionId') || 'placeholder-q1';
   const questionIndexParam = Number(searchParams.get('questionIndex') || '0');
   const totalQuestions = Number(searchParams.get('totalQuestions') || '10');
@@ -42,16 +43,49 @@ function PlayerGameContent() {
   const { deviceId } = useDeviceId();
   const playerId = playerParam || deviceId || 'anonymous-player';
 
-  const { gameFlow, timerState } = useGameFlow({
+  const [currentPhase, setCurrentPhase] = useState<PlayerPhase>(phaseParam);
+
+  const { gameFlow, timerState, isConnected } = useGameFlow({
     gameId,
     autoSync: true,
+    events: {
+      onQuestionStart: (qId, qIndex) => {
+        console.log('Player: Question started', qId, qIndex);
+        setCurrentPhase('question');
+        router.replace(
+          `/game-player?gameId=${gameId}&phase=question&questionIndex=${qIndex}&playerId=${playerId}`,
+        );
+      },
+      onQuestionEnd: () => {
+        console.log('Player: Question ended, moving to answer reveal');
+        setCurrentPhase('answer_reveal');
+        router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+      },
+      onAnswerReveal: () => {
+        console.log('Player: Answer revealed');
+        setCurrentPhase('answer_reveal');
+        router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+      },
+      onGameEnd: () => {
+        console.log('Player: Game ended, moving to podium');
+        setCurrentPhase('podium');
+        router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
+      },
+      onError: (err) => console.error('Player GameFlow Error:', err),
+    },
   });
 
-  const { answerStatus, submitAnswer } = useGameAnswer({
+  const { answerStatus, answerResult, submitAnswer } = useGameAnswer({
     gameId,
     playerId,
     questionId: gameFlow?.current_question_id || null,
     autoReveal: false,
+    events: {
+      onAnswerSubmitted: (submission) => {
+        console.log('Player: Answer submitted', submission);
+      },
+      onError: (err) => console.error('Player Answer Error:', err),
+    },
   });
 
   const { leaderboard } = useGameLeaderboard({
@@ -85,9 +119,9 @@ function PlayerGameContent() {
     loadQuiz();
   }, [gameId]);
 
-  // Listen for answer stats updates
+  // Listen for answer stats updates and phase changes
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !isConnected || !gameId) return;
 
     const handleStatsUpdate = (data: {
       roomId: string;
@@ -99,11 +133,22 @@ function PlayerGameContent() {
       }
     };
 
+    // Listen for phase transitions from host
+    const handlePhaseChange = (data: { roomId: string; phase: PlayerPhase }) => {
+      if (data.roomId === gameId) {
+        setCurrentPhase(data.phase);
+        router.replace(`/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId}`);
+      }
+    };
+
     socket.on('game:answer:stats:update', handleStatsUpdate);
+    socket.on('game:phase:change', handlePhaseChange);
+
     return () => {
       socket.off('game:answer:stats:update', handleStatsUpdate);
+      socket.off('game:phase:change', handlePhaseChange);
     };
-  }, [socket, gameId, gameFlow?.current_question_id]);
+  }, [socket, isConnected, gameId, gameFlow?.current_question_id, playerId, router]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -171,21 +216,34 @@ function PlayerGameContent() {
     setSelectedAnswer(answerId);
   };
 
-  const handleAnswerSubmit = async () => {
+  const handleAnswerSubmit = useCallback(async () => {
     if (!selectedAnswer || !gameFlow?.current_question_id) return;
     try {
-      await submitAnswer(selectedAnswer, timerState ? timerState.remainingMs : 0);
+      const responseTimeMs = timerState
+        ? currentQuestion.timeLimit * 1000 - timerState.remainingMs
+        : 0;
+      await submitAnswer(selectedAnswer, responseTimeMs);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to submit answer:', err);
     }
-  };
+  }, [
+    selectedAnswer,
+    gameFlow?.current_question_id,
+    timerState,
+    currentQuestion.timeLimit,
+    submitAnswer,
+  ]);
 
+  // Use answerResult from hook if available, otherwise construct from local state
   const revealPayload: AnswerResult = useMemo(() => {
-    const playerChoice = selectedAnswer
-      ? currentQuestion.choices.find((c) => c.id === selectedAnswer)
-      : undefined;
+    // answerResult from hook contains partial data (questionId, selectedOption, isCorrect, etc.)
+    // We need to construct the full AnswerResult with question and statistics
+    const playerChoice = answerResult?.selectedOption
+      ? currentQuestion.choices.find((c) => c.id === answerResult.selectedOption)
+      : selectedAnswer
+        ? currentQuestion.choices.find((c) => c.id === selectedAnswer)
+        : undefined;
 
-    // Calculate statistics from answerStats
     const totalAnswered = Object.values(answerStats).reduce((sum, count) => sum + count, 0);
     const statistics = currentQuestion.choices.map((choice) => {
       const count = answerStats[choice.id] || 0;
@@ -196,27 +254,86 @@ function PlayerGameContent() {
       };
     });
 
+    // Determine if answer is correct
+    const isCorrect =
+      answerResult?.isCorrect ??
+      (playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false);
+
     return {
       question: currentQuestion,
       correctAnswer: currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId)!,
       playerAnswer: playerChoice,
-      isCorrect: playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false,
+      isCorrect,
       statistics,
       totalPlayers: leaderboard.length || 0,
       totalAnswered,
     };
-  }, [currentQuestion, selectedAnswer, answerStats, leaderboard.length]);
+  }, [answerResult, currentQuestion, selectedAnswer, answerStats, leaderboard.length]);
+
+  // Update phase when URL changes
+  useEffect(() => {
+    setCurrentPhase(phaseParam);
+  }, [phaseParam]);
+
+  // Clear selected answer when question changes
+  useEffect(() => {
+    if (gameFlow?.current_question_id && gameFlow.current_question_id !== questionIdParam) {
+      setSelectedAnswer(undefined);
+    }
+  }, [gameFlow?.current_question_id, questionIdParam]);
 
   // Phase rendering
   if (!gameId) {
-    return <div className="p-6 text-red-600">gameId が指定されていません。</div>;
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="p-6 text-red-600 text-xl">gameId が指定されていません。</div>
+      </div>
+    );
   }
 
   if (!gameFlow) {
-    return <div className="p-6">ゲーム状態を読み込み中...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-cyan-900 via-blue-900 to-purple-900">
+        <div className="text-center">
+          <div className="p-6 text-white text-xl mb-4">ゲーム状態を読み込み中...</div>
+          <div className="flex justify-center space-x-2">
+            <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
+            <div
+              className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
+              style={{ animationDelay: '0.2s' }}
+            ></div>
+            <div
+              className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+              style={{ animationDelay: '0.4s' }}
+            ></div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  switch (phaseParam) {
+  if (!isConnected) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-cyan-900 via-blue-900 to-purple-900">
+        <div className="text-center">
+          <div className="p-6 text-yellow-400 text-xl mb-4">接続を確立中...</div>
+          <div className="flex justify-center space-x-2">
+            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-bounce"></div>
+            <div
+              className="w-2 h-2 bg-yellow-400 rounded-full animate-bounce"
+              style={{ animationDelay: '0.2s' }}
+            ></div>
+            <div
+              className="w-2 h-2 bg-yellow-400 rounded-full animate-bounce"
+              style={{ animationDelay: '0.4s' }}
+            ></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  switch (currentPhase) {
     case 'countdown':
       return (
         <PlayerCountdownScreen
@@ -224,6 +341,10 @@ function PlayerGameContent() {
           questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
           totalQuestions={questions.length || totalQuestions}
           isMobile={isMobile}
+          onCountdownComplete={() => {
+            // Countdown complete - phase will transition to question via WebSocket event
+            console.log('Countdown complete, waiting for question start');
+          }}
         />
       );
     case 'question':
@@ -233,7 +354,7 @@ function PlayerGameContent() {
           question={currentQuestion}
           currentTime={currentTimeSeconds}
           questionNumber={gameFlow.current_question_index ?? questionIndexParam}
-          totalQuestions={totalQuestions}
+          totalQuestions={questions.length || totalQuestions}
           onAnswerSelect={handleAnswerSelect}
           onAnswerSubmit={handleAnswerSubmit}
           isMobile={isMobile}
