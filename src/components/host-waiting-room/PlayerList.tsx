@@ -18,6 +18,7 @@ interface PlayerListProps {
   onPlayerBan: (playerId: string) => void;
   onAddPlayer: () => void;
   className?: string;
+  isLoading?: boolean;
 }
 
 export const PlayerList: React.FC<PlayerListProps> = ({
@@ -25,6 +26,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({
   onPlayerBan,
   onAddPlayer,
   className = '',
+  isLoading = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const { openModal, WarningModalComponent } = useWarningModal();
@@ -96,7 +98,12 @@ export const PlayerList: React.FC<PlayerListProps> = ({
 
         {/* Players List */}
         <div className="flex-1 overflow-y-auto space-y-2 max-h-[400px]">
-          {visiblePlayers.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2">プレイヤーを読み込み中...</p>
+            </div>
+          ) : visiblePlayers.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               {searchQuery ? '検索結果が見つかりません' : 'プレイヤーがいません'}
             </div>

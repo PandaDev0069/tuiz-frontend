@@ -90,6 +90,41 @@ export interface Answer {
   answered_at: string;
 }
 
+export interface AnswerReport {
+  total_answers: number;
+  correct_answers: number;
+  incorrect_answers: number;
+  questions: Array<{
+    question_id: string;
+    question_number: number;
+    answer_id: string | null;
+    is_correct: boolean;
+    time_taken: number; // seconds
+    points_earned: number;
+    answered_at: string; // ISO timestamp
+  }>;
+  streaks?: {
+    current_streak: number;
+    max_streak: number;
+  };
+  timing?: {
+    average_response_time: number;
+    fastest_response: number;
+    slowest_response: number;
+  };
+}
+
+export interface GamePlayerData {
+  id: string;
+  player_id: string;
+  player_device_id: string;
+  game_id: string;
+  score: number;
+  answer_report: AnswerReport;
+  created_at: string; // ISO timestamp
+  updated_at: string; // ISO timestamp
+}
+
 export interface ApiError {
   error: string;
   message?: string;
@@ -112,10 +147,11 @@ class GameApiClient {
    */
   private getAuthHeader(): Record<string, string> {
     try {
-      const authData = localStorage.getItem('tuiz_auth_data');
-      if (!authData) return {};
+      // Auth service stores session in 'tuiz_session' key
+      const sessionStr = localStorage.getItem('tuiz_session');
+      if (!sessionStr) return {};
 
-      const { session } = JSON.parse(authData);
+      const session = JSON.parse(sessionStr);
       if (!session?.access_token) return {};
 
       return {
@@ -174,15 +210,29 @@ class GameApiClient {
   /**
    * POST /games
    * Create a new game session
+   * Backend returns { game: Game }, so we need to unwrap it
    */
   async createGame(quizSetId: string, gameSettings?: Record<string, unknown>) {
-    return this.request<Game>('/games', {
+    const result = await this.request<{ game: Game }>('/games', {
       method: 'POST',
       body: JSON.stringify({
         quiz_set_id: quizSetId,
         game_settings: gameSettings || {},
       }),
     });
+
+    // Unwrap the game from the response
+    if (result.data?.game) {
+      return {
+        data: result.data.game,
+        error: result.error,
+      };
+    }
+
+    return {
+      data: null,
+      error: result.error || { error: 'invalid_response', message: 'Game not found in response' },
+    };
   }
 
   /**

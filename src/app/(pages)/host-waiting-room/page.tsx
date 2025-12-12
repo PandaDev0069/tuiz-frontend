@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense, useEffect, useRef } from 'react';
+import React, { useState, Suspense, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { HostSettingsModal } from '@/components/ui/overlays/host-settings-modal';
@@ -45,20 +45,114 @@ function HostWaitingRoomContent() {
   // Start game confirmation modal state
   const [isStartConfirmOpen, setIsStartConfirmOpen] = useState(false);
 
-  // Mock player data for now - will be replaced with real-time data
-  const [players, setPlayers] = useState([
-    { id: '1', name: 'プレイヤー1', joinedAt: new Date(), isHost: true },
-    { id: '2', name: 'プレイヤー2', joinedAt: new Date() },
-    { id: '3', name: 'プレイヤー3', joinedAt: new Date() },
-    { id: '4', name: 'プレイヤー4', joinedAt: new Date() },
-    { id: '5', name: 'プレイヤー5', joinedAt: new Date() },
-  ]);
+  // Player data from backend
+  const [players, setPlayers] = useState<
+    Array<{
+      id: string;
+      name: string;
+      joinedAt: Date;
+      isBanned?: boolean;
+      isHost?: boolean;
+    }>
+  >([]);
+  const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
+
+  // Fetch players from backend
+  const fetchPlayers = useCallback(async () => {
+    if (!gameId) return;
+
+    try {
+      setIsLoadingPlayers(true);
+      const { data: backendPlayers, error } = await gameApi.getPlayers(gameId);
+
+      if (error || !backendPlayers) {
+        console.error('Failed to fetch players:', error);
+        return;
+      }
+
+      // Map backend Player format to frontend format
+      const mappedPlayers = backendPlayers.map((player) => ({
+        id: player.id,
+        name: player.display_name,
+        joinedAt: new Date(player.joined_at),
+        isBanned: player.is_kicked,
+        isHost: player.is_host,
+      }));
+
+      setPlayers(mappedPlayers);
+    } catch (err) {
+      console.error('Error fetching players:', err);
+    } finally {
+      setIsLoadingPlayers(false);
+    }
+  }, [gameId]);
+
+  // Fetch players when gameId is available
+  useEffect(() => {
+    if (gameId) {
+      fetchPlayers();
+
+      // Set up polling to refresh player list every 3 seconds
+      const pollInterval = setInterval(() => {
+        fetchPlayers();
+      }, 3000);
+
+      return () => clearInterval(pollInterval);
+    }
+  }, [gameId, fetchPlayers]);
+
+  // Listen for WebSocket events for real-time player updates
+  useEffect(() => {
+    if (!socket || !gameId) return;
+
+    // Join the game room to receive events
+    socket.emit('room:join', { roomId: gameId });
+
+    // Listen for player join/leave events
+    const handlePlayerJoined = () => {
+      // Refresh player list when a player joins
+      fetchPlayers();
+    };
+
+    const handlePlayerLeft = () => {
+      // Refresh player list when a player leaves
+      fetchPlayers();
+    };
+
+    // Listen for room user events (these fire when players join/leave the room)
+    socket.on('room:user-joined', handlePlayerJoined);
+    socket.on('room:user-left', handlePlayerLeft);
+
+    // Also listen for game-specific player events if they exist
+    socket.on('game:player-joined', handlePlayerJoined);
+    socket.on('game:player-left', handlePlayerLeft);
+
+    return () => {
+      socket.off('room:user-joined', handlePlayerJoined);
+      socket.off('room:user-left', handlePlayerLeft);
+      socket.off('game:player-joined', handlePlayerJoined);
+      socket.off('game:player-left', handlePlayerLeft);
+      socket.emit('room:leave', { roomId: gameId });
+    };
+  }, [socket, gameId, fetchPlayers]);
 
   // Player management functions
-  const handlePlayerBan = (playerId: string) => {
-    setPlayers((prev) =>
-      prev.map((player) => (player.id === playerId ? { ...player, isBanned: true } : player)),
-    );
+  const handlePlayerBan = async (playerId: string) => {
+    if (!gameId) return;
+
+    try {
+      // Call backend API to kick player
+      const { error } = await gameApi.kickPlayer(gameId, playerId);
+      if (error) {
+        console.error('Failed to ban player:', error);
+        return;
+      }
+
+      // Refresh player list after banning
+      await fetchPlayers();
+    } catch (err) {
+      console.error('Error banning player:', err);
+    }
   };
 
   const handleStartQuiz = () => {
@@ -205,12 +299,9 @@ function HostWaitingRoomContent() {
   };
 
   const handleAddPlayer = () => {
-    const newPlayer = {
-      id: (players.length + 1).toString(),
-      name: `プレイヤー${players.length + 1}`,
-      joinedAt: new Date(),
-    };
-    setPlayers((prev) => [...prev, newPlayer]);
+    // Remove this function - players join via the join endpoint, not manually
+    // This was only for testing with mock data
+    console.warn('handleAddPlayer is deprecated - players join via the join endpoint');
   };
 
   const handleRoomLockToggle = (isLocked: boolean) => {
@@ -267,6 +358,7 @@ function HostWaitingRoomContent() {
                 onPlayerBan={handlePlayerBan}
                 onAddPlayer={handleAddPlayer}
                 className="h-full"
+                isLoading={isLoadingPlayers}
               />
             </div>
 
