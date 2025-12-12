@@ -127,7 +127,7 @@ function HostQuestionScreenContent() {
         question={currentQuestion}
         currentTime={currentTimeSeconds}
         questionNumber={gameFlow?.current_question_index ?? questionIndexParam}
-        totalQuestions={10}
+        totalQuestions={questions.length || 10}
       />
     </div>
   );
