@@ -109,6 +109,8 @@ function HostGameContent() {
   const currentQuestion: Question = useMemo(() => {
     const idx = gameFlow?.current_question_index ?? questionIndexParam;
     const questionData = questions[idx];
+
+    // If we have real question data, use it
     if (questionData) {
       return {
         id: questionData.id,
@@ -132,19 +134,25 @@ function HostGameContent() {
         type: 'multiple_choice_4',
       };
     }
+
+    // Fallback: Return a minimal question structure while loading
+    // This should only appear briefly while quiz data is being fetched
     return {
       id: gameFlow?.current_question_id || questionIdParam,
-      text: '問題の内容は近日バックエンド連携で差し替え予定です',
+      text:
+        questions.length === 0
+          ? 'クイズデータを読み込み中...'
+          : `問題 ${(idx ?? 0) + 1} を読み込み中...`,
       image: undefined,
       timeLimit: Math.max(5, Math.round((timerState?.remainingMs || 10000) / 1000)),
       choices: [
-        { id: 'a', text: '選択肢 A', letter: 'A' },
-        { id: 'b', text: '選択肢 B', letter: 'B' },
-        { id: 'c', text: '選択肢 C', letter: 'C' },
-        { id: 'd', text: '選択肢 D', letter: 'D' },
+        { id: 'loading-1', text: '読み込み中...', letter: 'A' },
+        { id: 'loading-2', text: '読み込み中...', letter: 'B' },
+        { id: 'loading-3', text: '読み込み中...', letter: 'C' },
+        { id: 'loading-4', text: '読み込み中...', letter: 'D' },
       ],
-      correctAnswerId: 'a',
-      explanation: '解説は後で表示されます。',
+      correctAnswerId: 'loading-1',
+      explanation: undefined,
       type: 'multiple_choice_4',
     };
   }, [
