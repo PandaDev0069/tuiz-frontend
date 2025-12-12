@@ -127,7 +127,11 @@ function PlayerQuestionScreenContent() {
   const handleAnswerSubmit = async () => {
     if (!selectedAnswer || !gameFlow?.current_question_id) return;
     try {
-      await submitAnswer(selectedAnswer, timerState ? timerState.remainingMs : 0);
+      // Calculate response time: total time limit - remaining time = elapsed time
+      const responseTimeMs = timerState
+        ? currentQuestion.timeLimit * 1000 - timerState.remainingMs
+        : 0;
+      await submitAnswer(selectedAnswer, responseTimeMs);
     } catch (err) {
       console.error(err);
     }
