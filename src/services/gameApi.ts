@@ -354,22 +354,29 @@ class GameApiClient {
   // ==========================================================================
 
   /**
-   * POST /games/:gameId/players/:playerId/answers
+   * POST /games/:gameId/players/:playerId/answer
    * Submit an answer for a question
+   * Backend expects: question_id, question_number, answer_id, is_correct, time_taken (seconds), points_earned
    */
   async submitAnswer(
     gameId: string,
     playerId: string,
     questionId: string,
-    selectedOption: string,
-    responseTimeMs: number,
+    questionNumber: number,
+    answerId: string | null,
+    isCorrect: boolean,
+    timeTakenSeconds: number,
+    pointsEarned: number = 0,
   ) {
-    return this.request<Answer>(`/games/${gameId}/players/${playerId}/answers`, {
+    return this.request<GamePlayerData>(`/games/${gameId}/players/${playerId}/answer`, {
       method: 'POST',
       body: JSON.stringify({
         question_id: questionId,
-        selected_option: selectedOption,
-        response_time_ms: responseTimeMs,
+        question_number: questionNumber,
+        answer_id: answerId,
+        is_correct: isCorrect,
+        time_taken: timeTakenSeconds,
+        points_earned: pointsEarned,
       }),
     });
   }

@@ -75,10 +75,18 @@ function PlayerGameContent() {
     },
   });
 
+  // Note: correctAnswerId will be passed after currentQuestion is computed below
+  const [correctAnswerIdState, setCorrectAnswerIdState] = useState<string | null>(null);
+
   const { answerStatus, answerResult, submitAnswer } = useGameAnswer({
     gameId,
     playerId,
     questionId: gameFlow?.current_question_id || null,
+    questionNumber:
+      gameFlow && gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+        ? gameFlow.current_question_index + 1
+        : undefined,
+    correctAnswerId: correctAnswerIdState || undefined,
     autoReveal: false,
     events: {
       onAnswerSubmitted: (submission) => {
@@ -158,6 +166,7 @@ function PlayerGameContent() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Get current question (after questions are loaded) - must be after questions state
   const currentQuestion: Question = useMemo(() => {
     const idx = gameFlow?.current_question_index ?? questionIndexParam;
     const questionData = questions[idx];
@@ -207,6 +216,13 @@ function PlayerGameContent() {
     questions,
     timerState?.remainingMs,
   ]);
+
+  // Update correctAnswerId when currentQuestion changes
+  useEffect(() => {
+    if (currentQuestion?.correctAnswerId) {
+      setCorrectAnswerIdState(currentQuestion.correctAnswerId);
+    }
+  }, [currentQuestion?.correctAnswerId]);
 
   const currentTimeSeconds = Math.max(
     0,

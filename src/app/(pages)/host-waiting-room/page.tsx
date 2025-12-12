@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense, useEffect } from 'react';
+import React, { useState, Suspense, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { HostSettingsModal } from '@/components/ui/overlays/host-settings-modal';
@@ -25,6 +25,7 @@ function HostWaitingRoomContent() {
 
   const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
   const [gameIdError, setGameIdError] = useState<string | null>(null);
+  const isCreatingGameRef = useRef(false);
 
   // Settings modal state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -89,7 +90,8 @@ function HostWaitingRoomContent() {
     }
 
     // Priority 3: Create new game if we have quizId but no gameId
-    if (quizId && !gameIdParam) {
+    if (quizId && !gameIdParam && !isCreatingGameRef.current) {
+      isCreatingGameRef.current = true;
       const createGame = async () => {
         try {
           setGameIdError(null);
@@ -119,6 +121,8 @@ function HostWaitingRoomContent() {
           const errorMessage = err instanceof Error ? err.message : 'ゲームの作成に失敗しました';
           setGameIdError(errorMessage);
           console.error('Failed to create game:', err);
+        } finally {
+          isCreatingGameRef.current = false;
         }
       };
 

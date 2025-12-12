@@ -48,6 +48,8 @@ export interface UseGameAnswerOptions {
   gameId: string;
   playerId: string;
   questionId: string | null; // Current question
+  questionNumber?: number; // Current question number (1-indexed)
+  correctAnswerId?: string | null; // Correct answer ID for validation
   autoReveal?: boolean; // Auto-reveal after submission
   events?: GameAnswerEvents;
 }
@@ -92,7 +94,15 @@ interface SocketQuestionStartedEvent {
 // ============================================================================
 
 export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerReturn {
-  const { gameId, playerId, questionId, autoReveal = false, events } = options;
+  const {
+    gameId,
+    playerId,
+    questionId,
+    questionNumber,
+    correctAnswerId,
+    autoReveal = false,
+    events,
+  } = options;
   const { socket, isConnected } = useSocket();
 
   // State
@@ -129,22 +139,50 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         throw new Error('Answer already submitted for this question');
       }
 
+      if (!questionNumber || questionNumber < 1) {
+        throw new Error('Question number is required');
+      }
+
       try {
         setAnswerStatus((prev) => ({ ...prev, isProcessing: true }));
         setError(null);
 
-        // Submit to API
+        // Determine if answer is correct
+        const isCorrect = correctAnswerId ? selectedOption === correctAnswerId : false;
+
+        // Convert milliseconds to seconds
+        const timeTakenSeconds = responseTimeMs / 1000;
+
+        // Calculate points (basic calculation - backend may override)
+        // Points = base points (100) + time bonus (if correct and fast)
+        // Note: Backend will calculate actual points based on game settings
+        let pointsEarned = 0;
+        if (isCorrect) {
+          const basePoints = 100;
+          // Simple time bonus calculation (backend will use actual game settings)
+          const timeBonus = Math.max(0, Math.floor((10000 - responseTimeMs) / 100));
+          pointsEarned = basePoints + timeBonus;
+        }
+
+        // Submit to API with backend-expected format
         const { data, error: apiError } = await gameApi.submitAnswer(
           gameId,
           playerId,
           questionId,
-          selectedOption,
-          responseTimeMs,
+          questionNumber,
+          selectedOption, // answer_id
+          isCorrect,
+          timeTakenSeconds,
+          pointsEarned,
         );
 
         if (apiError || !data) {
           throw new Error(apiError?.message || 'Failed to submit answer');
         }
+
+        // Extract answer info from response (GamePlayerData contains answer_report)
+        const answerReport = data.answer_report;
+        const lastAnswer = answerReport?.questions?.[answerReport.questions.length - 1];
 
         // Update local state
         setAnswerStatus({
@@ -154,8 +192,17 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
           isProcessing: false,
         });
 
-        // Add to history
-        setAnswersHistory((prev) => [...prev, data]);
+        // Create answer result from response
+        const answerData: AnswerResult = {
+          questionId,
+          selectedOption,
+          isCorrect: lastAnswer?.is_correct ?? isCorrect,
+          pointsEarned: lastAnswer?.points_earned ?? pointsEarned,
+          correctAnswer: correctAnswerId || '',
+          responseTimeMs,
+        };
+
+        setAnswerResult(answerData);
 
         // Emit WebSocket event
         if (socket && isConnected) {
@@ -173,16 +220,9 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
           responseTimeMs,
         });
 
-        // Auto-reveal if enabled and answer is processed
-        if (autoReveal && data.is_correct !== null) {
-          setAnswerResult({
-            questionId,
-            selectedOption,
-            isCorrect: data.is_correct,
-            pointsEarned: data.points_earned,
-            correctAnswer: '', // Will be filled by reveal event
-            responseTimeMs,
-          });
+        // Auto-reveal if enabled
+        if (autoReveal) {
+          events?.onAnswerResult?.(answerData);
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to submit answer';
@@ -197,6 +237,8 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
       gameId,
       playerId,
       questionId,
+      questionNumber,
+      correctAnswerId,
       answerStatus.hasAnswered,
       socket,
       isConnected,
