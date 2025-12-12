@@ -2,14 +2,17 @@
 
 import React, { Suspense, useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { PlayerCountdownScreen } from '@/components/game';
+import { useSocket } from '@/components/providers/SocketProvider';
 
 function WaitingRoomContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || '';
   const roomCode = searchParams.get('code') || '';
+  const { socket, isConnected } = useSocket();
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(true);
@@ -24,6 +27,28 @@ function WaitingRoomContent() {
 
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Listen for game start event
+  useEffect(() => {
+    if (!socket || !isConnected || !roomCode) return;
+
+    const handleGameStarted = (data: { roomId: string; roomCode: string }) => {
+      if (data.roomCode === roomCode) {
+        // Redirect to player game page
+        router.push(`/game-player?gameId=${data.roomId}&phase=countdown&playerId=${playerName}`);
+      }
+    };
+
+    socket.on('game:started', handleGameStarted);
+
+    // Join room to receive events
+    socket.emit('room:join', { roomId: roomCode });
+
+    return () => {
+      socket.off('game:started', handleGameStarted);
+      socket.emit('room:leave', { roomId: roomCode });
+    };
+  }, [socket, isConnected, roomCode, playerName, router]);
 
   // Countdown state
   const [showCountdown, setShowCountdown] = useState(false);

@@ -15,6 +15,11 @@ interface HostQuestionScreenProps {
   currentTime: number;
   questionNumber: number;
   totalQuestions: number;
+  onStartQuestion?: () => void;
+  onRevealAnswer?: () => void;
+  isLive?: boolean;
+  isLoading?: boolean;
+  errorMessage?: string;
 }
 
 export const HostQuestionScreen: React.FC<HostQuestionScreenProps> = ({
@@ -22,6 +27,11 @@ export const HostQuestionScreen: React.FC<HostQuestionScreenProps> = ({
   currentTime,
   questionNumber,
   totalQuestions,
+  onStartQuestion,
+  onRevealAnswer,
+  isLive = false,
+  isLoading = false,
+  errorMessage,
 }) => {
   return (
     <PageContainer className="h-screen">
@@ -68,6 +78,37 @@ export const HostQuestionScreen: React.FC<HostQuestionScreenProps> = ({
               </h1>
             </div>
           </div>
+
+          {/* Host Controls */}
+          {(onStartQuestion || onRevealAnswer) && (
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20 flex gap-4">
+              {!isLive && onStartQuestion && (
+                <button
+                  onClick={onStartQuestion}
+                  disabled={isLoading}
+                  className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? '開始中...' : '質問を開始'}
+                </button>
+              )}
+              {isLive && onRevealAnswer && (
+                <button
+                  onClick={onRevealAnswer}
+                  disabled={isLoading}
+                  className="px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? '処理中...' : '答えを表示'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Error Message */}
+          {errorMessage && (
+            <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-20 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg">
+              {errorMessage}
+            </div>
+          )}
         </div>
       </Main>
     </PageContainer>

@@ -168,6 +168,7 @@ interface HostAnswerRevealScreenProps {
   questionNumber?: number;
   totalQuestions?: number;
   onTimeExpired?: () => void; // Callback for when timer expires
+  onNext?: () => void; // Callback for manual next action
 }
 
 export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({
@@ -176,6 +177,7 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({
   questionNumber = 1,
   totalQuestions = 10,
   onTimeExpired,
+  onNext,
 }) => {
   const { question, correctAnswer, statistics } = answerResult;
   const router = useRouter();
@@ -374,6 +376,18 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({
               })}
             </div>
           </div>
+
+          {/* Next Button */}
+          {onNext && (
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20">
+              <button
+                onClick={onNext}
+                className="px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+              >
+                次へ
+              </button>
+            </div>
+          )}
         </div>
       </Main>
     </PageContainer>

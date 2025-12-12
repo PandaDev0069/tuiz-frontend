@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useState, Suspense, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { HostSettingsModal } from '@/components/ui/overlays/host-settings-modal';
 import {
@@ -12,11 +12,17 @@ import {
 } from '@/components/host-waiting-room';
 import { Settings } from 'lucide-react';
 import { QuizPlaySettings } from '@/types/quiz';
+import { gameApi } from '@/services/gameApi';
+import { useSocket } from '@/components/providers/SocketProvider';
 
 function HostWaitingRoomContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const roomCode = searchParams.get('code') || '';
   const quizId = searchParams.get('quizId') || '';
+  const { socket } = useSocket();
+
+  const [gameId, setGameId] = useState<string | null>(null);
 
   // Settings modal state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -55,14 +61,48 @@ function HostWaitingRoomContent() {
     setIsStartConfirmOpen(true);
   };
 
-  const handleConfirmStartQuiz = () => {
-    /**
-     * Implementation pending: Actual quiz start logic with backend integration
-     * Required: WebSocket event to notify all players, database state update
-     */
-    console.log('Starting quiz with settings:', playSettings);
-    // Redirect to host control panel
-    window.location.href = `/host-control-panel?code=${roomCode}&quizId=${quizId}`;
+  // Get gameId from room code (assuming game exists)
+  useEffect(() => {
+    if (!roomCode) return;
+    const fetchGame = async () => {
+      try {
+        // Try to find game by room code - if API doesn't support this, we'll need to store gameId
+        // For now, assume gameId is stored or passed via URL
+        const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
+        if (storedGameId) {
+          setGameId(storedGameId);
+        }
+      } catch (err) {
+        console.error('Failed to fetch game:', err);
+      }
+    };
+    fetchGame();
+  }, [roomCode]);
+
+  const handleConfirmStartQuiz = async () => {
+    if (!gameId) {
+      console.error('Game ID not available');
+      return;
+    }
+
+    try {
+      // Start the game via API
+      const { data: game, error } = await gameApi.startGame(gameId);
+      if (error || !game) {
+        console.error('Failed to start game:', error);
+        return;
+      }
+
+      // Emit WebSocket event to notify all players
+      if (socket) {
+        socket.emit('game:started', { roomId: gameId, roomCode });
+      }
+
+      // Redirect to game host page
+      router.push(`/game-host?gameId=${gameId}&phase=countdown`);
+    } catch (err) {
+      console.error('Error starting game:', err);
+    }
   };
 
   const handleOpenScreen = () => {
