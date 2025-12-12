@@ -68,7 +68,7 @@ export interface UseGameLeaderboardReturn {
 }
 
 interface QuestionEndEvent {
-  gameId: string;
+  roomId: string;
 }
 
 // ============================================================================
@@ -228,8 +228,7 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
      * Question end - refresh leaderboard if auto-refresh enabled
      */
     const handleQuestionEnd = (data: QuestionEndEvent) => {
-      if (data.gameId !== gameId && (data as unknown as { roomId?: string }).roomId !== gameId)
-        return;
+      if (data.roomId !== gameId) return;
 
       console.log('useGameLeaderboard: Question ended, refreshing leaderboard');
 

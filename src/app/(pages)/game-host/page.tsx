@@ -93,8 +93,9 @@ function HostGameContent() {
     const loadQuiz = async () => {
       try {
         const { data: game } = await gameApi.getGame(gameId);
-        if (game?.quiz_id) {
-          const quiz = await quizService.getQuizComplete(game.quiz_id);
+        const quizId = game?.quiz_id || game?.quiz_set_id;
+        if (quizId) {
+          const quiz = await quizService.getQuizComplete(quizId);
           const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
           setQuestions(sorted);
         }

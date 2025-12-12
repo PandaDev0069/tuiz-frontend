@@ -20,9 +20,11 @@ function HostWaitingRoomContent() {
   const searchParams = useSearchParams();
   const roomCode = searchParams.get('code') || '';
   const quizId = searchParams.get('quizId') || '';
+  const gameIdParam = searchParams.get('gameId') || '';
   const { socket } = useSocket();
 
-  const [gameId, setGameId] = useState<string | null>(null);
+  const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
+  const [gameIdError, setGameIdError] = useState<string | null>(null);
 
   // Settings modal state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -61,34 +63,86 @@ function HostWaitingRoomContent() {
     setIsStartConfirmOpen(true);
   };
 
-  // Get gameId from room code (assuming game exists)
+  // Get or create game
   useEffect(() => {
-    if (!roomCode) return;
-    const fetchGame = async () => {
-      try {
-        // Try to find game by room code - if API doesn't support this, we'll need to store gameId
-        // For now, assume gameId is stored or passed via URL
-        const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
-        if (storedGameId) {
-          setGameId(storedGameId);
-        }
-      } catch (err) {
-        console.error('Failed to fetch game:', err);
+    // Skip if we already have a gameId (to avoid re-running when gameId state updates)
+    if (gameId) return;
+
+    // Priority 1: gameId from URL params
+    if (gameIdParam) {
+      setGameId(gameIdParam);
+      if (roomCode) {
+        sessionStorage.setItem(`game_${roomCode}`, gameIdParam);
       }
-    };
-    fetchGame();
-  }, [roomCode]);
+      setGameIdError(null);
+      return;
+    }
+
+    // Priority 2: gameId from sessionStorage
+    if (roomCode) {
+      const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
+      if (storedGameId) {
+        setGameId(storedGameId);
+        setGameIdError(null);
+        return;
+      }
+    }
+
+    // Priority 3: Create new game if we have quizId but no gameId
+    if (quizId && !gameIdParam) {
+      const createGame = async () => {
+        try {
+          setGameIdError(null);
+          const { data: newGame, error: createError } = await gameApi.createGame(quizId, {
+            show_question_only: playSettings.show_question_only,
+            show_explanation: playSettings.show_explanation,
+            time_bonus: playSettings.time_bonus,
+            streak_bonus: playSettings.streak_bonus,
+            show_correct_answer: playSettings.show_correct_answer,
+            max_players: playSettings.max_players,
+          });
+
+          if (createError || !newGame) {
+            throw new Error(createError?.message || 'Failed to create game');
+          }
+
+          setGameId(newGame.id);
+          if (roomCode) {
+            sessionStorage.setItem(`game_${roomCode}`, newGame.id);
+          }
+          // Update URL with gameId
+          const gameCode = newGame.game_code || newGame.room_code || roomCode;
+          router.replace(
+            `/host-waiting-room?code=${gameCode}&quizId=${quizId}&gameId=${newGame.id}`,
+          );
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'ゲームの作成に失敗しました';
+          setGameIdError(errorMessage);
+          console.error('Failed to create game:', err);
+        }
+      };
+
+      createGame();
+    }
+    // Note: gameId is intentionally NOT in dependencies to avoid circular updates
+    // The effect checks gameId at the start and returns early if it's already set
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomCode, gameIdParam, quizId, playSettings, router]);
 
   const handleConfirmStartQuiz = async () => {
     if (!gameId) {
-      console.error('Game ID not available');
+      setGameIdError('ゲームIDが必要です。ゲームを作成してから開始してください。');
+      setIsStartConfirmOpen(false);
       return;
     }
 
     try {
+      setGameIdError(null);
       // Start the game via API
       const { data: game, error } = await gameApi.startGame(gameId);
       if (error || !game) {
+        const errorMessage = error?.message || 'ゲームの開始に失敗しました';
+        setGameIdError(errorMessage);
         console.error('Failed to start game:', error);
         return;
       }
@@ -101,6 +155,9 @@ function HostWaitingRoomContent() {
       // Redirect to game host page
       router.push(`/game-host?gameId=${gameId}&phase=countdown`);
     } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'ゲームの開始中にエラーが発生しました';
+      setGameIdError(errorMessage);
       console.error('Error starting game:', err);
     }
   };
@@ -179,6 +236,12 @@ function HostWaitingRoomContent() {
 
             {/* Center Panel - Host Controls */}
             <div className="lg:col-span-1 h-full flex flex-col items-center justify-center space-y-6">
+              {gameIdError && (
+                <div className="w-full max-w-md bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-md">
+                  <p className="font-semibold">エラー</p>
+                  <p className="text-sm">{gameIdError}</p>
+                </div>
+              )}
               <HostControls
                 roomCode={roomCode}
                 onStartQuiz={handleStartQuiz}

@@ -6,13 +6,19 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { PlayerCountdownScreen } from '@/components/game';
 import { useSocket } from '@/components/providers/SocketProvider';
+import { gameApi } from '@/services/gameApi';
+import { useDeviceId } from '@/hooks/useDeviceId';
 
 function WaitingRoomContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || '';
   const roomCode = searchParams.get('code') || '';
+  const gameIdParam = searchParams.get('gameId') || '';
   const { socket, isConnected } = useSocket();
+  const { deviceId } = useDeviceId();
+  const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
+  const [playerId, setPlayerId] = useState<string | null>(null);
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(true);
@@ -28,27 +34,79 @@ function WaitingRoomContent() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Get gameId from room code or join game
+  useEffect(() => {
+    if (!roomCode || !playerName || !deviceId) return;
+
+    const joinOrGetGame = async () => {
+      try {
+        // If gameId is provided, use it
+        if (gameIdParam) {
+          setGameId(gameIdParam);
+          // Join the game
+          const { data: player, error: joinError } = await gameApi.joinGame(
+            gameIdParam,
+            playerName,
+            deviceId,
+          );
+          if (joinError || !player) {
+            console.error('Failed to join game:', joinError);
+            return;
+          }
+          setPlayerId(player.id);
+          return;
+        }
+
+        // Try to find game by room code
+        // Note: Backend might need a GET /games/by-code/:code endpoint
+        // For now, we'll store gameId in sessionStorage when host creates game
+        const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
+        if (storedGameId) {
+          setGameId(storedGameId);
+          const { data: player, error: joinError } = await gameApi.joinGame(
+            storedGameId,
+            playerName,
+            deviceId,
+          );
+          if (joinError || !player) {
+            console.error('Failed to join game:', joinError);
+            return;
+          }
+          setPlayerId(player.id);
+        } else {
+          console.warn('Game not found for room code:', roomCode);
+        }
+      } catch (err) {
+        console.error('Failed to join game:', err);
+      }
+    };
+
+    joinOrGetGame();
+  }, [roomCode, playerName, deviceId, gameIdParam]);
+
   // Listen for game start event
   useEffect(() => {
-    if (!socket || !isConnected || !roomCode) return;
+    if (!socket || !isConnected || !gameId) return;
 
-    const handleGameStarted = (data: { roomId: string; roomCode: string }) => {
-      if (data.roomCode === roomCode) {
+    const handleGameStarted = (data: { roomId: string; roomCode?: string }) => {
+      if (data.roomId === gameId || data.roomCode === roomCode) {
         // Redirect to player game page
-        router.push(`/game-player?gameId=${data.roomId}&phase=countdown&playerId=${playerName}`);
+        router.push(
+          `/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId || playerName}`,
+        );
       }
     };
 
     socket.on('game:started', handleGameStarted);
 
-    // Join room to receive events
-    socket.emit('room:join', { roomId: roomCode });
+    // Join room to receive events (use gameId as roomId)
+    socket.emit('room:join', { roomId: gameId });
 
     return () => {
       socket.off('game:started', handleGameStarted);
-      socket.emit('room:leave', { roomId: roomCode });
+      socket.emit('room:leave', { roomId: gameId });
     };
-  }, [socket, isConnected, roomCode, playerName, router]);
+  }, [socket, isConnected, gameId, roomCode, playerId, playerName, router]);
 
   // Countdown state
   const [showCountdown, setShowCountdown] = useState(false);

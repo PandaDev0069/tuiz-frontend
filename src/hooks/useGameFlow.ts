@@ -321,6 +321,10 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
   /**
    * Advance to next question (Host only)
+   *
+   * NOTE: This function requires the next question ID to be provided.
+   * To advance to the next question, use startQuestion() with the next question's ID instead.
+   * This function is kept for API compatibility but throws an error to indicate it's not implemented.
    */
   const nextQuestion = useCallback(async () => {
     if (!isHost) {
@@ -330,21 +334,17 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       throw new Error('No game ID provided');
     }
 
-    try {
-      setLoading(true);
-      setError(null);
-
-      console.warn('useGameFlow: nextQuestion called but flow progression is not implemented yet');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to advance question';
-      setError(errorMessage);
-      console.error('useGameFlow: nextQuestion error', err);
-      events?.onError?.(errorMessage);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [isHost, gameId, events]);
+    const errorMessage =
+      'nextQuestion is not implemented. Use startQuestion(questionId, questionIndex) with the next question ID instead.';
+    setError(errorMessage);
+    console.error('useGameFlow: nextQuestion called but not implemented', {
+      gameId,
+      currentQuestionId: gameFlow?.current_question_id,
+      currentQuestionIndex: gameFlow?.current_question_index,
+    });
+    events?.onError?.(errorMessage);
+    throw new Error(errorMessage);
+  }, [isHost, gameId, gameFlow, events]);
 
   /**
    * Pause the game (Host only)

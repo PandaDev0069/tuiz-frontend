@@ -84,12 +84,12 @@ function PlayerQuestionScreenContent() {
       correctAnswer: currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId)!,
       playerAnswer: playerChoice,
       isCorrect: playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false,
-      statistics: [
-        { choiceId: 'a', count: 0, percentage: 0 },
-        { choiceId: 'b', count: 0, percentage: 0 },
-        { choiceId: 'c', count: 0, percentage: 0 },
-        { choiceId: 'd', count: 0, percentage: 0 },
-      ],
+      // Generate statistics dynamically based on actual choice IDs
+      statistics: currentQuestion.choices.map((choice) => ({
+        choiceId: choice.id,
+        count: 0,
+        percentage: 0,
+      })),
       totalPlayers: 0,
       totalAnswered: 0,
     };

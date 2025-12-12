@@ -12,8 +12,10 @@ import { cfg } from '@/config/config';
 
 export interface Game {
   id: string;
-  room_code: string;
-  quiz_id: string;
+  room_code?: string; // Legacy field name
+  game_code?: string; // Backend field name (preferred)
+  quiz_id?: string; // Legacy field name
+  quiz_set_id?: string; // Backend field name (preferred)
   user_id: string;
   status: 'waiting' | 'active' | 'paused' | 'completed';
   current_question_index: number | null;
@@ -170,6 +172,20 @@ class GameApiClient {
   // ==========================================================================
 
   /**
+   * POST /games
+   * Create a new game session
+   */
+  async createGame(quizSetId: string, gameSettings?: Record<string, unknown>) {
+    return this.request<Game>('/games', {
+      method: 'POST',
+      body: JSON.stringify({
+        quiz_set_id: quizSetId,
+        game_settings: gameSettings || {},
+      }),
+    });
+  }
+
+  /**
    * GET /games/:gameId
    * Get game details
    */
@@ -279,14 +295,14 @@ class GameApiClient {
   // ==========================================================================
 
   /**
-   * POST /games/:gameId/players
-   * Add a new player to the game (join game)
+   * POST /games/:gameId/join
+   * Join a game as a player (public endpoint, no auth required)
    */
-  async joinGame(gameId: string, displayName: string, deviceId: string) {
-    return this.request<Player>(`/games/${gameId}/players`, {
+  async joinGame(gameId: string, playerName: string, deviceId: string) {
+    return this.request<Player>(`/games/${gameId}/join`, {
       method: 'POST',
       body: JSON.stringify({
-        display_name: displayName,
+        player_name: playerName,
         device_id: deviceId,
       }),
     });
