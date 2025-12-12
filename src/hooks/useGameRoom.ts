@@ -190,14 +190,18 @@ export function useGameRoom(events?: GameRoomEvents): UseGameRoomReturn {
         // Set up room state
         setRoom({
           gameId: game.id,
-          roomCode: game.room_code,
+          roomCode: game.room_code ?? '',
           hostId: game.user_id,
           isLocked: game.locked,
           playerCount: 0, // Will be updated by player list
           maxPlayers: 400,
         });
 
-        // Join WebSocket room
+        // Join WebSocket room (guard against missing room code)
+        if (!game.room_code) {
+          console.warn('Missing room_code for game; skipping WebSocket join');
+          return;
+        }
         ws.joinRoom(game.room_code);
 
         // Fetch initial player list
