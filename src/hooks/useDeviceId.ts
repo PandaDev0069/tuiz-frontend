@@ -45,6 +45,12 @@ export function useDeviceId(): UseDeviceIdReturn {
   });
 
   useEffect(() => {
+    // Only run on client side (not during SSR)
+    if (typeof window === 'undefined') {
+      setIsLoading(false);
+      return;
+    }
+
     // Initialize device ID on mount
     try {
       const id = getOrCreateDeviceId();
@@ -97,6 +103,17 @@ export function useDeviceId(): UseDeviceIdReturn {
  * ```
  */
 export function useDeviceIdSync(): string {
-  const [deviceId] = useState(() => getOrCreateDeviceId());
+  const [deviceId] = useState(() => {
+    // Only run on client side (not during SSR)
+    if (typeof window === 'undefined') {
+      return '';
+    }
+    try {
+      return getOrCreateDeviceId();
+    } catch (error) {
+      console.error('[useDeviceIdSync] Failed to get device ID:', error);
+      return '';
+    }
+  });
   return deviceId;
 }

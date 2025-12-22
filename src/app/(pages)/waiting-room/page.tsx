@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
@@ -8,6 +8,7 @@ import { PlayerCountdownScreen } from '@/components/game';
 import { useSocket } from '@/components/providers/SocketProvider';
 import { gameApi } from '@/services/gameApi';
 import { useDeviceId } from '@/hooks/useDeviceId';
+import { toast } from 'react-hot-toast';
 
 function WaitingRoomContent() {
   const router = useRouter();
@@ -16,9 +17,15 @@ function WaitingRoomContent() {
   const roomCode = searchParams.get('code') || '';
   const gameIdParam = searchParams.get('gameId') || '';
   const { socket, isConnected } = useSocket();
-  const { deviceId } = useDeviceId();
+  const { deviceId, isLoading: isDeviceIdLoading } = useDeviceId();
+
+  // State management
   const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
   const [playerId, setPlayerId] = useState<string | null>(null);
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [isRoomLocked, setIsRoomLocked] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(true);
@@ -34,62 +41,200 @@ function WaitingRoomContent() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Get gameId from room code or join game
-  useEffect(() => {
-    if (!roomCode || !playerName || !deviceId) return;
+  // Get gameId from room code and join game
+  const getGameIdFromCode = useCallback(async (code: string): Promise<string | null> => {
+    // Priority 1: Check sessionStorage (set when host creates game)
+    const storedGameId = sessionStorage.getItem(`game_${code}`);
+    if (storedGameId) {
+      return storedGameId;
+    }
 
-    const joinOrGetGame = async () => {
+    // Priority 2: Fetch game by code from API
+    try {
+      const { data: game, error: gameError } = await gameApi.getGameByCode(code);
+      if (gameError || !game) {
+        console.warn('Failed to fetch game by code:', gameError);
+        return null;
+      }
+      // Store in sessionStorage for future use
+      sessionStorage.setItem(`game_${code}`, game.id);
+      return game.id;
+    } catch (err) {
+      console.error('Error fetching game by code:', err);
+      return null;
+    }
+  }, []);
+
+  // Handle reconnection: Check if player already exists for this device+game
+  const checkExistingPlayer = useCallback(
+    async (targetGameId?: string) => {
+      const gameIdToCheck = targetGameId || gameId;
+      if (!gameIdToCheck || !deviceId) return null;
+
       try {
-        // If gameId is provided, use it
-        if (gameIdParam) {
-          setGameId(gameIdParam);
-          // Join the game
-          const { data: player, error: joinError } = await gameApi.joinGame(
-            gameIdParam,
-            playerName,
-            deviceId,
-          );
-          if (joinError || !player) {
-            console.error('Failed to join game:', joinError);
+        // Get all players for this game
+        const { data: playersResponse } = await gameApi.getPlayers(gameIdToCheck);
+        if (!playersResponse) return null;
+
+        const playersArray = playersResponse.players || [];
+        // Find player with matching device_id
+        const existingPlayer = playersArray.find((p) => p.device_id === deviceId);
+        return existingPlayer || null;
+      } catch (err) {
+        console.warn('Failed to check existing player:', err);
+        return null;
+      }
+    },
+    [gameId, deviceId],
+  );
+
+  // Initialize player join flow
+  useEffect(() => {
+    // Wait for deviceId to be ready
+    if (isDeviceIdLoading || !deviceId) return;
+
+    // Check required params
+    if (!roomCode || !playerName) {
+      setJoinError('ルームコードとプレイヤー名が必要です');
+      return;
+    }
+
+    // Skip if already initialized
+    if (isInitialized) return;
+
+    let isMounted = true;
+
+    const initializeAndJoin = async () => {
+      try {
+        setIsJoining(true);
+        setJoinError(null);
+
+        // Step 1: Get gameId from room code
+        let currentGameId: string | null = gameIdParam || null;
+        if (!currentGameId) {
+          currentGameId = await getGameIdFromCode(roomCode);
+          if (!currentGameId) {
+            if (!isMounted) return;
+            setJoinError('ゲームが見つかりません。ルームコードを確認してください。');
             return;
           }
-          setPlayerId(player.id);
+        }
+
+        if (!isMounted || !currentGameId) return;
+        setGameId(currentGameId);
+
+        // Step 1.5: Check if player already exists (reconnection scenario)
+        // This handles the case where player refreshes page or reconnects
+        const existingPlayer = await checkExistingPlayer(currentGameId);
+        if (existingPlayer) {
+          // Player already exists, use existing player
+          if (!isMounted) return;
+          setPlayerId(existingPlayer.id);
+          setIsInitialized(true);
+          toast.success('再接続しました');
           return;
         }
 
-        // Try to find game by room code
-        // Note: Backend might need a GET /games/by-code/:code endpoint
-        // For now, we'll store gameId in sessionStorage when host creates game
-        const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
-        if (storedGameId) {
-          setGameId(storedGameId);
-          const { data: player, error: joinError } = await gameApi.joinGame(
-            storedGameId,
-            playerName,
-            deviceId,
-          );
-          if (joinError || !player) {
-            console.error('Failed to join game:', joinError);
-            return;
+        // Step 2: Join the game (creates players table record)
+        const { data: player, error: joinError } = await gameApi.joinGame(
+          currentGameId,
+          playerName,
+          deviceId,
+        );
+
+        if (!isMounted) return;
+
+        if (joinError || !player) {
+          const errorMessage = joinError?.message || 'ゲームへの参加に失敗しました';
+          setJoinError(errorMessage);
+          toast.error(errorMessage);
+
+          // Handle specific error cases
+          if (joinError?.error === 'join_game_failed') {
+            if (joinError.message?.includes('locked')) {
+              setIsRoomLocked(true);
+            }
           }
-          setPlayerId(player.id);
-        } else {
-          console.warn('Game not found for room code:', roomCode);
+          return;
         }
+
+        setPlayerId(player.id);
+
+        // Step 3: Initialize game_player_data (if not already created)
+        // Note: Backend might create this automatically, but we'll try to create it
+        // The API will return 409 if it already exists, which is fine
+        try {
+          await gameApi.initializePlayerData(currentGameId, player.id, deviceId);
+        } catch (dataError) {
+          // Ignore if already exists (409) or other non-critical errors
+          console.warn('Game player data initialization:', dataError);
+        }
+
+        if (!isMounted) return;
+
+        // Step 4: Fetch game data to check lock status
+        const { data: game } = await gameApi.getGame(currentGameId);
+        if (game && !isMounted) return;
+
+        if (game) {
+          setIsRoomLocked(game.locked);
+        }
+
+        setIsInitialized(true);
+        toast.success('ゲームに参加しました！');
       } catch (err) {
+        if (!isMounted) return;
+        const errorMessage =
+          err instanceof Error ? err.message : 'ゲームへの参加中にエラーが発生しました';
+        setJoinError(errorMessage);
+        toast.error(errorMessage);
         console.error('Failed to join game:', err);
+      } finally {
+        if (isMounted) {
+          setIsJoining(false);
+        }
       }
     };
 
-    joinOrGetGame();
-  }, [roomCode, playerName, deviceId, gameIdParam]);
+    initializeAndJoin();
 
-  // Listen for game start event
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    roomCode,
+    playerName,
+    deviceId,
+    gameIdParam,
+    isDeviceIdLoading,
+    isInitialized,
+    getGameIdFromCode,
+    checkExistingPlayer,
+  ]);
+
+  // WebSocket room joining and event listeners
   useEffect(() => {
-    if (!socket || !isConnected || !gameId) return;
+    if (!socket || !isConnected || !gameId || !isInitialized || !playerId) return;
 
-    const handleGameStarted = (data: { roomId: string; roomCode?: string }) => {
-      if (data.roomId === gameId || data.roomCode === roomCode) {
+    let reconnectAttempted = false;
+
+    // Join the game room via WebSocket
+    // Backend will create room_participants and websocket_connections records
+    const joinRoom = () => {
+      socket.emit('room:join', {
+        roomId: gameId,
+        gameId: gameId,
+        deviceId: deviceId,
+        playerId: playerId,
+      });
+    };
+
+    joinRoom();
+
+    // Listen for game start event
+    const handleGameStarted = (data: { roomId?: string; gameId?: string; roomCode?: string }) => {
+      const targetGameId = data.gameId || data.roomId;
+      if (targetGameId === gameId || data.roomCode === roomCode) {
         // Redirect to player game page
         router.push(
           `/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId || playerName}`,
@@ -97,16 +242,78 @@ function WaitingRoomContent() {
       }
     };
 
+    // Listen for room lock status changes
+    const handleRoomLocked = (data: { gameId?: string; roomId?: string; locked: boolean }) => {
+      const targetGameId = data.gameId || data.roomId;
+      if (targetGameId === gameId) {
+        setIsRoomLocked(data.locked);
+      }
+    };
+
+    // Handle WebSocket reconnection
+    const handleReconnect = async () => {
+      if (reconnectAttempted) return;
+      reconnectAttempted = true;
+
+      console.log('WebSocket reconnected, verifying player status...');
+
+      // Check if player still exists
+      const existingPlayer = await checkExistingPlayer();
+      if (existingPlayer) {
+        // Player exists, rejoin room
+        setPlayerId(existingPlayer.id);
+        joinRoom();
+        toast.success('再接続しました');
+      } else {
+        // Player doesn't exist, need to rejoin game
+        console.warn('Player not found after reconnection, may need to rejoin');
+        toast.error('接続が切断されました。ページを再読み込みしてください。');
+      }
+    };
+
+    // Listen for player join/leave events (for future use - showing player count)
+    const handlePlayerJoined = (data: { gameId?: string; roomId?: string; playerId: string }) => {
+      // Could update player list here if needed
+      console.log('Player joined:', data);
+    };
+
+    const handlePlayerLeft = (data: { gameId?: string; roomId?: string; playerId: string }) => {
+      // Could update player list here if needed
+      console.log('Player left:', data);
+    };
+
+    // Register event listeners
     socket.on('game:started', handleGameStarted);
+    socket.on('game:room-locked', handleRoomLocked);
+    socket.on('room:user-joined', handlePlayerJoined);
+    socket.on('room:user-left', handlePlayerLeft);
+    socket.on('connect', handleReconnect); // Handle reconnection
 
-    // Join room to receive events (use gameId as roomId)
-    socket.emit('room:join', { roomId: gameId });
-
+    // Cleanup on unmount
     return () => {
       socket.off('game:started', handleGameStarted);
-      socket.emit('room:leave', { roomId: gameId });
+      socket.off('game:room-locked', handleRoomLocked);
+      socket.off('room:user-joined', handlePlayerJoined);
+      socket.off('room:user-left', handlePlayerLeft);
+      socket.off('connect', handleReconnect);
+
+      // Leave room on unmount
+      if (gameId) {
+        socket.emit('room:leave', { roomId: gameId });
+      }
     };
-  }, [socket, isConnected, gameId, roomCode, playerId, playerName, router]);
+  }, [
+    socket,
+    isConnected,
+    gameId,
+    roomCode,
+    playerId,
+    playerName,
+    deviceId,
+    isInitialized,
+    router,
+    checkExistingPlayer,
+  ]);
 
   // Countdown state
   const [showCountdown, setShowCountdown] = useState(false);
@@ -231,35 +438,68 @@ function WaitingRoomContent() {
               <div className="absolute top-1/2 -right-1 w-2 h-2 bg-gradient-to-br from-white to-cyan-200 rounded-full transform -skew-x-12"></div>
             </div>
           </div>
-          {/* Waiting Message */}
-          <div className="text-center max-w-md">
-            <div className="relative inline-block">
-              {/* Background glow */}
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-blue-100 rounded-2xl blur-sm opacity-50 scale-105"></div>
-
-              {/* Message container */}
-              <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-6 py-4 rounded-2xl border border-cyan-200">
-                <p className="text-lg md:text-xl font-medium bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent leading-relaxed">
-                  ホストがクイズ開始するのを待っています
-                  <br />
-                  お待ちください
-                </p>
-
-                {/* Decorative dots */}
-                <div className="flex justify-center space-x-2 mt-3">
-                  <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
-                  <div
-                    className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
-                    style={{ animationDelay: '0.1s' }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
-                    style={{ animationDelay: '0.2s' }}
-                  ></div>
+          {/* Loading/Error States */}
+          {isJoining && (
+            <div className="text-center max-w-md">
+              <div className="relative inline-block">
+                <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-6 py-4 rounded-2xl border border-cyan-200">
+                  <div className="flex items-center justify-center space-x-3">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600"></div>
+                    <p className="text-lg font-medium bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent">
+                      ゲームに参加中...
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {joinError && (
+            <div className="text-center max-w-md">
+              <div className="relative inline-block">
+                <div className="relative bg-red-50 px-6 py-4 rounded-2xl border border-red-200">
+                  <p className="text-lg font-medium text-red-700">{joinError}</p>
+                  {isRoomLocked && (
+                    <p className="text-sm text-red-600 mt-2">このルームはロックされています</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Waiting Message */}
+          {!isJoining && !joinError && isInitialized && (
+            <div className="text-center max-w-md">
+              <div className="relative inline-block">
+                {/* Background glow */}
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-blue-100 rounded-2xl blur-sm opacity-50 scale-105"></div>
+
+                {/* Message container */}
+                <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-6 py-4 rounded-2xl border border-cyan-200">
+                  <p className="text-lg md:text-xl font-medium bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent leading-relaxed">
+                    {isRoomLocked
+                      ? 'ルームはロックされています'
+                      : 'ホストがクイズ開始するのを待っています'}
+                    <br />
+                    お待ちください
+                  </p>
+
+                  {/* Decorative dots */}
+                  <div className="flex justify-center space-x-2 mt-3">
+                    <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
+                    <div
+                      className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.1s' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.2s' }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Room Code */}
           <div className="text-center">

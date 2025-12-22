@@ -36,7 +36,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
-  const deviceIdRef = useRef<string>(getOrCreateDeviceId());
+  const deviceIdRef = useRef<string | null>(null);
 
   const clearHeartbeat = () => {
     if (heartbeatRef.current) {
@@ -45,7 +45,25 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Initialize device ID on client side only
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        deviceIdRef.current = getOrCreateDeviceId();
+      } catch (error) {
+        console.error('[SocketProvider] Failed to get device ID:', error);
+        // Generate a temporary device ID if we can't get one
+        deviceIdRef.current = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // Don't initialize socket if device ID is not ready (during SSR)
+    if (typeof window === 'undefined' || !deviceIdRef.current) {
+      return;
+    }
+
     // Use the configured API base URL instead of hardcoded localhost
     const socketUrl = cfg.apiBase;
 
@@ -64,13 +82,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 
     socketInstance.on('connect', () => {
       console.log('Socket.IO connected successfully');
-      socketInstance.emit('ws:connect', {
-        deviceId: deviceIdRef.current,
-        metadata: {
-          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
-          connectedAt: new Date().toISOString(),
-        },
-      });
+      if (deviceIdRef.current) {
+        socketInstance.emit('ws:connect', {
+          deviceId: deviceIdRef.current,
+          metadata: {
+            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+            connectedAt: new Date().toISOString(),
+          },
+        });
+      }
       heartbeatRef.current = setInterval(() => {
         socketInstance.emit('ws:heartbeat');
       }, HEARTBEAT_INTERVAL_MS);
@@ -145,7 +165,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setIsConnected(false);
       setConnectionError(null);
     };
-  }, []);
+  }, []); // Empty deps - only run once on mount (client-side)
 
   // Log connection status for debugging
   useEffect(() => {

@@ -39,7 +39,19 @@ export class WebSocketService {
       ...config,
     };
 
-    this.deviceId = getOrCreateDeviceId();
+    // Only get device ID on client side
+    if (typeof window !== 'undefined') {
+      try {
+        this.deviceId = getOrCreateDeviceId();
+      } catch (error) {
+        console.error('[WebSocketService] Failed to get device ID:', error);
+        // Generate a temporary device ID if we can't get one
+        this.deviceId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      }
+    } else {
+      // During SSR, use a placeholder
+      this.deviceId = '';
+    }
     this.connectionStatus = {
       connected: false,
       deviceId: this.deviceId,

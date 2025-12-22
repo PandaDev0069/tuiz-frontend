@@ -49,14 +49,16 @@ export interface Player {
   id: string;
   game_id: string;
   device_id: string;
-  display_name: string;
-  avatar_url: string | null;
-  score: number;
-  streak: number;
+  player_name: string; // Backend uses player_name, not display_name
+  is_logged_in: boolean;
   is_host: boolean;
-  is_kicked: boolean;
-  joined_at: string;
-  last_active_at: string;
+  created_at: string; // Backend uses created_at, not joined_at
+  updated_at: string; // Backend uses updated_at, not last_active_at
+  // Note: These fields don't exist in players table but may be in joined queries:
+  // avatar_url - only in profiles table
+  // score - only in game_player_data table
+  // streak - not tracked
+  // is_kicked - not implemented
 }
 
 export interface PlayersResponse {
@@ -77,13 +79,16 @@ export interface PlayerStats {
 
 export interface LeaderboardEntry {
   player_id: string;
-  display_name: string;
-  avatar_url: string | null;
+  player_name: string; // Backend returns player_name, not display_name
+  device_id?: string;
   score: number;
   rank: number;
   total_answers: number;
   correct_answers: number;
   accuracy: number;
+  is_host?: boolean;
+  is_logged_in?: boolean;
+  // Note: avatar_url not in backend response (only in profiles table)
 }
 
 export interface Answer {
@@ -254,6 +259,17 @@ class GameApiClient {
   }
 
   /**
+   * GET /games/by-code/:gameCode
+   * Get game details by room code
+   * Public access (for players to join using room code)
+   */
+  async getGameByCode(gameCode: string) {
+    return this.request<Game>(`/games/by-code/${gameCode}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
    * GET /games/:gameId/state
    * Get current game state including flow information
    */
@@ -355,15 +371,32 @@ class GameApiClient {
   /**
    * POST /games/:gameId/join
    * Join a game as a player (public endpoint, no auth required)
+   * Backend returns { success: true, player: Player, message: string }
    */
   async joinGame(gameId: string, playerName: string, deviceId: string) {
-    return this.request<Player>(`/games/${gameId}/join`, {
-      method: 'POST',
-      body: JSON.stringify({
-        player_name: playerName,
-        device_id: deviceId,
-      }),
-    });
+    const result = await this.request<{ success: boolean; player: Player; message: string }>(
+      `/games/${gameId}/join`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          player_name: playerName,
+          device_id: deviceId,
+        }),
+      },
+    );
+
+    // Unwrap the player from the response
+    if (result.data?.player) {
+      return {
+        data: result.data.player,
+        error: result.error,
+      };
+    }
+
+    return {
+      data: null,
+      error: result.error || { error: 'invalid_response', message: 'Player not found in response' },
+    };
   }
 
   /**
@@ -406,6 +439,22 @@ class GameApiClient {
     return this.request<{ message: string }>(`/games/${gameId}/players/${playerId}`, {
       method: 'DELETE',
     });
+  }
+
+  /**
+   * POST /games/:gameId/players/:playerId/data
+   * Initialize player data for a game (creates game_player_data record)
+   */
+  async initializePlayerData(gameId: string, playerId: string, deviceId: string) {
+    return this.request<{ id: string; player_id: string; game_id: string; score: number }>(
+      `/games/${gameId}/players/${playerId}/data`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          player_device_id: deviceId,
+        }),
+      },
+    );
   }
 
   // ==========================================================================

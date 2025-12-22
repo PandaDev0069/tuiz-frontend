@@ -149,6 +149,15 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
   // Get or create device ID
   // This ensures device ID is always available for WebSocket connections and game sessions
   getDeviceId: () => {
-    return getOrCreateDeviceId();
+    // Only get device ID on client side
+    if (typeof window === 'undefined') {
+      return '';
+    }
+    try {
+      return getOrCreateDeviceId();
+    } catch (error) {
+      console.error('[useAuthStore] Failed to get device ID:', error);
+      return '';
+    }
   },
 }));

@@ -391,7 +391,7 @@ function PlayerGameContent() {
           leaderboardData={{
             entries: leaderboard.map((entry) => ({
               playerId: entry.player_id,
-              playerName: entry.display_name,
+              playerName: entry.player_name,
               score: entry.score,
               rank: entry.rank,
               previousRank: entry.rank,

@@ -167,16 +167,6 @@ function HostScreenContent() {
                     <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
                   </div>
                 </div>
-
-                {/* Test Button for Development */}
-                <div className="mt-4">
-                  <button
-                    onClick={() => setShowCountdown(true)}
-                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white rounded-lg text-sm font-medium transition-all duration-200"
-                  >
-                    テスト: ゲーム開始
-                  </button>
-                </div>
               </div>
             </div>
           </div>

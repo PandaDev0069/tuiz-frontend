@@ -107,8 +107,16 @@ function storeDeviceId(deviceId: string): void {
  * 3. Store the device ID for future use
  *
  * @returns {string} The device ID (UUID v4)
+ * @throws {Error} If called in a non-browser environment
  */
 export function getOrCreateDeviceId(): string {
+  // Check if we're in a browser environment
+  if (!isBrowser()) {
+    // During SSR, we can't access localStorage, so we throw an error
+    // Components should use useDeviceId hook which handles this gracefully
+    throw new Error('getOrCreateDeviceId can only be called in a browser environment');
+  }
+
   const existingId = getStoredDeviceId();
 
   if (existingId) {

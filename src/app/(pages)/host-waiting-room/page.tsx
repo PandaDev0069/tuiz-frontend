@@ -76,11 +76,12 @@ function HostWaitingRoomContent() {
       const playersArray = playersResponseTyped.players || [];
 
       // Map backend Player format to frontend format
+      // Backend returns player_name, created_at (not display_name, joined_at)
       const mappedPlayers = playersArray.map((player) => ({
         id: player.id,
-        name: player.display_name,
-        joinedAt: new Date(player.joined_at),
-        isBanned: player.is_kicked,
+        name: player.player_name, // Backend uses player_name
+        joinedAt: new Date(player.created_at), // Backend uses created_at
+        isBanned: false, // is_kicked not implemented in backend
         isHost: player.is_host,
       }));
 
