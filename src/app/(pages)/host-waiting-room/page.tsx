@@ -77,13 +77,16 @@ function HostWaitingRoomContent() {
 
       // Map backend Player format to frontend format
       // Backend returns player_name, created_at (not display_name, joined_at)
-      const mappedPlayers = playersArray.map((player) => ({
-        id: player.id,
-        name: player.player_name, // Backend uses player_name
-        joinedAt: new Date(player.created_at), // Backend uses created_at
-        isBanned: false, // is_kicked not implemented in backend
-        isHost: player.is_host,
-      }));
+      // Filter out hosts from the player list (they shouldn't be displayed)
+      const mappedPlayers = playersArray
+        .filter((player) => !player.is_host) // Exclude hosts from player list
+        .map((player) => ({
+          id: player.id,
+          name: player.player_name, // Backend uses player_name
+          joinedAt: new Date(player.created_at), // Backend uses created_at
+          isBanned: false, // is_kicked not implemented in backend
+          isHost: player.is_host,
+        }));
 
       setPlayers(mappedPlayers);
     } catch (err) {

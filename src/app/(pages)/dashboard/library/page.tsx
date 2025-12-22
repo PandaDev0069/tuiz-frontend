@@ -17,6 +17,8 @@ import {
 import { useQuizPreview, useCloneQuiz } from '@/hooks/useQuizLibrary';
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
+import { useDeviceId } from '@/hooks/useDeviceId';
+import { useAuthStore } from '@/state/useAuthStore';
 
 type TabValue = 'my-library' | 'public-browse';
 
@@ -113,6 +115,10 @@ export default function LibraryPage() {
   // Game creation state
   const [isCreatingGame, setIsCreatingGame] = useState(false);
 
+  // Get device ID for host player creation
+  const { deviceId } = useDeviceId();
+  const { user } = useAuthStore();
+
   // Event handlers for My Library
   const handleMyLibraryFiltersChange = (filters: Partial<typeof myLibraryFilters>) => {
     setMyLibraryFilters((prev) => ({ ...prev, ...filters }));
@@ -166,9 +172,18 @@ export default function LibraryPage() {
         max_players: playSettings.max_players ?? 400,
       };
 
+      // Get user info for host player creation
+      const hostPlayerName = user?.username || user?.email?.split('@')[0] || 'Host';
+
       // Create the game via API - this creates both games and game_flows records
       // Backend will fetch the quiz, extract code from play_settings, and use game_settings for game config
-      const { data: newGame, error: createError } = await gameApi.createGame(id, gameSettings);
+      // Also creates host player if device_id is provided
+      const { data: newGame, error: createError } = await gameApi.createGame(
+        id,
+        gameSettings,
+        deviceId || undefined,
+        hostPlayerName,
+      );
 
       if (createError || !newGame) {
         const errorMessage = createError?.message || 'ゲームの作成に失敗しました';

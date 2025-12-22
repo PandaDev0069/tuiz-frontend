@@ -223,14 +223,21 @@ class GameApiClient {
   /**
    * POST /games
    * Create a new game session
-   * Backend returns { game: Game }, so we need to unwrap it
+   * Backend returns { game: Game, host_player?: Player }, so we need to unwrap it
    */
-  async createGame(quizSetId: string, gameSettings?: Record<string, unknown>) {
-    const result = await this.request<{ game: Game }>('/games', {
+  async createGame(
+    quizSetId: string,
+    gameSettings?: Record<string, unknown>,
+    deviceId?: string,
+    playerName?: string,
+  ) {
+    const result = await this.request<{ game: Game; host_player?: Player }>('/games', {
       method: 'POST',
       body: JSON.stringify({
         quiz_set_id: quizSetId,
         game_settings: gameSettings || {},
+        device_id: deviceId,
+        player_name: playerName || 'Host',
       }),
     });
 

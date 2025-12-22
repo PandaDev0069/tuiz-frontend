@@ -26,6 +26,8 @@ import { useQuizSearch, useRecentSearches, useSearchSuggestions } from '@/hooks/
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
+import { useDeviceId } from '@/hooks/useDeviceId';
+import { useAuthStore } from '@/state/useAuthStore';
 
 // Custom hook for dashboard state management
 const useDashboardState = () => {
@@ -444,6 +446,9 @@ function DashboardContent() {
 
   const { confirmDeleteQuiz, isDeleting, WarningModalComponent } = useQuizDeletion();
 
+  // Get device ID for host player creation
+  const { deviceId } = useDeviceId();
+
   // Event handlers
   const handleSearchWithQuery = (query: string) => {
     setSearchQuery(query);
@@ -483,6 +488,10 @@ function DashboardContent() {
       setCreatingQuizId(id);
       setGameCreationError(null);
 
+      // Get user info for host player creation
+      const { user } = useAuthStore.getState();
+      const hostPlayerName = user?.username || user?.email?.split('@')[0] || 'Host';
+
       // Fetch quiz set to get play_settings
       const quizSet = await quizService.getQuiz(id);
 
@@ -510,7 +519,13 @@ function DashboardContent() {
 
       // Create the game via API - this creates both games and game_flows records
       // Backend will fetch the quiz, extract code from play_settings, and use game_settings for game config
-      const { data: newGame, error: createError } = await gameApi.createGame(id, gameSettings);
+      // Also creates host player if device_id is provided
+      const { data: newGame, error: createError } = await gameApi.createGame(
+        id,
+        gameSettings,
+        deviceId || undefined,
+        hostPlayerName,
+      );
 
       if (createError || !newGame) {
         const errorMessage = createError?.message || 'ゲームの作成に失敗しました';

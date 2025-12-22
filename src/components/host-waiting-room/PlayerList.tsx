@@ -31,10 +31,10 @@ export const PlayerList: React.FC<PlayerListProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const { openModal, WarningModalComponent } = useWarningModal();
 
-  // Filter players based on search query and exclude banned players
+  // Filter players based on search query, exclude banned players, and exclude hosts
   const filteredPlayers = useMemo(() => {
-    // First filter out banned players
-    const activePlayers = players.filter((player) => !player.isBanned);
+    // First filter out banned players and hosts (hosts should not appear in player list)
+    const activePlayers = players.filter((player) => !player.isBanned && !player.isHost);
 
     // Then apply search filter
     if (!searchQuery.trim()) return activePlayers;
@@ -71,7 +71,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({
       <CardHeader className="pb-3 flex-shrink-0">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Users className="w-5 h-5 text-blue-600" />
-          参加プレイヤー ({players.length}人)
+          参加プレイヤー ({players.filter((p) => !p.isHost).length}人)
         </CardTitle>
       </CardHeader>
 
