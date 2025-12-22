@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense, useEffect, useRef, useCallback } from 'react';
+import React, { useState, Suspense, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { HostSettingsModal } from '@/components/ui/overlays/host-settings-modal';
@@ -12,8 +12,9 @@ import {
 } from '@/components/host-waiting-room';
 import { Settings } from 'lucide-react';
 import { QuizPlaySettings } from '@/types/quiz';
-import { gameApi } from '@/services/gameApi';
+import { gameApi, type PlayersResponse } from '@/services/gameApi';
 import { useSocket } from '@/components/providers/SocketProvider';
+import { quizService } from '@/lib/quizService';
 
 function HostWaitingRoomContent() {
   const router = useRouter();
@@ -26,7 +27,7 @@ function HostWaitingRoomContent() {
   const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
   const [gameCode, setGameCode] = useState<string | null>(roomCode || null);
   const [gameIdError, setGameIdError] = useState<string | null>(null);
-  const isCreatingGameRef = useRef(false);
+  const [isInitializing, setIsInitializing] = useState(false);
 
   // Settings modal state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -63,15 +64,19 @@ function HostWaitingRoomContent() {
 
     try {
       setIsLoadingPlayers(true);
-      const { data: backendPlayers, error } = await gameApi.getPlayers(gameId);
+      const { data: playersResponse, error } = await gameApi.getPlayers(gameId);
 
-      if (error || !backendPlayers) {
+      if (error || !playersResponse) {
         console.error('Failed to fetch players:', error);
         return;
       }
 
+      // Backend returns PlayersResponse with { players: Player[], total: number, ... }
+      const playersResponseTyped = playersResponse as PlayersResponse;
+      const playersArray = playersResponseTyped.players || [];
+
       // Map backend Player format to frontend format
-      const mappedPlayers = backendPlayers.map((player) => ({
+      const mappedPlayers = playersArray.map((player) => ({
         id: player.id,
         name: player.display_name,
         joinedAt: new Date(player.joined_at),
@@ -87,50 +92,104 @@ function HostWaitingRoomContent() {
     }
   }, [gameId]);
 
-  // Fetch game data and players when gameId is available
+  // Fetch game data, quiz settings, and players when gameId is available
   useEffect(() => {
-    if (gameId) {
-      // Fetch game data to get lock status
-      const fetchGameData = async () => {
-        try {
-          const { data: game, error } = await gameApi.getGame(gameId);
-          if (error || !game) {
-            console.error('Failed to fetch game data:', error);
-            return;
-          }
-          // Sync lock status from backend
-          setIsRoomLocked(game.locked);
-        } catch (err) {
-          console.error('Error fetching game data:', err);
+    if (!gameId || !quizId) return;
+
+    let isMounted = true;
+
+    const initializeGameData = async () => {
+      setIsInitializing(true);
+      try {
+        // Fetch game data to get lock status and game code
+        const { data: game, error: gameError } = await gameApi.getGame(gameId);
+        if (!isMounted) return;
+
+        if (gameError || !game) {
+          console.error('Failed to fetch game data:', gameError);
+          setGameIdError('ゲームデータの取得に失敗しました');
+          return;
         }
-      };
 
-      fetchGameData();
-      fetchPlayers();
+        // Sync lock status and game code from backend
+        setIsRoomLocked(game.locked);
+        if (game.game_code || game.room_code) {
+          const actualGameCode = game.game_code || game.room_code || '';
+          setGameCode(actualGameCode);
+          // Update sessionStorage
+          sessionStorage.setItem(`game_${actualGameCode}`, gameId);
+        }
 
-      // Set up polling to refresh player list every 3 seconds
-      const pollInterval = setInterval(() => {
+        // Fetch quiz set to get play_settings
+        try {
+          const quizSet = await quizService.getQuiz(quizId);
+          if (!isMounted) return;
+
+          if (quizSet?.play_settings) {
+            // Sync play_settings from quiz set
+            setPlaySettings({
+              show_question_only: quizSet.play_settings.show_question_only ?? true,
+              show_explanation: quizSet.play_settings.show_explanation ?? true,
+              time_bonus: quizSet.play_settings.time_bonus ?? true,
+              streak_bonus: quizSet.play_settings.streak_bonus ?? true,
+              show_correct_answer: quizSet.play_settings.show_correct_answer ?? false,
+              max_players: quizSet.play_settings.max_players ?? 400,
+            });
+          }
+        } catch (quizError) {
+          console.warn('Failed to fetch quiz settings, using defaults:', quizError);
+          // Continue with default settings if quiz fetch fails
+        }
+
+        // Fetch players
+        await fetchPlayers();
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('Error initializing game data:', err);
+        setGameIdError('ゲームの初期化に失敗しました');
+      } finally {
+        if (isMounted) {
+          setIsInitializing(false);
+        }
+      }
+    };
+
+    initializeGameData();
+
+    // Set up polling to refresh player list every 3 seconds
+    const pollInterval = setInterval(() => {
+      if (gameId && isMounted) {
         fetchPlayers();
-      }, 3000);
+      }
+    }, 3000);
 
-      return () => clearInterval(pollInterval);
-    }
-  }, [gameId, fetchPlayers]);
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+    // Note: fetchPlayers is stable (useCallback with gameId dependency)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, quizId]);
 
   // Listen for WebSocket events for real-time player updates
   useEffect(() => {
-    if (!socket || !gameId) return;
+    if (!socket || !gameId || !socket.connected) {
+      // Wait for socket connection
+      return;
+    }
 
     // Join the game room to receive events
     socket.emit('room:join', { roomId: gameId });
 
     // Listen for player join/leave events
-    const handlePlayerJoined = () => {
+    const handlePlayerJoined = (data?: { playerId?: string; playerName?: string }) => {
+      console.log('Player joined:', data);
       // Refresh player list when a player joins
       fetchPlayers();
     };
 
-    const handlePlayerLeft = () => {
+    const handlePlayerLeft = (data?: { playerId?: string }) => {
+      console.log('Player left:', data);
       // Refresh player list when a player leaves
       fetchPlayers();
     };
@@ -143,11 +202,18 @@ function HostWaitingRoomContent() {
     socket.on('game:player-joined', handlePlayerJoined);
     socket.on('game:player-left', handlePlayerLeft);
 
+    // Listen for room lock status changes
+    const handleRoomLocked = (data: { locked: boolean }) => {
+      setIsRoomLocked(data.locked);
+    };
+    socket.on('game:room-locked', handleRoomLocked);
+
     return () => {
       socket.off('room:user-joined', handlePlayerJoined);
       socket.off('room:user-left', handlePlayerLeft);
       socket.off('game:player-joined', handlePlayerJoined);
       socket.off('game:player-left', handlePlayerLeft);
+      socket.off('game:room-locked', handleRoomLocked);
       socket.emit('room:leave', { roomId: gameId });
     };
   }, [socket, gameId, fetchPlayers]);
@@ -175,99 +241,43 @@ function HostWaitingRoomContent() {
     setIsStartConfirmOpen(true);
   };
 
-  // Get or create game
+  // Initialize game from URL params or sessionStorage
   useEffect(() => {
     // Skip if we already have a gameId (to avoid re-running when gameId state updates)
     if (gameId) return;
 
-    // Priority 1: gameId from URL params
+    // Priority 1: gameId from URL params (preferred - game should be created before navigation)
     if (gameIdParam) {
       setGameId(gameIdParam);
-      // If we don't yet have a gameCode, fetch the game to obtain the authoritative code
-      if (!gameCode) {
-        gameApi
-          .getGame(gameIdParam)
-          .then(({ data: game }) => {
-            if (game) {
-              const actualGameCode = game.game_code || game.room_code || '';
-              if (actualGameCode) {
-                setGameCode(actualGameCode);
-                sessionStorage.setItem(`game_${actualGameCode}`, gameIdParam);
-                router.replace(
-                  `/host-waiting-room?code=${actualGameCode}&quizId=${quizId}&gameId=${gameIdParam}`,
-                );
-              }
-            }
-          })
-          .catch((err) => {
-            console.error('Failed to fetch game:', err);
-          });
-      } else {
-        sessionStorage.setItem(`game_${gameCode}`, gameIdParam);
+      // Store in sessionStorage for player join flow
+      if (roomCode) {
+        sessionStorage.setItem(`game_${roomCode}`, gameIdParam);
       }
       setGameIdError(null);
       return;
     }
 
-    // Priority 2: gameId from sessionStorage
+    // Priority 2: gameId from sessionStorage (fallback for direct navigation)
     if (roomCode) {
       const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
       if (storedGameId) {
         setGameId(storedGameId);
         setGameCode(roomCode);
         setGameIdError(null);
+        // Update URL to include gameId
+        router.replace(
+          `/host-waiting-room?code=${roomCode}&quizId=${quizId}&gameId=${storedGameId}`,
+        );
         return;
       }
     }
 
-    // Priority 3: Create new game if we have quizId but no gameId
-    if (quizId && !gameIdParam && !isCreatingGameRef.current) {
-      isCreatingGameRef.current = true;
-      const createGame = async () => {
-        try {
-          setGameIdError(null);
-          const { data: newGame, error: createError } = await gameApi.createGame(quizId, {
-            show_question_only: playSettings.show_question_only,
-            show_explanation: playSettings.show_explanation,
-            time_bonus: playSettings.time_bonus,
-            streak_bonus: playSettings.streak_bonus,
-            show_correct_answer: playSettings.show_correct_answer,
-            max_players: playSettings.max_players,
-          });
-
-          if (createError || !newGame) {
-            throw new Error(createError?.message || 'Failed to create game');
-          }
-
-          // Use backend-generated game_code as the canonical code
-          const actualGameCode = newGame.game_code || newGame.room_code || '';
-          if (!actualGameCode) {
-            throw new Error('Game created but no game_code returned from backend');
-          }
-
-          setGameId(newGame.id);
-          setGameCode(actualGameCode);
-          sessionStorage.setItem(`game_${actualGameCode}`, newGame.id);
-
-          // Update URL with canonical game_code and gameId
-          router.replace(
-            `/host-waiting-room?code=${actualGameCode}&quizId=${quizId}&gameId=${newGame.id}`,
-          );
-        } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : 'ゲームの作成に失敗しました';
-          setGameIdError(errorMessage);
-          console.error('Failed to create game:', err);
-        } finally {
-          isCreatingGameRef.current = false;
-        }
-      };
-
-      createGame();
+    // If we have quizId but no gameId, show error (game should be created in dashboard)
+    if (quizId && !gameIdParam) {
+      setGameIdError('ゲームが見つかりません。ダッシュボードからゲームを開始してください。');
     }
-    // Note: gameId is intentionally NOT in dependencies to avoid circular updates
-    // The effect checks gameId at the start and returns early if it's already set
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomCode, gameIdParam, quizId, playSettings, router]);
+  }, [roomCode, gameIdParam, quizId, router]);
 
   const handleConfirmStartQuiz = async () => {
     if (!gameId) {
@@ -288,9 +298,9 @@ function HostWaitingRoomContent() {
         return;
       }
 
-      // Emit WebSocket event to notify all players
+      // Emit WebSocket event to notify all players via the room
       const actualGameCode = gameCode || roomCode;
-      if (socket) {
+      if (socket && socket.connected) {
         socket.emit('game:started', { roomId: gameId, roomCode: actualGameCode });
       }
 
@@ -413,18 +423,28 @@ function HostWaitingRoomContent() {
 
             {/* Center Panel - Host Controls */}
             <div className="lg:col-span-1 h-full flex flex-col items-center justify-center space-y-6">
+              {isInitializing && (
+                <div className="w-full max-w-md bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg shadow-md">
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <p className="text-sm">ゲームを初期化中...</p>
+                  </div>
+                </div>
+              )}
               {gameIdError && (
                 <div className="w-full max-w-md bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-md">
                   <p className="font-semibold">エラー</p>
                   <p className="text-sm">{gameIdError}</p>
                 </div>
               )}
-              <HostControls
-                roomCode={gameCode || roomCode}
-                onStartQuiz={handleStartQuiz}
-                onOpenScreen={handleOpenScreen}
-                className="w-full max-w-md h-fit"
-              />
+              {!isInitializing && (
+                <HostControls
+                  roomCode={gameCode || roomCode}
+                  onStartQuiz={handleStartQuiz}
+                  onOpenScreen={handleOpenScreen}
+                  className="w-full max-w-md h-fit"
+                />
+              )}
             </div>
 
             {/* Right Panel - Room Management */}

@@ -59,6 +59,14 @@ export interface Player {
   last_active_at: string;
 }
 
+export interface PlayersResponse {
+  players: Player[];
+  total: number;
+  game_id: string;
+  limit: number;
+  offset: number;
+}
+
 export interface PlayerStats {
   total_answers: number;
   correct_answers: number;
@@ -361,9 +369,10 @@ class GameApiClient {
   /**
    * GET /games/:gameId/players
    * Get all players in a game
+   * Backend returns PlayersResponse with { players: Player[], total: number, ... }
    */
   async getPlayers(gameId: string) {
-    return this.request<Player[]>(`/games/${gameId}/players`, {
+    return this.request<PlayersResponse>(`/games/${gameId}/players`, {
       method: 'GET',
     });
   }
