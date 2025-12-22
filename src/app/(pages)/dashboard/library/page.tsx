@@ -15,6 +15,8 @@ import {
   PreviewQuizModal,
 } from '@/components/quiz-library';
 import { useQuizPreview, useCloneQuiz } from '@/hooks/useQuizLibrary';
+import { gameApi } from '@/services/gameApi';
+import { quizService } from '@/lib/quizService';
 
 type TabValue = 'my-library' | 'public-browse';
 
@@ -108,6 +110,9 @@ export default function LibraryPage() {
     quizId: null,
   });
 
+  // Game creation state
+  const [isCreatingGame, setIsCreatingGame] = useState(false);
+
   // Event handlers for My Library
   const handleMyLibraryFiltersChange = (filters: Partial<typeof myLibraryFilters>) => {
     setMyLibraryFilters((prev) => ({ ...prev, ...filters }));
@@ -127,9 +132,70 @@ export default function LibraryPage() {
     router.push(`/create/edit/${id}`);
   };
 
-  const handleStartQuiz = (id: string) => {
-    // Backend will generate the authoritative game_code during creation
-    router.push(`/host-waiting-room?quizId=${id}`);
+  const handleStartQuiz = async (id: string) => {
+    // Prevent multiple simultaneous game creations
+    if (isCreatingGame) {
+      return;
+    }
+
+    try {
+      setIsCreatingGame(true);
+
+      // Fetch quiz set to get play_settings
+      const quizSet = await quizService.getQuiz(id);
+
+      // Extract play_settings from quiz set
+      // The backend will fetch the quiz again and extract the code from play_settings
+      // We pass the play_settings as game_settings so they're used for the game
+      const playSettings = quizSet.play_settings || {
+        show_question_only: true,
+        show_explanation: true,
+        time_bonus: true,
+        streak_bonus: true,
+        show_correct_answer: false,
+        max_players: 400,
+      };
+
+      // Prepare game settings from play_settings (excluding code - backend handles that)
+      const gameSettings = {
+        show_question_only: playSettings.show_question_only ?? true,
+        show_explanation: playSettings.show_explanation ?? true,
+        time_bonus: playSettings.time_bonus ?? true,
+        streak_bonus: playSettings.streak_bonus ?? true,
+        show_correct_answer: playSettings.show_correct_answer ?? false,
+        max_players: playSettings.max_players ?? 400,
+      };
+
+      // Create the game via API - this creates both games and game_flows records
+      // Backend will fetch the quiz, extract code from play_settings, and use game_settings for game config
+      const { data: newGame, error: createError } = await gameApi.createGame(id, gameSettings);
+
+      if (createError || !newGame) {
+        const errorMessage = createError?.message || 'ゲームの作成に失敗しました';
+        toast.error(errorMessage);
+        console.error('Failed to create game:', createError);
+        return;
+      }
+
+      // Get the authoritative game_code from backend
+      const gameCode = newGame.game_code || newGame.room_code || '';
+      if (!gameCode) {
+        throw new Error('Game created but no game_code returned from backend');
+      }
+
+      // Store gameId in sessionStorage for player join flow
+      sessionStorage.setItem(`game_${gameCode}`, newGame.id);
+
+      // Navigate to waiting room with both quizId and gameId
+      router.push(`/host-waiting-room?code=${gameCode}&quizId=${id}&gameId=${newGame.id}`);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'ゲームの作成中にエラーが発生しました';
+      toast.error(errorMessage);
+      console.error('Error creating game:', err);
+    } finally {
+      setIsCreatingGame(false);
+    }
   };
 
   const handleDeleteQuiz = (id: string) => {
@@ -214,10 +280,9 @@ export default function LibraryPage() {
     });
   };
 
-  const handleStartFromPreview = (quizId: string) => {
-    // Generate a 6-digit room code
-    const roomCode = Math.floor(100000 + Math.random() * 900000).toString();
-    router.push(`/host-waiting-room?code=${roomCode}&quizId=${quizId}`);
+  const handleStartFromPreview = async (quizId: string) => {
+    // Use the same game creation logic as handleStartQuiz
+    await handleStartQuiz(quizId);
   };
 
   return (

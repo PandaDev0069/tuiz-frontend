@@ -24,6 +24,8 @@ import { useDraftQuizzes, usePublishedQuizzes } from '@/hooks/useDashboard';
 import { useQuizDeletion } from '@/hooks/useQuizDeletion';
 import { useQuizSearch, useRecentSearches, useSearchSuggestions } from '@/hooks/useQuizSearch';
 import { AuthGuard } from '@/components/auth/AuthGuard';
+import { gameApi } from '@/services/gameApi';
+import { quizService } from '@/lib/quizService';
 
 // Custom hook for dashboard state management
 const useDashboardState = () => {
@@ -41,6 +43,9 @@ const useDashboardState = () => {
     playCount: 'all',
     tags: [],
   });
+  const [isCreatingGame, setIsCreatingGame] = useState(false);
+  const [creatingQuizId, setCreatingQuizId] = useState<string | null>(null);
+  const [gameCreationError, setGameCreationError] = useState<string | null>(null);
 
   return {
     sidebarOpen,
@@ -51,6 +56,12 @@ const useDashboardState = () => {
     setSearchQuery,
     filters,
     setFilters,
+    isCreatingGame,
+    setIsCreatingGame,
+    creatingQuizId,
+    setCreatingQuizId,
+    gameCreationError,
+    setGameCreationError,
   };
 };
 
@@ -289,6 +300,8 @@ const QuizSection: React.FC<{
   onStart: (id: string) => void;
   onDelete: (id: string) => void;
   isDeleting: boolean;
+  isCreatingGame?: boolean;
+  creatingQuizId?: string | null;
   onCreateQuiz?: () => void;
   containerId: string;
   showCreateButton?: boolean;
@@ -303,6 +316,8 @@ const QuizSection: React.FC<{
   onStart,
   onDelete,
   isDeleting,
+  isCreatingGame = false,
+  creatingQuizId = null,
   onCreateQuiz,
   containerId,
   showCreateButton = false,
@@ -362,6 +377,7 @@ const QuizSection: React.FC<{
                 onStart={onStart}
                 onDelete={onDelete}
                 isDeleting={isDeleting}
+                isStarting={isCreatingGame && quiz.id === creatingQuizId}
               />
             </div>
           ))}
@@ -388,6 +404,12 @@ function DashboardContent() {
     setSearchQuery,
     filters,
     setFilters,
+    isCreatingGame,
+    setIsCreatingGame,
+    creatingQuizId,
+    setCreatingQuizId,
+    gameCreationError,
+    setGameCreationError,
   } = useDashboardState();
 
   // Use custom hooks for search functionality
@@ -450,9 +472,73 @@ function DashboardContent() {
     router.push(`/create/edit/${id}`);
   };
 
-  const handleStartQuiz = (id: string) => {
-    // Backend will generate the authoritative game_code during creation
-    router.push(`/host-waiting-room?quizId=${id}`);
+  const handleStartQuiz = async (id: string) => {
+    // Prevent multiple simultaneous game creations
+    if (isCreatingGame) {
+      return;
+    }
+
+    try {
+      setIsCreatingGame(true);
+      setCreatingQuizId(id);
+      setGameCreationError(null);
+
+      // Fetch quiz set to get play_settings
+      const quizSet = await quizService.getQuiz(id);
+
+      // Extract play_settings from quiz set
+      // The backend will fetch the quiz again and extract the code from play_settings
+      // We pass the play_settings as game_settings so they're used for the game
+      const playSettings = quizSet.play_settings || {
+        show_question_only: true,
+        show_explanation: true,
+        time_bonus: true,
+        streak_bonus: true,
+        show_correct_answer: false,
+        max_players: 400,
+      };
+
+      // Prepare game settings from play_settings (excluding code - backend handles that)
+      const gameSettings = {
+        show_question_only: playSettings.show_question_only ?? true,
+        show_explanation: playSettings.show_explanation ?? true,
+        time_bonus: playSettings.time_bonus ?? true,
+        streak_bonus: playSettings.streak_bonus ?? true,
+        show_correct_answer: playSettings.show_correct_answer ?? false,
+        max_players: playSettings.max_players ?? 400,
+      };
+
+      // Create the game via API - this creates both games and game_flows records
+      // Backend will fetch the quiz, extract code from play_settings, and use game_settings for game config
+      const { data: newGame, error: createError } = await gameApi.createGame(id, gameSettings);
+
+      if (createError || !newGame) {
+        const errorMessage = createError?.message || 'ゲームの作成に失敗しました';
+        setGameCreationError(errorMessage);
+        console.error('Failed to create game:', createError);
+        return;
+      }
+
+      // Get the authoritative game_code from backend
+      const gameCode = newGame.game_code || newGame.room_code || '';
+      if (!gameCode) {
+        throw new Error('Game created but no game_code returned from backend');
+      }
+
+      // Store gameId in sessionStorage for player join flow
+      sessionStorage.setItem(`game_${gameCode}`, newGame.id);
+
+      // Navigate to waiting room with both quizId and gameId
+      router.push(`/host-waiting-room?code=${gameCode}&quizId=${id}&gameId=${newGame.id}`);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'ゲームの作成中にエラーが発生しました';
+      setGameCreationError(errorMessage);
+      console.error('Error creating game:', err);
+    } finally {
+      setIsCreatingGame(false);
+      setCreatingQuizId(null);
+    }
   };
 
   const handleDeleteQuiz = (id: string) => {
@@ -485,6 +571,19 @@ function DashboardContent() {
       <PageContainer className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
         <main role="main">
           <Container size="lg" className="max-w-7xl mx-auto">
+            {/* Game Creation Error */}
+            {gameCreationError && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-md">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5" />
+                  <div>
+                    <p className="font-semibold">ゲーム作成エラー</p>
+                    <p className="text-sm">{gameCreationError}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Quick Actions Section */}
             <QuickActions
               onCreateQuiz={handleCreateQuiz}
@@ -515,6 +614,8 @@ function DashboardContent() {
               onStart={handleStartQuiz}
               onDelete={handleDeleteQuiz}
               isDeleting={isDeleting}
+              isCreatingGame={isCreatingGame}
+              creatingQuizId={creatingQuizId}
               onCreateQuiz={handleCreateQuiz}
               containerId="draft-quizzes-container"
               showCreateButton={true}
@@ -531,6 +632,8 @@ function DashboardContent() {
               onStart={handleStartQuiz}
               onDelete={handleDeleteQuiz}
               isDeleting={isDeleting}
+              isCreatingGame={isCreatingGame}
+              creatingQuizId={creatingQuizId}
               containerId="published-quizzes-container"
               showCreateButton={false}
               emptyMessage="公開済みのクイズがありません"

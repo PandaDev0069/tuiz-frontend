@@ -87,9 +87,25 @@ function HostWaitingRoomContent() {
     }
   }, [gameId]);
 
-  // Fetch players when gameId is available
+  // Fetch game data and players when gameId is available
   useEffect(() => {
     if (gameId) {
+      // Fetch game data to get lock status
+      const fetchGameData = async () => {
+        try {
+          const { data: game, error } = await gameApi.getGame(gameId);
+          if (error || !game) {
+            console.error('Failed to fetch game data:', error);
+            return;
+          }
+          // Sync lock status from backend
+          setIsRoomLocked(game.locked);
+        } catch (err) {
+          console.error('Error fetching game data:', err);
+        }
+      };
+
+      fetchGameData();
       fetchPlayers();
 
       // Set up polling to refresh player list every 3 seconds
@@ -304,13 +320,46 @@ function HostWaitingRoomContent() {
     console.warn('handleAddPlayer is deprecated - players join via the join endpoint');
   };
 
-  const handleRoomLockToggle = (isLocked: boolean) => {
-    setIsRoomLocked(isLocked);
-    /**
-     * Implementation pending: Actual room lock logic with backend API call
-     * Required: Update room status in database, emit WebSocket event to prevent new joins
-     */
-    console.log(`Room ${isLocked ? 'locked' : 'unlocked'}`);
+  const handleRoomLockToggle = async (isLocked: boolean) => {
+    if (!gameId) {
+      console.error('Cannot lock room: gameId is missing');
+      return;
+    }
+
+    try {
+      // Update room lock status via backend API
+      const { data: game, error } = await gameApi.lockGame(gameId, isLocked);
+
+      if (error || !game) {
+        const errorMessage =
+          error?.message || `ルームの${isLocked ? 'ロック' : 'アンロック'}に失敗しました`;
+        setGameIdError(errorMessage);
+        console.error('Failed to lock/unlock room:', error);
+        // Revert the state change on error
+        setIsRoomLocked(!isLocked);
+        return;
+      }
+
+      // Update local state on success
+      setIsRoomLocked(game.locked);
+
+      // Emit WebSocket event to notify players about room lock status
+      if (socket) {
+        socket.emit('game:room-locked', {
+          roomId: gameId,
+          locked: game.locked,
+        });
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : `ルームの${isLocked ? 'ロック' : 'アンロック'}中にエラーが発生しました`;
+      setGameIdError(errorMessage);
+      console.error('Error locking/unlocking room:', err);
+      // Revert the state change on error
+      setIsRoomLocked(!isLocked);
+    }
   };
 
   return (

@@ -13,6 +13,7 @@ export interface QuizCardProps {
   onStart?: (id: string) => void;
   onDelete?: (id: string) => void;
   isDeleting?: boolean;
+  isStarting?: boolean;
   className?: string;
 }
 
@@ -22,6 +23,7 @@ export const QuizCard: React.FC<QuizCardProps> = ({
   onStart,
   onDelete,
   isDeleting = false,
+  isStarting = false,
   className,
 }) => {
   const handleEdit = () => onEdit?.(quiz.id);
@@ -163,10 +165,14 @@ export const QuizCard: React.FC<QuizCardProps> = ({
             <Button
               size="sm"
               onClick={handleStart}
-              disabled={isDeleting}
+              disabled={isDeleting || isStarting}
               className="flex-1 bg-green-500 hover:bg-green-600 text-white shadow-md hover:shadow-lg text-[10px] sm:text-sm px-1 sm:px-3"
             >
-              <Play className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
+              {isStarting ? (
+                <Loader2 className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1 animate-spin" />
+              ) : (
+                <Play className="w-2.5 h-2.5 sm:w-4 sm:h-4 mr-0.5 sm:mr-1" />
+              )}
               ゲーム開始
             </Button>
             <Button
