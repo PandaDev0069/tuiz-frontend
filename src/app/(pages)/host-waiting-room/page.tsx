@@ -15,6 +15,7 @@ import { QuizPlaySettings } from '@/types/quiz';
 import { gameApi, type PlayersResponse } from '@/services/gameApi';
 import { useSocket } from '@/components/providers/SocketProvider';
 import { quizService } from '@/lib/quizService';
+import toast from 'react-hot-toast';
 
 function HostWaitingRoomContent() {
   const router = useRouter();
@@ -212,12 +213,25 @@ function HostWaitingRoomContent() {
     };
     socket.on('game:room-locked', handleRoomLocked);
 
+    // Listen for player kicked events
+    const handlePlayerKicked = (data: { player_id: string; player_name: string }) => {
+      console.log('Player kicked:', data);
+      // Refresh player list when a player is kicked
+      fetchPlayers();
+      // Show notification
+      toast.success(`${data.player_name}がBANされました`, {
+        icon: '🚫',
+      });
+    };
+    socket.on('game:player-kicked', handlePlayerKicked);
+
     return () => {
       socket.off('room:user-joined', handlePlayerJoined);
       socket.off('room:user-left', handlePlayerLeft);
       socket.off('game:player-joined', handlePlayerJoined);
       socket.off('game:player-left', handlePlayerLeft);
       socket.off('game:room-locked', handleRoomLocked);
+      socket.off('game:player-kicked', handlePlayerKicked);
       socket.emit('room:leave', { roomId: gameId });
     };
   }, [socket, gameId, fetchPlayers]);
@@ -226,17 +240,35 @@ function HostWaitingRoomContent() {
   const handlePlayerBan = async (playerId: string) => {
     if (!gameId) return;
 
+    // Find player name for better error messages
+    const playerToBan = players.find((p) => p.id === playerId);
+    const playerName = playerToBan?.name || 'プレイヤー';
+
     try {
       // Call backend API to kick player
       const { error } = await gameApi.kickPlayer(gameId, playerId);
       if (error) {
+        const errorMessage = error.message || 'プレイヤーのBANに失敗しました';
+        toast.error(errorMessage, {
+          icon: '❌',
+        });
         console.error('Failed to ban player:', error);
         return;
       }
 
+      // Show success message
+      toast.success(`${playerName}をBANしました`, {
+        icon: '🚫',
+      });
+
       // Refresh player list after banning
       await fetchPlayers();
     } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'プレイヤーのBAN中にエラーが発生しました';
+      toast.error(errorMessage, {
+        icon: '❌',
+      });
       console.error('Error banning player:', err);
     }
   };

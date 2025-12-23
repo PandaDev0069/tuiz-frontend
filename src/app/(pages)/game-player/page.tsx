@@ -19,6 +19,7 @@ import { Question, AnswerResult } from '@/types/game';
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
 import type { QuestionWithAnswers } from '@/types/quiz';
+import { toast } from 'react-hot-toast';
 
 type PlayerPhase =
   | 'waiting'
@@ -128,6 +129,40 @@ function PlayerGameContent() {
     loadQuiz();
   }, [gameId]);
 
+  // Handle player kicked event - redirect to join page
+  const handlePlayerKicked = useCallback(
+    (data: {
+      player_id: string;
+      player_name: string;
+      game_id: string;
+      kicked_by: string;
+      timestamp: string;
+    }) => {
+      // Check if the kicked player is the current player
+      if (data.player_id === playerId || data.game_id === gameId) {
+        console.log('Player was kicked during game:', data);
+
+        // Show notification
+        toast.error('ホストによってBANされました', {
+          icon: '🚫',
+          duration: 5000,
+        });
+
+        // Clear stored game data (try to get from URL or use gameId)
+        const roomCode = searchParams.get('code') || '';
+        if (roomCode) {
+          sessionStorage.removeItem(`game_${roomCode}`);
+        }
+
+        // Redirect to join page after a short delay
+        setTimeout(() => {
+          router.push('/join');
+        }, 2000);
+      }
+    },
+    [playerId, gameId, router, searchParams],
+  );
+
   // Listen for answer stats updates and phase changes
   useEffect(() => {
     if (!socket || !isConnected || !gameId) return;
@@ -152,12 +187,22 @@ function PlayerGameContent() {
 
     socket.on('game:answer:stats:update', handleStatsUpdate);
     socket.on('game:phase:change', handlePhaseChange);
+    socket.on('game:player-kicked', handlePlayerKicked);
 
     return () => {
       socket.off('game:answer:stats:update', handleStatsUpdate);
       socket.off('game:phase:change', handlePhaseChange);
+      socket.off('game:player-kicked', handlePlayerKicked);
     };
-  }, [socket, isConnected, gameId, gameFlow?.current_question_id, playerId, router]);
+  }, [
+    socket,
+    isConnected,
+    gameId,
+    gameFlow?.current_question_id,
+    playerId,
+    router,
+    handlePlayerKicked,
+  ]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -422,7 +467,7 @@ function PlayerGameContent() {
         <PlayerPodiumScreen
           entries={leaderboard.map((entry) => ({
             playerId: entry.player_id,
-            playerName: entry.display_name,
+            playerName: entry.player_name,
             score: entry.score,
             rank: entry.rank,
             previousRank: entry.rank,

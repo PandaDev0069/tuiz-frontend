@@ -282,11 +282,42 @@ function WaitingRoomContent() {
       console.log('Player left:', data);
     };
 
+    // Handle player kicked event - redirect to join page
+    const handlePlayerKicked = (data: {
+      player_id: string;
+      player_name: string;
+      game_id: string;
+      kicked_by: string;
+      timestamp: string;
+    }) => {
+      // Check if the kicked player is the current player
+      if (data.player_id === playerId || data.game_id === gameId) {
+        console.log('Player was kicked:', data);
+
+        // Show notification
+        toast.error('ホストによってBANされました', {
+          icon: '🚫',
+          duration: 5000,
+        });
+
+        // Clear stored game data
+        if (roomCode) {
+          sessionStorage.removeItem(`game_${roomCode}`);
+        }
+
+        // Redirect to join page after a short delay
+        setTimeout(() => {
+          router.push('/join');
+        }, 2000);
+      }
+    };
+
     // Register event listeners
     socket.on('game:started', handleGameStarted);
     socket.on('game:room-locked', handleRoomLocked);
     socket.on('room:user-joined', handlePlayerJoined);
     socket.on('room:user-left', handlePlayerLeft);
+    socket.on('game:player-kicked', handlePlayerKicked);
     socket.on('connect', handleReconnect); // Handle reconnection
 
     // Cleanup on unmount
@@ -295,6 +326,7 @@ function WaitingRoomContent() {
       socket.off('game:room-locked', handleRoomLocked);
       socket.off('room:user-joined', handlePlayerJoined);
       socket.off('room:user-left', handlePlayerLeft);
+      socket.off('game:player-kicked', handlePlayerKicked);
       socket.off('connect', handleReconnect);
 
       // Leave room on unmount
