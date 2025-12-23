@@ -87,10 +87,12 @@ export function useGameRoom(events?: GameRoomEvents): UseGameRoomReturn {
         return;
       }
 
-      setPlayers(playerList);
+      // playerList is PlayersResponse, extract the players array
+      const playersArray = playerList.players || [];
+      setPlayers(playersArray);
 
       // Update room player count
-      setRoom((prev) => (prev ? { ...prev, playerCount: playerList.length } : null));
+      setRoom((prev) => (prev ? { ...prev, playerCount: playersArray.length } : null));
     } catch (err) {
       console.error('[useGameRoom] Refresh players error:', err);
     }
