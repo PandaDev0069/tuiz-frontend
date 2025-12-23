@@ -109,8 +109,13 @@ function PlayerGameContent() {
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
   const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
   const [isMobile, setIsMobile] = useState(true);
+  const [currentQuestionData, setCurrentQuestionData] = useState<{
+    question: Question;
+    serverTime: string | null;
+    isActive: boolean;
+  } | null>(null);
 
-  // Load quiz data
+  // Load quiz data once (for fallback)
   useEffect(() => {
     if (!gameId) return;
     const loadQuiz = async () => {
@@ -128,6 +133,56 @@ function PlayerGameContent() {
     };
     loadQuiz();
   }, [gameId]);
+
+  // Fetch current question from API when question changes (with full metadata)
+  useEffect(() => {
+    if (!gameId || !gameFlow?.current_question_id) {
+      setCurrentQuestionData(null);
+      return;
+    }
+
+    const fetchCurrentQuestion = async () => {
+      try {
+        const { data, error } = await gameApi.getCurrentQuestion(gameId);
+        if (error || !data) {
+          console.error('Failed to fetch current question:', error);
+          return;
+        }
+
+        // Transform API response to Question format
+        const question: Question = {
+          id: data.question.id,
+          text: data.question.text,
+          image: data.question.image_url || undefined,
+          timeLimit: data.question.time_limit,
+          choices: data.answers
+            .sort((a, b) => a.order_index - b.order_index)
+            .map((a, i) => ({
+              id: a.id,
+              text: a.text,
+              letter: ['A', 'B', 'C', 'D'][i] || String.fromCharCode(65 + i),
+            })),
+          correctAnswerId: data.answers.find((a) => a.is_correct)?.id || '',
+          explanation: data.question.explanation_text || undefined,
+          type: 'multiple_choice_4',
+        };
+
+        setCurrentQuestionData({
+          question,
+          serverTime: data.server_time,
+          isActive: data.is_active,
+        });
+      } catch (err) {
+        console.error('Error fetching current question:', err);
+      }
+    };
+
+    fetchCurrentQuestion();
+
+    // Refresh question data periodically to sync with server (every 5 seconds)
+    const refreshInterval = setInterval(fetchCurrentQuestion, 5000);
+    return () => clearInterval(refreshInterval);
+  }, [gameId, gameFlow?.current_question_id]);
 
   // Handle player kicked event - redirect to join page
   const handlePlayerKicked = useCallback(
@@ -185,14 +240,25 @@ function PlayerGameContent() {
       }
     };
 
+    // Listen for game start (in case player joins after game has started)
+    const handleGameStarted = (data: { roomId?: string; gameId?: string; roomCode?: string }) => {
+      const targetGameId = data.gameId || data.roomId;
+      if (targetGameId === gameId) {
+        setCurrentPhase('countdown');
+        router.replace(`/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId}`);
+      }
+    };
+
     socket.on('game:answer:stats:update', handleStatsUpdate);
     socket.on('game:phase:change', handlePhaseChange);
     socket.on('game:player-kicked', handlePlayerKicked);
+    socket.on('game:started', handleGameStarted);
 
     return () => {
       socket.off('game:answer:stats:update', handleStatsUpdate);
       socket.off('game:phase:change', handlePhaseChange);
       socket.off('game:player-kicked', handlePlayerKicked);
+      socket.off('game:started', handleGameStarted);
     };
   }, [
     socket,
@@ -211,8 +277,14 @@ function PlayerGameContent() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Get current question (after questions are loaded) - must be after questions state
+  // Use current question from API if available, otherwise fallback to local quiz data
   const currentQuestion: Question = useMemo(() => {
+    // Prefer API data (has full metadata and server timestamps)
+    if (currentQuestionData?.question) {
+      return currentQuestionData.question;
+    }
+
+    // Fallback to local quiz data
     const idx = gameFlow?.current_question_index ?? questionIndexParam;
     const questionData = questions[idx];
     if (questionData) {
@@ -238,8 +310,7 @@ function PlayerGameContent() {
         type: 'multiple_choice_4',
       };
     }
-    // Fallback: Return a minimal question structure while loading
-    // This should only appear briefly while quiz data is being fetched
+    // Loading state
     return {
       id: gameFlow?.current_question_id || questionIdParam,
       text:
@@ -259,6 +330,7 @@ function PlayerGameContent() {
       type: 'multiple_choice_4',
     };
   }, [
+    currentQuestionData,
     gameFlow?.current_question_id,
     gameFlow?.current_question_index,
     questionIdParam,
@@ -303,6 +375,19 @@ function PlayerGameContent() {
 
   // Use answerResult from hook if available, otherwise construct from local state
   const revealPayload: AnswerResult = useMemo(() => {
+    // Safety check for empty choices
+    if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
+      return {
+        question: currentQuestion,
+        correctAnswer: { id: '', text: '読み込み中...', letter: 'A' },
+        playerAnswer: undefined,
+        isCorrect: false,
+        statistics: [],
+        totalPlayers: 0,
+        totalAnswered: 0,
+      };
+    }
+
     // answerResult from hook contains partial data (questionId, selectedOption, isCorrect, etc.)
     // We need to construct the full AnswerResult with question and statistics
     const playerChoice = answerResult?.selectedOption
@@ -326,9 +411,13 @@ function PlayerGameContent() {
       answerResult?.isCorrect ??
       (playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false);
 
+    const correctAnswerChoice =
+      currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId) ||
+      currentQuestion.choices[0]; // Fallback to first choice if not found
+
     return {
       question: currentQuestion,
-      correctAnswer: currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId)!,
+      correctAnswer: correctAnswerChoice,
       playerAnswer: playerChoice,
       isCorrect,
       statistics,
@@ -474,6 +563,15 @@ function PlayerGameContent() {
             rankChange: 'same' as const,
           }))}
         />
+      );
+    case 'ended':
+      return (
+        <div className="flex items-center justify-center h-screen bg-gradient-to-br from-cyan-900 via-blue-900 to-purple-900">
+          <div className="text-center p-6">
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">ゲーム終了</h1>
+            <p className="text-xl text-gray-200">ありがとうございました！</p>
+          </div>
+        </div>
       );
     default:
       return <div className="p-6">次のステップを待機しています...</div>;

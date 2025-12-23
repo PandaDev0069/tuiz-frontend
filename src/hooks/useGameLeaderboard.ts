@@ -87,7 +87,7 @@ function calculateRankChange(
     if (oldEntry && oldEntry.rank !== newEntry.rank) {
       changes.push({
         playerId: newEntry.player_id,
-        displayName: newEntry.display_name,
+        displayName: newEntry.player_name,
         fromRank: oldEntry.rank,
         toRank: newEntry.rank,
         isMovingUp: newEntry.rank < oldEntry.rank, // Lower rank number = higher position

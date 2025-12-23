@@ -286,6 +286,43 @@ class GameApiClient {
     });
   }
 
+  /**
+   * GET /games/:gameId/questions/current
+   * Get current question with full metadata (images, answers, server timestamps)
+   */
+  async getCurrentQuestion(gameId: string) {
+    return this.request<{
+      question: {
+        id: string;
+        text: string;
+        image_url: string | null;
+        type: string;
+        time_limit: number;
+        points: number;
+        difficulty: string;
+        explanation_title: string | null;
+        explanation_text: string | null;
+        explanation_image_url: string | null;
+        show_explanation_time: number;
+      };
+      answers: Array<{
+        id: string;
+        text: string;
+        image_url: string | null;
+        is_correct: boolean;
+        order_index: number;
+      }>;
+      question_index: number;
+      total_questions: number;
+      server_time: string;
+      start_time: string | null;
+      remaining_ms: number;
+      is_active: boolean;
+    }>(`/games/${gameId}/questions/current`, {
+      method: 'GET',
+    });
+  }
+
   // ==========================================================================
   // GAME STATE MANAGEMENT
   // ==========================================================================
@@ -369,6 +406,21 @@ class GameApiClient {
         method: 'POST',
       },
     );
+  }
+
+  /**
+   * POST /games/:gameId/questions/next
+   * Advance to the next question
+   */
+  async nextQuestion(gameId: string) {
+    return this.request<{
+      message: string;
+      gameFlow: GameFlow;
+      nextQuestion?: { id: string; index: number };
+      isComplete: boolean;
+    }>(`/games/${gameId}/questions/next`, {
+      method: 'POST',
+    });
   }
 
   // ==========================================================================

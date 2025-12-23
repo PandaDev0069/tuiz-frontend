@@ -334,10 +334,13 @@ function HostWaitingRoomContent() {
         return;
       }
 
-      // Emit WebSocket event to notify all players via the room
+      // Emit WebSocket events to notify all clients (players and public screen)
       const actualGameCode = gameCode || roomCode;
       if (socket && socket.connected) {
+        // Emit game:started event for players
         socket.emit('game:started', { roomId: gameId, roomCode: actualGameCode });
+        // Emit phase change to countdown for public screen and players
+        socket.emit('game:phase:change', { roomId: gameId, phase: 'countdown' });
       }
 
       // Redirect to game host page

@@ -70,7 +70,8 @@ export interface UseGameFlowReturn {
 interface SocketQuestionStartedEvent {
   roomId: string;
   question: { id: string; index?: number };
-  endsAt?: number;
+  startsAt?: number; // Server timestamp (milliseconds)
+  endsAt?: number; // Server timestamp (milliseconds)
 }
 
 interface SocketQuestionChangedEvent {
@@ -502,16 +503,34 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       if (data.roomId !== gameId) return;
       console.log('useGameFlow: Question started', data);
 
-      const durationMs = data.endsAt
-        ? Math.max(0, data.endsAt - Date.now())
-        : DEFAULT_QUESTION_DURATION_MS;
-      const idx =
-        typeof data.question?.index === 'number'
-          ? data.question.index
-          : (gameFlow?.current_question_index ?? 0);
+      // Use server timestamps if available (authoritative)
+      if (data.startsAt && data.endsAt) {
+        const serverStartTime = data.startsAt;
+        const serverEndTime = data.endsAt;
+        const durationMs = serverEndTime - serverStartTime;
 
-      updateTimerState(data.question.id, idx, new Date().toISOString(), durationMs);
-      events?.onQuestionStart?.(data.question.id, idx);
+        // Calculate server start time ISO string
+        const serverStartIso = new Date(serverStartTime).toISOString();
+
+        const idx =
+          typeof data.question?.index === 'number'
+            ? data.question.index
+            : (gameFlow?.current_question_index ?? 0);
+
+        updateTimerState(data.question.id, idx, serverStartIso, durationMs);
+        events?.onQuestionStart?.(data.question.id, idx);
+      } else {
+        // Fallback to client-side calculation if server timestamps not available
+        const durationMs = DEFAULT_QUESTION_DURATION_MS;
+        const idx =
+          typeof data.question?.index === 'number'
+            ? data.question.index
+            : (gameFlow?.current_question_index ?? 0);
+
+        updateTimerState(data.question.id, idx, new Date().toISOString(), durationMs);
+        events?.onQuestionStart?.(data.question.id, idx);
+      }
+
       refreshFlow();
     };
 

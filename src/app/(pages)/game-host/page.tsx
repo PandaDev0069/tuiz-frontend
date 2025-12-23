@@ -8,6 +8,7 @@ import {
   HostLeaderboardScreen,
   HostExplanationScreen,
   HostPodiumScreen,
+  HostGameEndScreen,
   PublicCountdownScreen,
 } from '@/components/game';
 import { Question, LeaderboardData } from '@/types/game';
@@ -76,6 +77,12 @@ function HostGameContent() {
 
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
+  const [currentQuestionData, setCurrentQuestionData] = useState<{
+    question: Question;
+    serverTime: string | null;
+    isActive: boolean;
+  } | null>(null);
+  const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
 
   // Listen for answer stats updates
   useEffect(() => {
@@ -97,6 +104,7 @@ function HostGameContent() {
     };
   }, [socket, gameId, gameFlow?.current_question_id]);
 
+  // Load quiz data once (for fallback and total questions count)
   useEffect(() => {
     if (!gameId) return;
     const loadQuiz = async () => {
@@ -115,11 +123,71 @@ function HostGameContent() {
     loadQuiz();
   }, [gameId]);
 
+  // Fetch current question from API when question changes (with full metadata)
+  useEffect(() => {
+    if (!gameId || !gameFlow?.current_question_id) {
+      setCurrentQuestionData(null);
+      return;
+    }
+
+    const fetchCurrentQuestion = async () => {
+      setIsLoadingQuestion(true);
+      try {
+        const { data, error } = await gameApi.getCurrentQuestion(gameId);
+        if (error || !data) {
+          console.error('Failed to fetch current question:', error);
+          // Fallback to local quiz data
+          return;
+        }
+
+        // Transform API response to Question format
+        const question: Question = {
+          id: data.question.id,
+          text: data.question.text,
+          image: data.question.image_url || undefined,
+          timeLimit: data.question.time_limit,
+          choices: data.answers
+            .sort((a, b) => a.order_index - b.order_index)
+            .map((a, i) => ({
+              id: a.id,
+              text: a.text,
+              letter: ['A', 'B', 'C', 'D'][i] || String.fromCharCode(65 + i),
+            })),
+          correctAnswerId: data.answers.find((a) => a.is_correct)?.id || '',
+          explanation: data.question.explanation_text || undefined,
+          type: 'multiple_choice_4',
+        };
+
+        setCurrentQuestionData({
+          question,
+          serverTime: data.server_time,
+          isActive: data.is_active,
+        });
+      } catch (err) {
+        console.error('Error fetching current question:', err);
+      } finally {
+        setIsLoadingQuestion(false);
+      }
+    };
+
+    fetchCurrentQuestion();
+
+    // Refresh question data periodically to detect desync (every 5 seconds)
+    const refreshInterval = setInterval(fetchCurrentQuestion, 5000);
+    return () => clearInterval(refreshInterval);
+  }, [gameId, gameFlow?.current_question_id]);
+
+  // Use current question from API if available, otherwise fallback to local quiz data
   const currentQuestion: Question = useMemo(() => {
+    // Prefer API data (has full metadata and server timestamps)
+    if (currentQuestionData?.question) {
+      return currentQuestionData.question;
+    }
+
+    // Fallback to local quiz data
     const idx = gameFlow?.current_question_index ?? questionIndexParam;
     const questionData = questions[idx];
 
-    // If we have real question data, use it
     if (questionData) {
       return {
         id: questionData.id,
@@ -144,8 +212,7 @@ function HostGameContent() {
       };
     }
 
-    // Fallback: Return a minimal question structure while loading
-    // This should only appear briefly while quiz data is being fetched
+    // Loading state
     return {
       id: gameFlow?.current_question_id || questionIdParam,
       text:
@@ -165,6 +232,7 @@ function HostGameContent() {
       type: 'multiple_choice_4',
     };
   }, [
+    currentQuestionData,
     gameFlow?.current_question_id,
     gameFlow?.current_question_index,
     questionIdParam,
@@ -236,7 +304,7 @@ function HostGameContent() {
     }
   }, [gameId, revealAnswer, router]);
 
-  const handleNextPhase = useCallback(() => {
+  const handleNextPhase = useCallback(async () => {
     const currentIdx = gameFlow?.current_question_index ?? questionIndexParam;
     const totalQ = questions.length || totalQuestionsParam;
     const isLastQuestion = currentIdx >= totalQ - 1;
@@ -264,29 +332,107 @@ function HostGameContent() {
         router.replace(`/game-host?gameId=${gameId}&phase=explanation`);
         emitPhaseChange('explanation');
       } else {
-        // Move to next question countdown
+        // Move to next question or end game
         const nextIdx = currentIdx + 1;
         if (nextIdx < totalQ) {
+          // Advance to next question via backend
+          try {
+            const { data, error } = await gameApi.nextQuestion(gameId);
+            if (error || !data) {
+              console.error('Failed to advance to next question:', error);
+              // Fallback: just update UI
+              setCurrentPhase('countdown');
+              router.replace(
+                `/game-host?gameId=${gameId}&phase=countdown&questionIndex=${nextIdx}`,
+              );
+              emitPhaseChange('countdown');
+            } else if (data.isComplete) {
+              // Game is complete
+              setCurrentPhase('podium');
+              router.replace(`/game-host?gameId=${gameId}&phase=podium`);
+              emitPhaseChange('podium');
+            } else {
+              // Next question ready - go to countdown
+              setCurrentPhase('countdown');
+              router.replace(
+                `/game-host?gameId=${gameId}&phase=countdown&questionIndex=${data.nextQuestion?.index ?? nextIdx}`,
+              );
+              emitPhaseChange('countdown');
+            }
+          } catch (e) {
+            console.error('Error advancing to next question:', e);
+            // Fallback: just update UI
+            setCurrentPhase('countdown');
+            router.replace(`/game-host?gameId=${gameId}&phase=countdown&questionIndex=${nextIdx}`);
+            emitPhaseChange('countdown');
+          }
+        } else {
+          // Last question - end game
+          try {
+            const { data, error } = await gameApi.nextQuestion(gameId);
+            if (error || !data || !data.isComplete) {
+              console.error('Failed to end game:', error);
+            }
+            setCurrentPhase('podium');
+            router.replace(`/game-host?gameId=${gameId}&phase=podium`);
+            emitPhaseChange('podium');
+          } catch (e) {
+            console.error('Error ending game:', e);
+            setCurrentPhase('podium');
+            router.replace(`/game-host?gameId=${gameId}&phase=podium`);
+            emitPhaseChange('podium');
+          }
+        }
+      }
+    } else if (currentPhase === 'explanation') {
+      // Move to next question or end game
+      const nextIdx = currentIdx + 1;
+      if (nextIdx < totalQ) {
+        // Advance to next question via backend
+        try {
+          const { data, error } = await gameApi.nextQuestion(gameId);
+          if (error || !data) {
+            console.error('Failed to advance to next question:', error);
+            // Fallback: just update UI
+            setCurrentPhase('countdown');
+            router.replace(`/game-host?gameId=${gameId}&phase=countdown&questionIndex=${nextIdx}`);
+            emitPhaseChange('countdown');
+          } else if (data.isComplete) {
+            // Game is complete
+            setCurrentPhase('podium');
+            router.replace(`/game-host?gameId=${gameId}&phase=podium`);
+            emitPhaseChange('podium');
+          } else {
+            // Next question ready - go to countdown
+            setCurrentPhase('countdown');
+            router.replace(
+              `/game-host?gameId=${gameId}&phase=countdown&questionIndex=${data.nextQuestion?.index ?? nextIdx}`,
+            );
+            emitPhaseChange('countdown');
+          }
+        } catch (e) {
+          console.error('Error advancing to next question:', e);
+          // Fallback: just update UI
           setCurrentPhase('countdown');
           router.replace(`/game-host?gameId=${gameId}&phase=countdown&questionIndex=${nextIdx}`);
           emitPhaseChange('countdown');
-        } else {
+        }
+      } else {
+        // Last question - end game
+        try {
+          const { data, error } = await gameApi.nextQuestion(gameId);
+          if (error || !data || !data.isComplete) {
+            console.error('Failed to end game:', error);
+          }
+          setCurrentPhase('podium');
+          router.replace(`/game-host?gameId=${gameId}&phase=podium`);
+          emitPhaseChange('podium');
+        } catch (e) {
+          console.error('Error ending game:', e);
           setCurrentPhase('podium');
           router.replace(`/game-host?gameId=${gameId}&phase=podium`);
           emitPhaseChange('podium');
         }
-      }
-    } else if (currentPhase === 'explanation') {
-      // Move to next question countdown
-      const nextIdx = currentIdx + 1;
-      if (nextIdx < totalQ) {
-        setCurrentPhase('countdown');
-        router.replace(`/game-host?gameId=${gameId}&phase=countdown&questionIndex=${nextIdx}`);
-        emitPhaseChange('countdown');
-      } else {
-        setCurrentPhase('podium');
-        router.replace(`/game-host?gameId=${gameId}&phase=podium`);
-        emitPhaseChange('podium');
       }
     }
   }, [
@@ -301,10 +447,14 @@ function HostGameContent() {
     emitPhaseChange,
   ]);
 
-  // Update phase when URL changes
+  // Update phase when URL changes and emit phase change event
   useEffect(() => {
     setCurrentPhase(phaseParam);
-  }, [phaseParam]);
+    // Emit phase change when phase is set (for public screen and players to sync)
+    if (phaseParam && gameId && socket) {
+      emitPhaseChange(phaseParam);
+    }
+  }, [phaseParam, gameId, socket, emitPhaseChange]);
 
   switch (currentPhase) {
     case 'countdown':
@@ -317,13 +467,23 @@ function HostGameContent() {
             // Auto-transition to question phase when countdown completes
             // The host can then start the question manually
             setCurrentPhase('question');
+            const currentIdx = gameFlow?.current_question_index ?? questionIndexParam;
             router.replace(
-              `/game-host?gameId=${gameId}&phase=question&questionIndex=${gameFlow?.current_question_index ?? questionIndexParam}`,
+              `/game-host?gameId=${gameId}&phase=question&questionIndex=${currentIdx}`,
             );
+            emitPhaseChange('question');
           }}
         />
       );
     case 'answer_reveal': {
+      if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
+        return (
+          <div className="flex items-center justify-center h-screen">
+            <div className="text-red-600 text-xl">問題データが読み込まれていません</div>
+          </div>
+        );
+      }
+
       const totalAnswered = Object.values(answerStats).reduce((sum, count) => sum + count, 0);
       const statistics = currentQuestion.choices.map((choice) => {
         const count = answerStats[choice.id] || 0;
@@ -334,13 +494,15 @@ function HostGameContent() {
         };
       });
 
+      const correctAnswerChoice =
+        currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId) ||
+        currentQuestion.choices[0]; // Fallback to first choice if not found
+
       return (
         <HostAnswerRevealScreen
           answerResult={{
             question: currentQuestion,
-            correctAnswer: currentQuestion.choices.find(
-              (c) => c.id === currentQuestion.correctAnswerId,
-            )!,
+            correctAnswer: correctAnswerChoice,
             playerAnswer: undefined,
             isCorrect: false,
             statistics,
@@ -373,7 +535,33 @@ function HostGameContent() {
         />
       );
     case 'podium':
-      return <HostPodiumScreen entries={leaderboardData.entries} />;
+      return (
+        <HostPodiumScreen
+          entries={leaderboardData.entries}
+          onAnimationComplete={() => {
+            // After podium animations, show game end screen
+            setTimeout(() => {
+              setCurrentPhase('ended');
+              router.replace(`/game-host?gameId=${gameId}&phase=ended`);
+              emitPhaseChange('ended');
+            }, 5000); // Wait for podium animations to complete
+          }}
+        />
+      );
+    case 'ended':
+      return (
+        <HostGameEndScreen
+          entries={leaderboardData.entries}
+          gameId={gameId}
+          onDismissRoom={() => {
+            router.push('/dashboard');
+          }}
+          onStartNewGame={() => {
+            // Navigate to dashboard to start a new game
+            router.push('/dashboard');
+          }}
+        />
+      );
     case 'question':
     default:
       return (
@@ -385,7 +573,14 @@ function HostGameContent() {
           onStartQuestion={handleStartQuestion}
           onRevealAnswer={handleRevealAnswer}
           isLive={timerState?.isActive ?? false}
-          isLoading={flowLoading}
+          isLoading={flowLoading || isLoadingQuestion}
+          errorMessage={
+            flowLoading
+              ? undefined
+              : currentQuestionData && !currentQuestionData.isActive && timerState?.isActive
+                ? 'タイマーの同期に問題があります'
+                : undefined
+          }
         />
       );
   }
