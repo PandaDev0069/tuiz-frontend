@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
@@ -26,6 +26,8 @@ function WaitingRoomContent() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isRoomLocked, setIsRoomLocked] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const isNavigatingRef = useRef(false);
+  const hasJoinedRoomRef = useRef(false);
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(true);
@@ -88,6 +90,42 @@ function WaitingRoomContent() {
     [gameId, deviceId],
   );
 
+  // Fetch current game state to recover if websocket events were missed
+  const syncGameState = useCallback(async () => {
+    if (!gameId || isNavigatingRef.current) return;
+
+    try {
+      const { data, error } = await gameApi.getGameState(gameId);
+      if (error || !data) return;
+
+      const { game, gameFlow } = data;
+      let nextPhase: string = 'waiting';
+
+      if (game.status === 'completed') {
+        nextPhase = 'ended';
+      } else if (gameFlow.current_question_id) {
+        if (gameFlow.current_question_end_time) {
+          nextPhase = 'answer_reveal';
+        } else if (gameFlow.current_question_start_time) {
+          nextPhase = 'question';
+        } else {
+          nextPhase = 'countdown';
+        }
+      } else if (game.status === 'active') {
+        nextPhase = 'countdown';
+      }
+
+      if (nextPhase !== 'waiting') {
+        isNavigatingRef.current = true;
+        router.replace(
+          `/game-player?gameId=${gameId}&phase=${nextPhase}&playerId=${playerId || playerName}`,
+        );
+      }
+    } catch (err) {
+      console.warn('[WaitingRoom] Failed to sync game state', err);
+    }
+  }, [gameId, router, playerId, playerName]);
+
   // Initialize player join flow
   useEffect(() => {
     // Wait for deviceId to be ready
@@ -123,6 +161,18 @@ function WaitingRoomContent() {
         if (!isMounted || !currentGameId) return;
         setGameId(currentGameId);
 
+        // Step 1.25: Check local cache for playerId to avoid duplicate creation
+        const cachedPlayerId =
+          (typeof window !== 'undefined' &&
+            sessionStorage.getItem(`player_${currentGameId}_${deviceId || 'unknown'}`)) ||
+          null;
+        if (cachedPlayerId) {
+          setPlayerId(cachedPlayerId);
+          setIsInitialized(true);
+          toast.success('再接続しました');
+          return;
+        }
+
         // Step 1.5: Check if player already exists (reconnection scenario)
         // This handles the case where player refreshes page or reconnects
         const existingPlayer = await checkExistingPlayer(currentGameId);
@@ -130,6 +180,12 @@ function WaitingRoomContent() {
           // Player already exists, use existing player
           if (!isMounted) return;
           setPlayerId(existingPlayer.id);
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem(
+              `player_${currentGameId}_${deviceId || 'unknown'}`,
+              existingPlayer.id,
+            );
+          }
           setIsInitialized(true);
           toast.success('再接続しました');
           return;
@@ -159,6 +215,9 @@ function WaitingRoomContent() {
         }
 
         setPlayerId(player.id);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(`player_${currentGameId}_${deviceId || 'unknown'}`, player.id);
+        }
 
         // Step 3: Initialize game_player_data (if not already created)
         // Note: Backend might create this automatically, but we'll try to create it
@@ -212,12 +271,18 @@ function WaitingRoomContent() {
     checkExistingPlayer,
   ]);
 
+  // If already initialized, double-check the current game state to avoid missing phase changes
+  useEffect(() => {
+    if (isInitialized) {
+      syncGameState();
+    }
+  }, [isInitialized, syncGameState]);
+
   // WebSocket room joining and event listeners
   useEffect(() => {
     if (!socket || !isConnected || !gameId || !isInitialized || !playerId) return;
 
     let reconnectAttempted = false;
-    const hasJoinedRoomRef = { current: false }; // Use ref-like object to persist across closures
 
     // Join the game room via WebSocket
     // Backend will create room_participants and websocket_connections records
@@ -241,10 +306,22 @@ function WaitingRoomContent() {
     // Listen for game start event
     const handleGameStarted = (data: { roomId?: string; gameId?: string; roomCode?: string }) => {
       const targetGameId = data.gameId || data.roomId;
+      if (isNavigatingRef.current) return;
       if (targetGameId === gameId || data.roomCode === roomCode) {
-        // Redirect to player game page
+        isNavigatingRef.current = true;
         router.push(
           `/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId || playerName}`,
+        );
+      }
+    };
+
+    // Listen for explicit phase changes (fallback if game:started missed)
+    const handlePhaseChange = (data: { roomId: string; phase: string }) => {
+      if (isNavigatingRef.current) return;
+      if (data.roomId === gameId) {
+        isNavigatingRef.current = true;
+        router.push(
+          `/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId || playerName}`,
         );
       }
     };
@@ -270,7 +347,12 @@ function WaitingRoomContent() {
         // Player exists, rejoin room (reset flag to allow rejoin)
         hasJoinedRoomRef.current = false;
         setPlayerId(existingPlayer.id);
+        if (typeof window !== 'undefined' && gameId) {
+          sessionStorage.setItem(`player_${gameId}_${deviceId || 'unknown'}`, existingPlayer.id);
+        }
         joinRoom();
+        // Re-sync current phase in case we missed events while disconnected
+        syncGameState();
         toast.success('再接続しました');
       } else {
         // Player doesn't exist, need to rejoin game
@@ -312,6 +394,9 @@ function WaitingRoomContent() {
         if (roomCode) {
           sessionStorage.removeItem(`game_${roomCode}`);
         }
+        if (typeof window !== 'undefined' && gameId) {
+          sessionStorage.removeItem(`player_${gameId}_${deviceId || 'unknown'}`);
+        }
 
         // Redirect to join page after a short delay
         setTimeout(() => {
@@ -322,6 +407,7 @@ function WaitingRoomContent() {
 
     // Register event listeners
     socket.on('game:started', handleGameStarted);
+    socket.on('game:phase:change', handlePhaseChange);
     socket.on('game:room-locked', handleRoomLocked);
     socket.on('room:user-joined', handlePlayerJoined);
     socket.on('room:user-left', handlePlayerLeft);
@@ -331,14 +417,15 @@ function WaitingRoomContent() {
     // Cleanup on unmount
     return () => {
       socket.off('game:started', handleGameStarted);
+      socket.off('game:phase:change', handlePhaseChange);
       socket.off('game:room-locked', handleRoomLocked);
       socket.off('room:user-joined', handlePlayerJoined);
       socket.off('room:user-left', handlePlayerLeft);
       socket.off('game:player-kicked', handlePlayerKicked);
       socket.off('connect', handleReconnect);
 
-      // Leave room on unmount
-      if (gameId && hasJoinedRoomRef.current) {
+      // Leave room on unmount unless we are navigating to the game
+      if (gameId && hasJoinedRoomRef.current && !isNavigatingRef.current) {
         console.log('[WaitingRoom] Leaving room on unmount');
         socket.emit('room:leave', { roomId: gameId });
         hasJoinedRoomRef.current = false;
@@ -355,6 +442,7 @@ function WaitingRoomContent() {
     isInitialized,
     router,
     checkExistingPlayer,
+    syncGameState,
   ]);
 
   // Countdown state
