@@ -421,10 +421,10 @@ function PlayerGameContent() {
       playerAnswer: playerChoice,
       isCorrect,
       statistics,
-      totalPlayers: leaderboard.length || 0,
+      totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
       totalAnswered,
     };
-  }, [answerResult, currentQuestion, selectedAnswer, answerStats, leaderboard.length]);
+  }, [answerResult, currentQuestion, selectedAnswer, answerStats, leaderboard]);
 
   // Update phase when URL changes
   useEffect(() => {
@@ -523,14 +523,16 @@ function PlayerGameContent() {
       return (
         <PlayerLeaderboardScreen
           leaderboardData={{
-            entries: leaderboard.map((entry) => ({
-              playerId: entry.player_id,
-              playerName: entry.player_name,
-              score: entry.score,
-              rank: entry.rank,
-              previousRank: entry.rank,
-              rankChange: 'same' as const,
-            })),
+            entries: Array.isArray(leaderboard)
+              ? leaderboard.map((entry) => ({
+                  playerId: entry.player_id,
+                  playerName: entry.player_name,
+                  score: entry.score,
+                  rank: entry.rank,
+                  previousRank: entry.rank,
+                  rankChange: 'same' as const,
+                }))
+              : [],
             questionNumber: (gameFlow.current_question_index ?? questionIndexParam) + 1,
             totalQuestions: questions.length || totalQuestions,
             timeRemaining: Math.max(0, Math.round((timerState?.remainingMs || 5000) / 1000)),
@@ -554,14 +556,18 @@ function PlayerGameContent() {
     case 'podium':
       return (
         <PlayerPodiumScreen
-          entries={leaderboard.map((entry) => ({
-            playerId: entry.player_id,
-            playerName: entry.player_name,
-            score: entry.score,
-            rank: entry.rank,
-            previousRank: entry.rank,
-            rankChange: 'same' as const,
-          }))}
+          entries={
+            Array.isArray(leaderboard)
+              ? leaderboard.map((entry) => ({
+                  playerId: entry.player_id,
+                  playerName: entry.player_name,
+                  score: entry.score,
+                  rank: entry.rank,
+                  previousRank: entry.rank,
+                  rankChange: 'same' as const,
+                }))
+              : []
+          }
         />
       );
     case 'ended':

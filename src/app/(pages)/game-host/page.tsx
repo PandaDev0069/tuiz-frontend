@@ -243,14 +243,16 @@ function HostGameContent() {
 
   const leaderboardData: LeaderboardData = useMemo(
     () => ({
-      entries: leaderboard.map((entry) => ({
-        playerId: entry.player_id,
-        playerName: entry.player_name,
-        score: entry.score,
-        rank: entry.rank,
-        previousRank: entry.rank,
-        rankChange: 'same' as const,
-      })),
+      entries: Array.isArray(leaderboard)
+        ? leaderboard.map((entry) => ({
+            playerId: entry.player_id,
+            playerName: entry.player_name,
+            score: entry.score,
+            rank: entry.rank,
+            previousRank: entry.rank,
+            rankChange: 'same' as const,
+          }))
+        : [],
       questionNumber: (gameFlow?.current_question_index ?? questionIndexParam) + 1,
       totalQuestions: questions.length || totalQuestionsParam,
       timeRemaining: Math.max(0, Math.round((timerState?.remainingMs || 5000) / 1000)),
@@ -506,7 +508,7 @@ function HostGameContent() {
             playerAnswer: undefined,
             isCorrect: false,
             statistics,
-            totalPlayers: leaderboard.length || 0,
+            totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
             totalAnswered,
           }}
           onNext={handleNextPhase}

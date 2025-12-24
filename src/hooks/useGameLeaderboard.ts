@@ -157,17 +157,20 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
         throw new Error(apiError?.message || 'Failed to fetch leaderboard');
       }
 
+      // Ensure data is an array
+      const leaderboardArray = Array.isArray(data) ? data : [];
+
       // Store previous leaderboard for rank change detection
       const oldLeaderboard = [...leaderboard];
       previousLeaderboardRef.current = oldLeaderboard;
 
       // Update leaderboard
-      setLeaderboard(data);
+      setLeaderboard(leaderboardArray);
       setLastUpdateTime(new Date());
 
       // Detect and emit rank changes if animations enabled
       if (enableAnimations && oldLeaderboard.length > 0) {
-        const rankChanges = calculateRankChange(oldLeaderboard, data);
+        const rankChanges = calculateRankChange(oldLeaderboard, leaderboardArray);
 
         if (rankChanges.length > 0) {
           setRecentRankChanges(rankChanges);

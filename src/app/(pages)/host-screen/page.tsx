@@ -259,14 +259,16 @@ function HostScreenContent() {
 
   const leaderboardData: LeaderboardData = useMemo(
     () => ({
-      entries: leaderboard.map((entry) => ({
-        playerId: entry.player_id,
-        playerName: entry.player_name,
-        score: entry.score,
-        rank: entry.rank,
-        previousRank: entry.rank,
-        rankChange: 'same' as const,
-      })),
+      entries: Array.isArray(leaderboard)
+        ? leaderboard.map((entry) => ({
+            playerId: entry.player_id,
+            playerName: entry.player_name,
+            score: entry.score,
+            rank: entry.rank,
+            previousRank: entry.rank,
+            rankChange: 'same' as const,
+          }))
+        : [],
       questionNumber: questionIndex + 1,
       totalQuestions: questions.length,
       timeRemaining: currentTimeSeconds,
@@ -332,7 +334,7 @@ function HostScreenContent() {
             playerAnswer: undefined,
             isCorrect: false,
             statistics,
-            totalPlayers: leaderboard.length || 0,
+            totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
             totalAnswered,
           }}
           // No controls on public screen
