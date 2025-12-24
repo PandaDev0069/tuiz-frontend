@@ -139,6 +139,8 @@ function HostGameContent() {
     const hasJoinedRoomRef = { current: false }; // Use ref-like object to persist across closures
 
     // Join the game room to receive and emit events
+    // Note: We may already be in the room from host-waiting-room, but we'll join anyway
+    // The backend will handle duplicate joins gracefully
     const joinRoom = () => {
       if (hasJoinedRoomRef.current) {
         console.log('[GameHost] Already joined room, skipping duplicate join');
@@ -149,6 +151,8 @@ function HostGameContent() {
       socket.emit('room:join', { roomId: gameId });
     };
 
+    // Join immediately on mount - this ensures we're in the room even if
+    // the host-waiting-room cleanup hasn't run yet
     joinRoom();
 
     const handleStatsUpdate = (data: {

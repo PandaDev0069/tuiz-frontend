@@ -193,8 +193,20 @@ function HostWaitingRoomContent() {
       return;
     }
 
+    const hasJoinedRoomRef = { current: false }; // Track room join to prevent duplicates
+
     // Join the game room to receive events
-    socket.emit('room:join', { roomId: gameId });
+    const joinRoom = () => {
+      if (hasJoinedRoomRef.current) {
+        console.log('[HostWaitingRoom] Already joined room, skipping duplicate join');
+        return;
+      }
+      console.log('[HostWaitingRoom] Joining room:', gameId);
+      hasJoinedRoomRef.current = true;
+      socket.emit('room:join', { roomId: gameId });
+    };
+
+    joinRoom();
 
     // Listen for player join/leave events
     const handlePlayerJoined = (data?: { playerId?: string; playerName?: string }) => {
@@ -246,8 +258,14 @@ function HostWaitingRoomContent() {
       socket.off('game:player-left', handlePlayerLeft);
       socket.off('game:room-locked', handleRoomLocked);
       socket.off('game:player-kicked', handlePlayerKicked);
-      if (!isNavigatingRef.current) {
+      // Don't leave room if navigating - game-host page will need to be in the room
+      // Only leave if component is actually unmounting (not navigating)
+      if (!isNavigatingRef.current && hasJoinedRoomRef.current) {
+        console.log('[HostWaitingRoom] Leaving room on unmount (not navigating)');
         socket.emit('room:leave', { roomId: gameId });
+        hasJoinedRoomRef.current = false;
+      } else if (isNavigatingRef.current) {
+        console.log('[HostWaitingRoom] Skipping room leave - navigating to game-host');
       }
     };
   }, [socket, gameId]);
@@ -370,12 +388,11 @@ function HostWaitingRoomContent() {
         console.warn('[HostWaitingRoom] Socket not connected, cannot emit events');
       }
 
-      // Leave the room before navigating
-      if (socket && socket.connected) {
-        socket.emit('room:leave', { roomId: gameId });
-      }
+      // Don't leave the room - game-host page needs to be in the room
+      // The room will persist and game-host will join (or already be in it)
+      console.log('[HostWaitingRoom] Keeping room connection for game-host page');
 
-      // Small delay to ensure socket cleanup completes
+      // Small delay to ensure events are emitted before navigation
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Redirect to game host page
