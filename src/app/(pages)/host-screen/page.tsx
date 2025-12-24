@@ -217,14 +217,47 @@ function HostScreenContent() {
       }
     };
 
+    // Listen for game pause event
+    const handleGamePause = (data: { gameId?: string; timestamp?: string }) => {
+      const targetGameId = data.gameId;
+      if (targetGameId === gameId) {
+        console.log('Public Screen: Game paused');
+        // Timer will be paused by useGameFlow hook
+      }
+    };
+
+    // Listen for game resume event
+    const handleGameResume = (data: { gameId?: string; timestamp?: string }) => {
+      const targetGameId = data.gameId;
+      if (targetGameId === gameId) {
+        console.log('Public Screen: Game resumed');
+        // Timer will be resumed by useGameFlow hook
+      }
+    };
+
+    // Listen for game end event
+    const handleGameEnd = (data: { gameId?: string; timestamp?: string }) => {
+      const targetGameId = data.gameId;
+      if (targetGameId === gameId) {
+        console.log('Public Screen: Game ended');
+        setCurrentPhase('ended');
+      }
+    };
+
     socket.on('game:phase:change', handlePhaseChange);
     socket.on('game:answer:stats:update', handleStatsUpdate);
     socket.on('game:started', handleGameStarted);
+    socket.on('game:pause', handleGamePause);
+    socket.on('game:resume', handleGameResume);
+    socket.on('game:end', handleGameEnd);
 
     return () => {
       socket.off('game:phase:change', handlePhaseChange);
       socket.off('game:answer:stats:update', handleStatsUpdate);
       socket.off('game:started', handleGameStarted);
+      socket.off('game:pause', handleGamePause);
+      socket.off('game:resume', handleGameResume);
+      socket.off('game:end', handleGameEnd);
       socket.emit('room:leave', { roomId: gameId });
     };
   }, [socket, isConnected, gameId, roomCode, gameFlow?.current_question_id]);

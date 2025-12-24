@@ -302,6 +302,22 @@ function HostGameContent() {
     setCurrentPhase(phaseParam);
   }, [phaseParam]);
 
+  // Auto-transition from countdown to question after countdown completes
+  useEffect(() => {
+    if (currentPhase === 'countdown' && currentQuestion?.id && !flowLoading) {
+      // Set a timer to auto-start question after countdown (3 seconds)
+      const countdownDuration = 3000; // 3 seconds countdown
+      const timer = setTimeout(() => {
+        // Auto-start the question
+        handleStartQuestion().catch((err) => {
+          console.error('Auto-start question failed:', err);
+        });
+      }, countdownDuration);
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentPhase, currentQuestion?.id, handleStartQuestion, flowLoading]);
+
   // Show podium or end screen if in those phases
   if (currentPhase === 'podium') {
     const leaderboardData = {

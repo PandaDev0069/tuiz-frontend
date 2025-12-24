@@ -324,16 +324,50 @@ function PlayerGameContent() {
       }
     };
 
+    // Listen for game pause event
+    const handleGamePause = (data: { gameId?: string; timestamp?: string }) => {
+      const targetGameId = data.gameId;
+      if (targetGameId === gameId) {
+        console.log('Player: Game paused');
+        // Timer will be paused by useGameFlow hook
+      }
+    };
+
+    // Listen for game resume event
+    const handleGameResume = (data: { gameId?: string; timestamp?: string }) => {
+      const targetGameId = data.gameId;
+      if (targetGameId === gameId) {
+        console.log('Player: Game resumed');
+        // Timer will be resumed by useGameFlow hook
+      }
+    };
+
+    // Listen for game end event
+    const handleGameEnd = (data: { gameId?: string; timestamp?: string }) => {
+      const targetGameId = data.gameId;
+      if (targetGameId === gameId) {
+        console.log('Player: Game ended');
+        setCurrentPhase('ended');
+        router.replace(`/game-player?gameId=${gameId}&phase=ended&playerId=${playerId}`);
+      }
+    };
+
     currentSocket.on('game:answer:stats:update', handleStatsUpdate);
     currentSocket.on('game:phase:change', handlePhaseChange);
     currentSocket.on('game:player-kicked', (data) => handlePlayerKickedRef.current?.(data));
     currentSocket.on('game:started', handleGameStarted);
+    currentSocket.on('game:pause', handleGamePause);
+    currentSocket.on('game:resume', handleGameResume);
+    currentSocket.on('game:end', handleGameEnd);
 
     return () => {
       currentSocket.off('game:answer:stats:update', handleStatsUpdate);
       currentSocket.off('game:phase:change', handlePhaseChange);
       currentSocket.off('game:player-kicked');
       currentSocket.off('game:started', handleGameStarted);
+      currentSocket.off('game:pause', handleGamePause);
+      currentSocket.off('game:resume', handleGameResume);
+      currentSocket.off('game:end', handleGameEnd);
     };
   }, [gameId, playerId, router]);
 

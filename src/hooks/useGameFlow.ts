@@ -612,6 +612,53 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       console.log('useGameFlow: Game resumed');
 
       setIsPaused(false);
+
+      // Restart timer interval if question is active
+      if (
+        gameFlowRef.current?.current_question_id &&
+        gameFlowRef.current?.current_question_start_time
+      ) {
+        const startTime = gameFlowRef.current.current_question_start_time;
+        const endTime = gameFlowRef.current.current_question_end_time;
+        const durationMs =
+          endTime && startTime
+            ? new Date(endTime).getTime() - new Date(startTime).getTime()
+            : DEFAULT_QUESTION_DURATION_MS;
+
+        // Restart the timer interval
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+        }
+
+        // Update timer state immediately with current remaining time
+        const currentRemaining = calculateRemainingTime(startTime, durationMs);
+        setTimerState((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            remainingMs: currentRemaining,
+            isActive: currentRemaining > 0,
+          };
+        });
+
+        timerIntervalRef.current = setInterval(() => {
+          const remaining = calculateRemainingTime(startTime, durationMs);
+
+          if (remaining <= 0) {
+            setTimerState((prev) => (prev ? { ...prev, remainingMs: 0, isActive: false } : null));
+            if (timerIntervalRef.current) {
+              clearInterval(timerIntervalRef.current);
+              timerIntervalRef.current = null;
+            }
+            eventsRef.current?.onQuestionEnd?.(gameFlowRef.current?.current_question_id || '');
+          } else {
+            setTimerState((prev) =>
+              prev ? { ...prev, remainingMs: remaining, isActive: true } : null,
+            );
+          }
+        }, 100);
+      }
+
       eventsRef.current?.onGameResume?.();
     };
 
