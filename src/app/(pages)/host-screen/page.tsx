@@ -41,7 +41,6 @@ function HostScreenContent() {
   const [currentPhase, setCurrentPhase] = useState<PublicPhase>('waiting');
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
-  const [questionIndex, setQuestionIndex] = useState(0);
   const [currentQuestionData, setCurrentQuestionData] = useState<{
     question: Question;
     serverTime: string | null;
@@ -64,11 +63,13 @@ function HostScreenContent() {
           return;
         }
 
-        const { data: game } = await gameApi.getGameByCode(roomCode);
-        if (game) {
-          setGameId(game.id);
-          sessionStorage.setItem(`game_${roomCode}`, game.id);
+        const { data: game, error } = await gameApi.getGameByCode(roomCode);
+        if (error || !game) {
+          console.error('Failed to get game by code:', error);
+          return;
         }
+        setGameId(game.id);
+        sessionStorage.setItem(`game_${roomCode}`, game.id);
       } catch (err) {
         console.error('Failed to get game ID:', err);
       }
@@ -82,7 +83,11 @@ function HostScreenContent() {
     if (!gameId) return;
     const loadQuiz = async () => {
       try {
-        const { data: game } = await gameApi.getGame(gameId);
+        const { data: game, error } = await gameApi.getGame(gameId);
+        if (error || !game) {
+          console.error('Failed to get game:', error);
+          return;
+        }
         const quizSetId = game?.quiz_id || game?.quiz_set_id;
         if (quizSetId) {
           const quiz = await quizService.getQuizComplete(quizSetId);
@@ -96,11 +101,30 @@ function HostScreenContent() {
     loadQuiz();
   }, [gameId]);
 
-  // Use game flow for timer and question state
+  // Use game flow for timer and question state - sync with backend
   const { gameFlow, timerState } = useGameFlow({
     gameId: gameId || '',
     isHost: false, // Public screen is not the host
     autoSync: true,
+    events: {
+      onQuestionStart: (questionId, questionIndex) => {
+        console.log('Public Screen: Question started', questionId, questionIndex);
+        setCurrentPhase('question');
+      },
+      onQuestionEnd: () => {
+        console.log('Public Screen: Question ended');
+        // Don't auto-transition - wait for host to reveal answer
+      },
+      onAnswerReveal: () => {
+        console.log('Public Screen: Answer revealed');
+        setCurrentPhase('answer_reveal');
+      },
+      onGameEnd: () => {
+        console.log('Public Screen: Game ended');
+        setCurrentPhase('podium');
+      },
+      onError: (err) => console.error('Public Screen GameFlow Error:', err),
+    },
   });
 
   const { leaderboard } = useGameLeaderboard({
@@ -146,7 +170,6 @@ function HostScreenContent() {
           serverTime: data.server_time,
           isActive: data.is_active,
         });
-        setQuestionIndex(data.question_index);
       } catch (err) {
         console.error('Error fetching current question:', err);
       }
@@ -163,17 +186,13 @@ function HostScreenContent() {
   useEffect(() => {
     if (!socket || !isConnected || !gameId) return;
 
-    // Listen for game start
-    const handleGameStarted = (data: { roomId?: string; gameId?: string; roomCode?: string }) => {
-      const targetGameId = data.gameId || data.roomId;
-      if (targetGameId === gameId || data.roomCode === roomCode) {
-        setCurrentPhase('countdown');
-      }
-    };
+    // Join the game room
+    socket.emit('room:join', { roomId: gameId });
 
     // Listen for phase changes from host
     const handlePhaseChange = (data: { roomId: string; phase: PublicPhase }) => {
       if (data.roomId === gameId) {
+        console.log('Public Screen: Phase changed to', data.phase);
         setCurrentPhase(data.phase);
       }
     };
@@ -184,36 +203,47 @@ function HostScreenContent() {
       questionId: string;
       counts: Record<string, number>;
     }) => {
-      if (data.roomId === gameId) {
+      if (data.roomId === gameId && data.questionId === gameFlow?.current_question_id) {
         setAnswerStats(data.counts);
       }
     };
 
-    // Join the game room
-    socket.emit('room:join', { roomId: gameId });
+    // Listen for game started event
+    const handleGameStarted = (data: { roomId?: string; gameId?: string; roomCode?: string }) => {
+      const targetGameId = data.gameId || data.roomId;
+      if (targetGameId === gameId || data.roomCode === roomCode) {
+        console.log('Public Screen: Game started');
+        setCurrentPhase('countdown');
+      }
+    };
 
-    socket.on('game:started', handleGameStarted);
     socket.on('game:phase:change', handlePhaseChange);
     socket.on('game:answer:stats:update', handleStatsUpdate);
+    socket.on('game:started', handleGameStarted);
 
     return () => {
-      socket.off('game:started', handleGameStarted);
       socket.off('game:phase:change', handlePhaseChange);
       socket.off('game:answer:stats:update', handleStatsUpdate);
+      socket.off('game:started', handleGameStarted);
       socket.emit('room:leave', { roomId: gameId });
     };
-  }, [socket, isConnected, gameId, roomCode]);
+  }, [socket, isConnected, gameId, roomCode, gameFlow?.current_question_id]);
 
-  // Update question index when game flow changes
+  // Sync phase with game flow state
   useEffect(() => {
-    if (
-      gameFlow &&
-      gameFlow.current_question_index !== null &&
-      gameFlow.current_question_index !== undefined
-    ) {
-      setQuestionIndex(gameFlow.current_question_index);
+    if (!gameFlow) return;
+
+    // If question is active, we're in question phase
+    if (gameFlow.current_question_id && timerState?.isActive) {
+      if (currentPhase !== 'question') {
+        setCurrentPhase('question');
+      }
     }
-  }, [gameFlow]);
+    // If question exists but timer is not active, might be in answer reveal
+    else if (gameFlow.current_question_id && !timerState?.isActive && currentPhase === 'question') {
+      // Wait for explicit phase change from host
+    }
+  }, [gameFlow, timerState, currentPhase]);
 
   // Use current question from API if available, otherwise fallback to local quiz data
   const currentQuestion: Question = useMemo(() => {
@@ -223,6 +253,7 @@ function HostScreenContent() {
     }
 
     // Fallback to local quiz data
+    const questionIndex = gameFlow?.current_question_index ?? 0;
     const questionData = questions[questionIndex];
     if (questionData) {
       return {
@@ -250,12 +281,14 @@ function HostScreenContent() {
       correctAnswerId: '',
       type: 'multiple_choice_4',
     };
-  }, [currentQuestionData, questions, questionIndex]);
+  }, [currentQuestionData, questions, gameFlow?.current_question_index]);
 
   const currentTimeSeconds = Math.max(
     0,
     Math.round((timerState?.remainingMs || currentQuestion.timeLimit * 1000) / 1000),
   );
+
+  const questionIndex = gameFlow?.current_question_index ?? 0;
 
   const leaderboardData: LeaderboardData = useMemo(
     () => ({
@@ -286,8 +319,8 @@ function HostScreenContent() {
           questionNumber={questionIndex + 1}
           totalQuestions={questions.length}
           onCountdownComplete={() => {
-            // Auto-transition handled by host, but we can update local state
-            setCurrentPhase('question');
+            // Phase will be updated by game flow event or WebSocket
+            // Don't manually change phase here
           }}
         />
       );
@@ -299,7 +332,7 @@ function HostScreenContent() {
           currentTime={currentTimeSeconds}
           questionNumber={questionIndex + 1}
           totalQuestions={questions.length}
-          // No controls on public screen
+          // No controls on public screen - read-only display
         />
       );
 
@@ -337,7 +370,9 @@ function HostScreenContent() {
             totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
             totalAnswered,
           }}
-          // No controls on public screen
+          questionNumber={questionIndex + 1}
+          totalQuestions={questions.length}
+          // No controls on public screen - read-only display
         />
       );
     }
@@ -346,7 +381,7 @@ function HostScreenContent() {
       return (
         <HostLeaderboardScreen
           leaderboardData={leaderboardData}
-          // No controls on public screen
+          // No controls on public screen - read-only display
         />
       );
 
@@ -360,7 +395,7 @@ function HostScreenContent() {
             title: '解説',
             body: currentQuestion.explanation || '解説は近日追加されます。',
           }}
-          // No controls on public screen
+          // No controls on public screen - read-only display
         />
       );
 
@@ -485,100 +520,6 @@ function HostScreenContent() {
         </PageContainer>
       );
   }
-
-  return (
-    <PageContainer>
-      <Main className="flex-1">
-        <Container
-          size="sm"
-          className="flex flex-col items-center justify-center py-4 md:py-2 space-y-4 md:space-y-6"
-        >
-          {/* Public Display Title */}
-          <div className="text-center">
-            <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 bg-clip-text text-transparent animate-pulse">
-              TUIZ情報王
-            </h1>
-            <div className="mt-3 relative inline-block">
-              {/* Background glow */}
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-blue-100 rounded-xl blur-sm opacity-50 scale-105"></div>
-
-              {/* Message container */}
-              <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-6 py-3 rounded-xl border border-cyan-200">
-                <p className="text-base md:text-lg font-semibold bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent">
-                  参加コードでクイズに参加しよう！
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Room Code Display - Large for audience */}
-          <div className="text-center">
-            <div className="relative inline-block">
-              {/* Outer glow effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl blur-lg opacity-30 scale-110"></div>
-
-              {/* Main container with 3D effect */}
-              <div className="relative bg-gradient-to-br from-cyan-100 via-blue-50 to-cyan-100 px-16 py-10 rounded-xl border-2 border-cyan-300 shadow-2xl transform hover:scale-105 hover:shadow-cyan-200/50 transition-all duration-300">
-                {/* Inner highlight */}
-                <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl"></div>
-
-                <div className="relative">
-                  <span className="text-8xl md:text-9xl font-mono font-black bg-gradient-to-r from-cyan-700 via-blue-600 to-cyan-700 bg-clip-text text-transparent tracking-wider drop-shadow-sm">
-                    {roomCode || '------'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Decorative corner elements */}
-              <div className="absolute -top-3 -left-3 w-6 h-6 bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-full shadow-lg"></div>
-              <div className="absolute -bottom-3 -right-3 w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
-              <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
-            </div>
-          </div>
-          {/* QR Code for Join Page */}
-          <div className="text-center max-w-md">
-            <div className="relative inline-block">
-              {/* Background glow */}
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-blue-100 rounded-2xl blur-sm opacity-50 scale-105"></div>
-
-              {/* QR Code container */}
-              <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-8 py-6 rounded-2xl border border-cyan-200">
-                <h3 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent mb-4">
-                  QRコードで参加
-                </h3>
-
-                {/* QR Code */}
-                <div className="relative inline-block mb-4">
-                  {/* Outer glow effect */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl blur-lg opacity-30 scale-110"></div>
-
-                  {/* Main container with 3D effect */}
-                  <div className="relative bg-gradient-to-br from-cyan-100 via-blue-50 to-cyan-100 px-8 py-8 rounded-xl border-2 border-cyan-300 shadow-2xl transform hover:scale-105 hover:shadow-cyan-200/50 transition-all duration-300">
-                    {/* Inner highlight */}
-                    <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl"></div>
-
-                    {/* QR Code */}
-                    {joinUrl ? (
-                      <QRCode value={joinUrl} size={300} className="rounded-lg" />
-                    ) : (
-                      <div className="w-64 h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                        <p className="text-gray-500">QRコード生成中...</p>
-                      </div>
-                    )}
-
-                    {/* Decorative corner elements */}
-                    <div className="absolute -top-3 -left-3 w-6 h-6 bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-full shadow-lg"></div>
-                    <div className="absolute -bottom-3 -right-3 w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
-                    <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Container>
-      </Main>
-    </PageContainer>
-  );
 }
 
 export default function HostScreenPage() {

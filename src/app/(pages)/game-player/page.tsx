@@ -84,13 +84,42 @@ function PlayerGameContent() {
     time_bonus: boolean;
     streak_bonus: boolean;
   } | null>(null);
+  const [currentQuestionData, setCurrentQuestionData] = useState<{
+    question: Question;
+    serverTime: string | null;
+    isActive: boolean;
+    points: number;
+    timeLimit: number;
+  } | null>(null);
 
   // Get current question data for point calculation
+  // Prefer API data (has authoritative points and time_limit), fallback to local quiz data
   const currentQuestionForPoints = useMemo(() => {
+    // Priority 1: Use API question data if available (most authoritative)
+    if (currentQuestionData) {
+      return {
+        points: currentQuestionData.points ?? 100,
+        answering_time: currentQuestionData.timeLimit ?? 30,
+      };
+    }
+
+    // Priority 2: Use local quiz data as fallback
     if (!gameFlow?.current_question_id || !questions.length) return null;
     const questionIndex = gameFlow.current_question_index ?? 0;
-    return questions[questionIndex] || null;
-  }, [gameFlow?.current_question_id, gameFlow?.current_question_index, questions]);
+    const questionData = questions[questionIndex];
+    if (questionData) {
+      return {
+        points: questionData.points ?? 100,
+        answering_time: questionData.answering_time ?? questionData.show_question_time ?? 30,
+      };
+    }
+    return null;
+  }, [
+    currentQuestionData,
+    gameFlow?.current_question_id,
+    gameFlow?.current_question_index,
+    questions,
+  ]);
 
   const { answerStatus, answerResult, submitAnswer } = useGameAnswer({
     gameId,
@@ -125,11 +154,6 @@ function PlayerGameContent() {
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
   const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
   const [isMobile, setIsMobile] = useState(true);
-  const [currentQuestionData, setCurrentQuestionData] = useState<{
-    question: Question;
-    serverTime: string | null;
-    isActive: boolean;
-  } | null>(null);
 
   // Refs for stable access
   const gameFlowRef = useRef(gameFlow);
@@ -213,6 +237,8 @@ function PlayerGameContent() {
           question,
           serverTime: data.server_time,
           isActive: data.is_active,
+          points: data.question.points,
+          timeLimit: data.question.time_limit,
         });
       } catch (err) {
         console.error('Error fetching current question:', err);
