@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense, useEffect, useCallback } from 'react';
+import React, { useState, Suspense, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { HostSettingsModal } from '@/components/ui/overlays/host-settings-modal';
@@ -59,6 +59,11 @@ function HostWaitingRoomContent() {
   >([]);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
 
+  // Ref to track if component is navigating away
+  const isNavigatingRef = useRef(false);
+  // Ref to store latest fetchPlayers function to avoid dependency issues
+  const fetchPlayersRef = useRef<(() => Promise<void>) | undefined>(undefined);
+
   // Fetch players from backend
   const fetchPlayers = useCallback(async () => {
     if (!gameId) return;
@@ -96,6 +101,11 @@ function HostWaitingRoomContent() {
       setIsLoadingPlayers(false);
     }
   }, [gameId]);
+
+  // Update ref whenever fetchPlayers changes
+  useEffect(() => {
+    fetchPlayersRef.current = fetchPlayers;
+  }, [fetchPlayers]);
 
   // Fetch game data, quiz settings, and players when gameId is available
   useEffect(() => {
@@ -178,8 +188,8 @@ function HostWaitingRoomContent() {
 
   // Listen for WebSocket events for real-time player updates
   useEffect(() => {
-    if (!socket || !gameId || !socket.connected) {
-      // Wait for socket connection
+    if (!socket || !gameId || !socket.connected || isNavigatingRef.current) {
+      // Wait for socket connection or skip if navigating away
       return;
     }
 
@@ -188,15 +198,17 @@ function HostWaitingRoomContent() {
 
     // Listen for player join/leave events
     const handlePlayerJoined = (data?: { playerId?: string; playerName?: string }) => {
+      if (isNavigatingRef.current) return;
       console.log('Player joined:', data);
       // Refresh player list when a player joins
-      fetchPlayers();
+      fetchPlayersRef.current?.();
     };
 
     const handlePlayerLeft = (data?: { playerId?: string }) => {
+      if (isNavigatingRef.current) return;
       console.log('Player left:', data);
       // Refresh player list when a player leaves
-      fetchPlayers();
+      fetchPlayersRef.current?.();
     };
 
     // Listen for room user events (these fire when players join/leave the room)
@@ -209,15 +221,17 @@ function HostWaitingRoomContent() {
 
     // Listen for room lock status changes
     const handleRoomLocked = (data: { locked: boolean }) => {
+      if (isNavigatingRef.current) return;
       setIsRoomLocked(data.locked);
     };
     socket.on('game:room-locked', handleRoomLocked);
 
     // Listen for player kicked events
     const handlePlayerKicked = (data: { player_id: string; player_name: string }) => {
+      if (isNavigatingRef.current) return;
       console.log('Player kicked:', data);
       // Refresh player list when a player is kicked
-      fetchPlayers();
+      fetchPlayersRef.current?.();
       // Show notification
       toast.success(`${data.player_name}がBANされました`, {
         icon: '🚫',
@@ -232,9 +246,11 @@ function HostWaitingRoomContent() {
       socket.off('game:player-left', handlePlayerLeft);
       socket.off('game:room-locked', handleRoomLocked);
       socket.off('game:player-kicked', handlePlayerKicked);
-      socket.emit('room:leave', { roomId: gameId });
+      if (!isNavigatingRef.current) {
+        socket.emit('room:leave', { roomId: gameId });
+      }
     };
-  }, [socket, gameId, fetchPlayers]);
+  }, [socket, gameId]);
 
   // Player management functions
   const handlePlayerBan = async (playerId: string) => {
@@ -323,6 +339,9 @@ function HostWaitingRoomContent() {
     }
 
     try {
+      // Set navigating flag to prevent socket room join/leave loops
+      isNavigatingRef.current = true;
+
       setGameIdError(null);
       // Start the game via API
       const { data: game, error } = await gameApi.startGame(gameId);
@@ -331,6 +350,7 @@ function HostWaitingRoomContent() {
         setGameIdError(errorMessage);
         console.error('Failed to start game:', error);
         setIsStartConfirmOpen(false);
+        isNavigatingRef.current = false; // Reset flag on error
         return;
       }
 
@@ -343,6 +363,14 @@ function HostWaitingRoomContent() {
         socket.emit('game:phase:change', { roomId: gameId, phase: 'countdown' });
       }
 
+      // Leave the room before navigating
+      if (socket && socket.connected) {
+        socket.emit('room:leave', { roomId: gameId });
+      }
+
+      // Small delay to ensure socket cleanup completes
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       // Redirect to game host page
       router.push(`/game-host?gameId=${gameId}&phase=countdown`);
     } catch (err) {
@@ -351,6 +379,7 @@ function HostWaitingRoomContent() {
       setGameIdError(errorMessage);
       console.error('Error starting game:', err);
       setIsStartConfirmOpen(false);
+      isNavigatingRef.current = false; // Reset flag on error
     }
   };
 

@@ -348,17 +348,12 @@ function WaitingRoomContent() {
   ]);
 
   // Countdown state
-  const [showCountdown, setShowCountdown] = useState(false);
+  const [showCountdown] = useState(false);
   const [countdownTime] = useState(5);
 
   const handleCountdownComplete = () => {
     // Navigate to player question screen after countdown
     window.location.href = `/player-question-screen?code=${roomCode}&playerId=test&name=${encodeURIComponent(playerName)}`;
-  };
-
-  const handleManualStart = () => {
-    // Show countdown first
-    setShowCountdown(true);
   };
 
   // Show countdown screen if countdown is active
@@ -555,20 +550,6 @@ function WaitingRoomContent() {
               <div className="absolute -bottom-3 -right-3 w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
               <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
             </div>
-          </div>
-
-          {/* Manual Start Game Button for Testing */}
-          <div className="text-center max-w-md">
-            <button
-              onClick={handleManualStart}
-              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center space-x-2"
-            >
-              <span className="text-lg">🚀</span>
-              <span>テスト: ゲーム開始</span>
-            </button>
-            <p className="text-xs text-gray-500 text-center mt-2">
-              開発用: カウントダウン後にプレイヤー画面に移動
-            </p>
           </div>
         </Container>
       </Main>
