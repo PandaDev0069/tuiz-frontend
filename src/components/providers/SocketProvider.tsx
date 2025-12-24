@@ -111,8 +111,14 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
 
     socketInstance.on('connect_error', (error) => {
-      console.error('Socket.IO connection error:', error);
-      setConnectionError(error.message);
+      const errorMessage = error?.message || error?.toString() || 'Connection failed';
+      console.error('Socket.IO connection error:', {
+        error,
+        message: errorMessage,
+        type: (error as { type?: string })?.type,
+        description: (error as { description?: string })?.description,
+      });
+      setConnectionError(errorMessage);
       setIsConnected(false);
 
       // Log additional debugging info
@@ -131,8 +137,13 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
 
     socketInstance.on('reconnect_error', (error) => {
-      console.error('Socket.IO reconnection error:', error);
-      setConnectionError(`Reconnection failed: ${error.message}`);
+      const errorMessage = error?.message || error?.toString() || 'Reconnection failed';
+      console.error('Socket.IO reconnection error:', {
+        error,
+        message: errorMessage,
+        type: (error as { type?: string })?.type,
+      });
+      setConnectionError(`Reconnection failed: ${errorMessage}`);
     });
 
     socketInstance.on('reconnect_failed', () => {
@@ -141,8 +152,22 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     });
 
     socketInstance.on('ws:error', (data) => {
-      console.error('Socket.IO server error:', data);
-      setConnectionError(data.message);
+      // Handle empty error objects or missing message
+      const errorMessage =
+        data && typeof data === 'object' && 'message' in data && data.message
+          ? data.message
+          : data && typeof data === 'string'
+            ? data
+            : 'Unknown server error';
+
+      console.error('Socket.IO server error:', {
+        error: data,
+        message: errorMessage,
+        type: typeof data,
+        keys: data && typeof data === 'object' ? Object.keys(data) : [],
+      });
+
+      setConnectionError(errorMessage);
     });
 
     socketInstance.on('ws:pong', () => {
@@ -152,6 +177,18 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socketInstance.on('server:hello', () => {
       console.log('Received server hello message');
       // no-op; just verifying connectivity
+    });
+
+    // Catch-all error handler for any unhandled errors
+    socketInstance.on('error', (error) => {
+      const errorMessage = error?.message || error?.toString() || 'Unknown socket error';
+      console.error('Socket.IO unhandled error:', {
+        error,
+        message: errorMessage,
+        type: (error as { type?: string })?.type,
+      });
+      // Don't set connection error for unhandled errors - they might be recoverable
+      // Only log them for debugging
     });
 
     // Send initial greeting
