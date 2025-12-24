@@ -22,6 +22,8 @@ const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
   connectionError: null,
+  joinRoom: () => {},
+  leaveRoom: () => {},
 });
 
 // Hook to access socket instance
