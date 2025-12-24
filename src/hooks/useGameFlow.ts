@@ -128,6 +128,8 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   const eventsRef = useRef<GameFlowEvents | undefined>(events);
   const socketRef = useRef(socket);
   const isConnectedRef = useRef(isConnected);
+  const isHostRef = useRef(isHost);
+  const revealAnswerRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   // Keep refs in sync
   useEffect(() => {
@@ -141,6 +143,10 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   useEffect(() => {
     isConnectedRef.current = isConnected;
   }, [isConnected]);
+
+  useEffect(() => {
+    isHostRef.current = isHost;
+  }, [isHost]);
 
   const updateTimerState = useCallback(
     (
@@ -176,7 +182,26 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
             clearInterval(timerIntervalRef.current);
             timerIntervalRef.current = null;
           }
-          eventsRef.current?.onQuestionEnd?.(questionId);
+
+          // Auto-reveal answer if host hasn't already revealed it
+          // Check if answer hasn't been revealed by checking if current_question_end_time is not set
+          const currentFlow = gameFlowRef.current;
+          if (
+            isHostRef.current &&
+            revealAnswerRef.current &&
+            currentFlow?.current_question_id === questionId &&
+            !currentFlow?.current_question_end_time
+          ) {
+            // Auto-reveal answer when timer expires
+            revealAnswerRef.current().catch((err) => {
+              console.error('Auto-reveal answer failed:', err);
+              // Still fire the event even if reveal fails
+              eventsRef.current?.onQuestionEnd?.(questionId);
+            });
+          } else {
+            // For non-hosts or if already revealed, just fire the event
+            eventsRef.current?.onQuestionEnd?.(questionId);
+          }
         } else {
           setTimerState((prev) => (prev ? { ...prev, remainingMs: remaining } : null));
         }
@@ -650,7 +675,22 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
               clearInterval(timerIntervalRef.current);
               timerIntervalRef.current = null;
             }
-            eventsRef.current?.onQuestionEnd?.(gameFlowRef.current?.current_question_id || '');
+
+            // Auto-reveal answer if host hasn't already revealed it
+            const currentQuestionId = gameFlowRef.current?.current_question_id;
+            if (
+              isHostRef.current &&
+              revealAnswerRef.current &&
+              currentQuestionId &&
+              !gameFlowRef.current?.current_question_end_time
+            ) {
+              revealAnswerRef.current().catch((err) => {
+                console.error('Auto-reveal answer failed on resume:', err);
+                eventsRef.current?.onQuestionEnd?.(currentQuestionId);
+              });
+            } else {
+              eventsRef.current?.onQuestionEnd?.(currentQuestionId || '');
+            }
           } else {
             setTimerState((prev) =>
               prev ? { ...prev, remainingMs: remaining, isActive: true } : null,

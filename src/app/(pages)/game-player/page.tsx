@@ -9,13 +9,14 @@ import {
   PlayerLeaderboardScreen,
   PlayerExplanationScreen,
   PlayerPodiumScreen,
+  PlayerGameEndScreen,
 } from '@/components/game';
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameAnswer } from '@/hooks/useGameAnswer';
 import { useGameLeaderboard } from '@/hooks/useGameLeaderboard';
 import { useDeviceId } from '@/hooks/useDeviceId';
 import { useSocket } from '@/components/providers/SocketProvider';
-import { Question, AnswerResult } from '@/types/game';
+import { Question, AnswerResult, LeaderboardEntry } from '@/types/game';
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
 import type { QuestionWithAnswers } from '@/types/quiz';
@@ -671,15 +672,42 @@ function PlayerGameContent() {
           }
         />
       );
-    case 'ended':
+    case 'ended': {
+      const playerEntry = Array.isArray(leaderboard)
+        ? leaderboard.find((entry) => entry.player_id === playerId)
+        : undefined;
+
+      const leaderboardEntries: LeaderboardEntry[] = Array.isArray(leaderboard)
+        ? leaderboard.map((entry) => ({
+            playerId: entry.player_id,
+            playerName: entry.player_name,
+            score: entry.score,
+            rank: entry.rank,
+            previousRank: entry.rank,
+            rankChange: 'same' as const,
+          }))
+        : [];
+
       return (
-        <div className="flex items-center justify-center h-screen bg-gradient-to-br from-cyan-900 via-blue-900 to-purple-900">
-          <div className="text-center p-6">
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">ゲーム終了</h1>
-            <p className="text-xl text-gray-200">ありがとうございました！</p>
-          </div>
-        </div>
+        <PlayerGameEndScreen
+          playerEntry={
+            playerEntry
+              ? {
+                  playerId: playerEntry.player_id,
+                  playerName: playerEntry.player_name,
+                  score: playerEntry.score,
+                  rank: playerEntry.rank,
+                  previousRank: playerEntry.rank,
+                  rankChange: 'same',
+                }
+              : undefined
+          }
+          entries={leaderboardEntries}
+          onReturnHome={() => router.push('/')}
+          onJoinNewGame={() => router.push('/')}
+        />
       );
+    }
     default:
       return <div className="p-6">次のステップを待機しています...</div>;
   }

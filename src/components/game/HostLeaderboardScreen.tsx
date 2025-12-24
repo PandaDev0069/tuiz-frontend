@@ -123,10 +123,12 @@ const LeaderboardEntryComponent: React.FC<{
       }`}
       style={{ transitionDelay: `${index * 100}ms` }}
     >
-      {/* Rank Change Indicator */}
-      <div className="absolute -top-1 -left-1 w-6 h-6 md:w-7 md:h-7 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
-        {getRankChangeIcon(entry.rankChange, 14)}
-      </div>
+      {/* Rank Change Indicator - Only show for top 5 */}
+      {entry.rank <= 5 && (
+        <div className="absolute -top-1 -left-1 w-6 h-6 md:w-7 md:h-7 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
+          {getRankChangeIcon(entry.rankChange, 14)}
+        </div>
+      )}
 
       {/* Rank Crown/Medal for top 3 */}
       {rankIcon && (

@@ -235,7 +235,10 @@ function HostGameContent() {
             if (error || !data) {
               console.error('Failed to advance to next question:', error);
               toast.error('次の問題への移動に失敗しました');
-            } else if (data.isComplete) {
+              // Don't change phase on error - stay in current phase
+              return;
+            }
+            if (data.isComplete) {
               setCurrentPhase('podium');
               emitPhaseChange('podium');
             } else {
@@ -245,6 +248,8 @@ function HostGameContent() {
           } catch (e) {
             console.error('Error advancing to next question:', e);
             toast.error('次の問題への移動に失敗しました');
+            // Don't change phase on error - stay in current phase
+            return;
           }
         } else {
           setCurrentPhase('podium');
@@ -260,7 +265,10 @@ function HostGameContent() {
           if (error || !data) {
             console.error('Failed to advance to next question:', error);
             toast.error('次の問題への移動に失敗しました');
-          } else if (data.isComplete) {
+            // Don't change phase on error - stay in current phase
+            return;
+          }
+          if (data.isComplete) {
             setCurrentPhase('podium');
             emitPhaseChange('podium');
           } else {
@@ -270,6 +278,8 @@ function HostGameContent() {
         } catch (e) {
           console.error('Error advancing to next question:', e);
           toast.error('次の問題への移動に失敗しました');
+          // Don't change phase on error - stay in current phase
+          return;
         }
       } else {
         setCurrentPhase('podium');
@@ -305,8 +315,10 @@ function HostGameContent() {
   // Auto-transition from countdown to question after countdown completes
   useEffect(() => {
     if (currentPhase === 'countdown' && currentQuestion?.id && !flowLoading) {
-      // Set a timer to auto-start question after countdown (3 seconds)
-      const countdownDuration = 3000; // 3 seconds countdown
+      // Set a timer to auto-start question after countdown completes
+      // Use 3.5 seconds to ensure countdown component (3 seconds) completes first
+      // This prevents race condition where question starts while countdown is still showing
+      const countdownDuration = 3500; // 3.5 seconds to allow countdown to complete
       const timer = setTimeout(() => {
         // Auto-start the question
         handleStartQuestion().catch((err) => {
