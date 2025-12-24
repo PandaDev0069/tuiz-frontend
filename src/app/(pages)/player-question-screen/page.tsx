@@ -23,16 +23,13 @@ function PlayerQuestionScreenContent() {
     autoSync: true,
   });
 
-  const { answerStatus, submitAnswer } = useGameAnswer({
-    gameId,
-    playerId: playerIdentifier,
-    questionId: gameFlow?.current_question_id || null,
-    autoReveal: false,
-  });
-
   const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
   const [isMobile, setIsMobile] = useState(true);
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
+  const [quizPlaySettings, setQuizPlaySettings] = useState<{
+    time_bonus: boolean;
+    streak_bonus: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -52,6 +49,13 @@ function PlayerQuestionScreenContent() {
           const quiz = await quizService.getQuizComplete(quizId);
           const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
           setQuestions(sorted);
+          // Store play settings for point calculation
+          if (quiz.play_settings) {
+            setQuizPlaySettings({
+              time_bonus: quiz.play_settings.time_bonus ?? false,
+              streak_bonus: quiz.play_settings.streak_bonus ?? false,
+            });
+          }
         }
       } catch (err) {
         console.error('Failed to load quiz for game', err);
@@ -59,6 +63,29 @@ function PlayerQuestionScreenContent() {
     };
     loadQuiz();
   }, [gameId]);
+
+  // Get current question data for point calculation
+  const currentQuestionForPoints = useMemo(() => {
+    if (!gameFlow?.current_question_id || !questions.length) return null;
+    const questionIndex = gameFlow.current_question_index ?? 0;
+    return questions[questionIndex] || null;
+  }, [gameFlow?.current_question_id, gameFlow?.current_question_index, questions]);
+
+  const { answerStatus, submitAnswer } = useGameAnswer({
+    gameId,
+    playerId: playerIdentifier,
+    questionId: gameFlow?.current_question_id || null,
+    questionNumber:
+      gameFlow && gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+        ? gameFlow.current_question_index + 1
+        : undefined,
+    autoReveal: false,
+    // Point calculation parameters
+    questionPoints: currentQuestionForPoints?.points ?? 100,
+    answeringTime: currentQuestionForPoints?.answering_time ?? 30,
+    timeBonusEnabled: quizPlaySettings?.time_bonus ?? false,
+    streakBonusEnabled: quizPlaySettings?.streak_bonus ?? false,
+  });
 
   const currentQuestion: Question = useMemo(() => {
     const idx = gameFlow?.current_question_index ?? 0;

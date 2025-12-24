@@ -79,6 +79,19 @@ function PlayerGameContent() {
   // Note: correctAnswerId will be passed after currentQuestion is computed below
   const [correctAnswerIdState, setCorrectAnswerIdState] = useState<string | null>(null);
 
+  const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
+  const [quizPlaySettings, setQuizPlaySettings] = useState<{
+    time_bonus: boolean;
+    streak_bonus: boolean;
+  } | null>(null);
+
+  // Get current question data for point calculation
+  const currentQuestionForPoints = useMemo(() => {
+    if (!gameFlow?.current_question_id || !questions.length) return null;
+    const questionIndex = gameFlow.current_question_index ?? 0;
+    return questions[questionIndex] || null;
+  }, [gameFlow?.current_question_id, gameFlow?.current_question_index, questions]);
+
   const { answerStatus, answerResult, submitAnswer } = useGameAnswer({
     gameId,
     playerId,
@@ -89,6 +102,11 @@ function PlayerGameContent() {
         : undefined,
     correctAnswerId: correctAnswerIdState || undefined,
     autoReveal: false,
+    // Point calculation parameters
+    questionPoints: currentQuestionForPoints?.points ?? 100,
+    answeringTime: currentQuestionForPoints?.answering_time ?? 30,
+    timeBonusEnabled: quizPlaySettings?.time_bonus ?? false,
+    streakBonusEnabled: quizPlaySettings?.streak_bonus ?? false,
     events: {
       onAnswerSubmitted: (submission) => {
         console.log('Player: Answer submitted', submission);
@@ -104,8 +122,6 @@ function PlayerGameContent() {
   });
 
   const { socket } = useSocket();
-
-  const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
   const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
   const [isMobile, setIsMobile] = useState(true);
@@ -134,7 +150,7 @@ function PlayerGameContent() {
     isConnectedRef.current = isConnected;
   }, [isConnected]);
 
-  // Load quiz data once (for fallback)
+  // Load quiz data once (for fallback and settings)
   useEffect(() => {
     if (!gameId) return;
     const loadQuiz = async () => {
@@ -145,6 +161,13 @@ function PlayerGameContent() {
           const quiz = await quizService.getQuizComplete(quizId);
           const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
           setQuestions(sorted);
+          // Store play settings for point calculation
+          if (quiz.play_settings) {
+            setQuizPlaySettings({
+              time_bonus: quiz.play_settings.time_bonus ?? false,
+              streak_bonus: quiz.play_settings.streak_bonus ?? false,
+            });
+          }
         }
       } catch (err) {
         console.error('Failed to load quiz for game', err);

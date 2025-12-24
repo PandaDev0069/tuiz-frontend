@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSocket } from '@/components/providers/SocketProvider';
 import { gameApi, type Answer } from '@/services/gameApi';
+import { calculatePoints } from '@/lib/pointCalculation';
 
 // ============================================================================
 // TYPES
@@ -52,6 +53,11 @@ export interface UseGameAnswerOptions {
   correctAnswerId?: string | null; // Correct answer ID for validation
   autoReveal?: boolean; // Auto-reveal after submission
   events?: GameAnswerEvents;
+  // Point calculation parameters
+  questionPoints?: number; // Points for this question (from question.points)
+  answeringTime?: number; // Time limit for answering in seconds (from question.answering_time)
+  timeBonusEnabled?: boolean; // Whether time bonus is enabled (from game settings)
+  streakBonusEnabled?: boolean; // Whether streak bonus is enabled (from game settings)
 }
 
 export interface UseGameAnswerReturn {
@@ -102,6 +108,10 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
     correctAnswerId,
     autoReveal = false,
     events,
+    questionPoints = 100, // Default to 100 if not provided
+    answeringTime = 30, // Default to 30 seconds if not provided
+    timeBonusEnabled = false,
+    streakBonusEnabled = false,
   } = options;
   const { socket, isConnected } = useSocket();
 
@@ -158,16 +168,37 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         // Convert milliseconds to seconds
         const timeTakenSeconds = responseTimeMs / 1000;
 
-        // Calculate points (basic calculation - backend may override)
-        // Points = base points (100) + time bonus (if correct and fast)
-        // Note: Backend will calculate actual points based on game settings
-        let pointsEarned = 0;
-        if (isCorrect) {
-          const basePoints = 100;
-          // Simple time bonus calculation (backend will use actual game settings)
-          const timeBonus = Math.max(0, Math.floor((10000 - responseTimeMs) / 100));
-          pointsEarned = basePoints + timeBonus;
+        // Check if answer was submitted in time
+        // If timeTaken exceeds answeringTime, it's considered late
+        const answeredInTime = timeTakenSeconds <= answeringTime;
+
+        // Get current streak from answer history
+        // Streak is the number of consecutive correct answers before this one
+        let currentStreak = 0;
+        if (answersHistory.length > 0) {
+          // Count consecutive correct answers from the end
+          for (let i = answersHistory.length - 1; i >= 0; i--) {
+            if (answersHistory[i].is_correct) {
+              currentStreak++;
+            } else {
+              break; // Streak broken
+            }
+          }
         }
+
+        // Calculate points using the point calculation utility
+        const pointCalculationResult = calculatePoints({
+          basePoints: questionPoints,
+          answeringTime,
+          isCorrect,
+          timeTaken: timeTakenSeconds,
+          answeredInTime,
+          timeBonusEnabled,
+          streakBonusEnabled,
+          currentStreak,
+        });
+
+        const pointsEarned = pointCalculationResult.points;
 
         // Submit to API with backend-expected format
         const { data, error: apiError } = await gameApi.submitAnswer(
@@ -246,6 +277,11 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
       correctAnswerId,
       answerStatus.hasAnswered,
       autoReveal,
+      questionPoints,
+      answeringTime,
+      timeBonusEnabled,
+      streakBonusEnabled,
+      answersHistory,
     ],
   );
 
