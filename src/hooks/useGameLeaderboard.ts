@@ -125,6 +125,7 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
   const listenersSetupRef = useRef(false);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const previousLeaderboardRef = useRef<LeaderboardEntry[]>([]);
+  const refreshLeaderboardRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   // Derived state
   const currentPlayerRank =
@@ -160,13 +161,15 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
       // Ensure data is an array
       const leaderboardArray = Array.isArray(data) ? data : [];
 
-      // Store previous leaderboard for rank change detection
-      const oldLeaderboard = [...leaderboard];
-      previousLeaderboardRef.current = oldLeaderboard;
+      // Store previous leaderboard for rank change detection (use ref to avoid dependency)
+      const oldLeaderboard = [...previousLeaderboardRef.current];
 
       // Update leaderboard
       setLeaderboard(leaderboardArray);
       setLastUpdateTime(new Date());
+
+      // Update previous leaderboard ref for next comparison
+      previousLeaderboardRef.current = leaderboardArray;
 
       // Detect and emit rank changes if animations enabled
       if (enableAnimations && oldLeaderboard.length > 0) {
@@ -194,7 +197,12 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
     } finally {
       setLoading(false);
     }
-  }, [gameId, leaderboard, enableAnimations, events]);
+  }, [gameId, enableAnimations, events]);
+
+  // Keep refs in sync with callbacks
+  useEffect(() => {
+    refreshLeaderboardRef.current = refreshLeaderboard;
+  }, [refreshLeaderboard]);
 
   /**
    * Clear score update and rank change history
@@ -223,7 +231,7 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
      */
     const handleLeaderboardUpdate = () => {
       console.log('useGameLeaderboard: Leaderboard update received');
-      refreshLeaderboard();
+      refreshLeaderboardRef.current?.();
       setLastUpdateTime(new Date());
     };
 
@@ -236,7 +244,7 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
       console.log('useGameLeaderboard: Question ended, refreshing leaderboard');
 
       if (autoRefresh) {
-        refreshLeaderboard();
+        refreshLeaderboardRef.current?.();
       }
     };
 
@@ -254,7 +262,7 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
 
       listenersSetupRef.current = false;
     };
-  }, [socket, isConnected, gameId, autoRefresh, refreshLeaderboard]);
+  }, [socket, isConnected, gameId, autoRefresh]);
 
   // ========================================================================
   // POLLING (if interval specified)
@@ -266,7 +274,7 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
     console.log(`useGameLeaderboard: Setting up polling every ${refreshIntervalMs}ms`);
 
     refreshIntervalRef.current = setInterval(() => {
-      refreshLeaderboard();
+      refreshLeaderboardRef.current?.();
     }, refreshIntervalMs);
 
     return () => {
@@ -275,7 +283,7 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
         refreshIntervalRef.current = null;
       }
     };
-  }, [refreshIntervalMs, refreshLeaderboard]);
+  }, [refreshIntervalMs]);
 
   // ========================================================================
   // INITIALIZATION
@@ -286,9 +294,9 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
    */
   useEffect(() => {
     if (gameId) {
-      refreshLeaderboard();
+      refreshLeaderboardRef.current?.();
     }
-  }, [gameId, refreshLeaderboard]);
+  }, [gameId]);
 
   // ========================================================================
   // RETURN

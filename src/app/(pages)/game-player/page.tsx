@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useMemo, useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   PlayerCountdownScreen,
@@ -115,6 +115,25 @@ function PlayerGameContent() {
     isActive: boolean;
   } | null>(null);
 
+  // Refs for stable access
+  const gameFlowRef = useRef(gameFlow);
+  const socketRef = useRef(socket);
+  const isConnectedRef = useRef(isConnected);
+  const handlePlayerKickedRef = useRef<typeof handlePlayerKicked | undefined>(undefined);
+
+  // Keep refs in sync
+  useEffect(() => {
+    gameFlowRef.current = gameFlow;
+  }, [gameFlow]);
+
+  useEffect(() => {
+    socketRef.current = socket;
+  }, [socket]);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
   // Load quiz data once (for fallback)
   useEffect(() => {
     if (!gameId) return;
@@ -218,16 +237,23 @@ function PlayerGameContent() {
     [playerId, gameId, router, searchParams],
   );
 
+  // Keep handlePlayerKicked ref in sync
+  useEffect(() => {
+    handlePlayerKickedRef.current = handlePlayerKicked;
+  }, [handlePlayerKicked]);
+
   // Listen for answer stats updates and phase changes
   useEffect(() => {
-    if (!socket || !isConnected || !gameId) return;
+    if (!socketRef.current || !isConnectedRef.current || !gameId) return;
+
+    const currentSocket = socketRef.current;
 
     const handleStatsUpdate = (data: {
       roomId: string;
       questionId: string;
       counts: Record<string, number>;
     }) => {
-      if (data.roomId === gameId && data.questionId === gameFlow?.current_question_id) {
+      if (data.roomId === gameId && data.questionId === gameFlowRef.current?.current_question_id) {
         setAnswerStats(data.counts);
       }
     };
@@ -249,26 +275,18 @@ function PlayerGameContent() {
       }
     };
 
-    socket.on('game:answer:stats:update', handleStatsUpdate);
-    socket.on('game:phase:change', handlePhaseChange);
-    socket.on('game:player-kicked', handlePlayerKicked);
-    socket.on('game:started', handleGameStarted);
+    currentSocket.on('game:answer:stats:update', handleStatsUpdate);
+    currentSocket.on('game:phase:change', handlePhaseChange);
+    currentSocket.on('game:player-kicked', (data) => handlePlayerKickedRef.current?.(data));
+    currentSocket.on('game:started', handleGameStarted);
 
     return () => {
-      socket.off('game:answer:stats:update', handleStatsUpdate);
-      socket.off('game:phase:change', handlePhaseChange);
-      socket.off('game:player-kicked', handlePlayerKicked);
-      socket.off('game:started', handleGameStarted);
+      currentSocket.off('game:answer:stats:update', handleStatsUpdate);
+      currentSocket.off('game:phase:change', handlePhaseChange);
+      currentSocket.off('game:player-kicked');
+      currentSocket.off('game:started', handleGameStarted);
     };
-  }, [
-    socket,
-    isConnected,
-    gameId,
-    gameFlow?.current_question_id,
-    playerId,
-    router,
-    handlePlayerKicked,
-  ]);
+  }, [gameId, playerId, router]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);

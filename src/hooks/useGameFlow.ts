@@ -123,6 +123,24 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   // Refs
   const listenersSetupRef = useRef(false);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const gameFlowRef = useRef<GameFlow | null>(null);
+  const refreshFlowRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  const eventsRef = useRef<GameFlowEvents | undefined>(events);
+  const socketRef = useRef(socket);
+  const isConnectedRef = useRef(isConnected);
+
+  // Keep refs in sync
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
+
+  useEffect(() => {
+    socketRef.current = socket;
+  }, [socket]);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
 
   const updateTimerState = useCallback(
     (
@@ -158,14 +176,20 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
             clearInterval(timerIntervalRef.current);
             timerIntervalRef.current = null;
           }
-          events?.onQuestionEnd?.(questionId);
+          eventsRef.current?.onQuestionEnd?.(questionId);
         } else {
           setTimerState((prev) => (prev ? { ...prev, remainingMs: remaining } : null));
         }
       }, 100); // Update every 100ms for smooth countdown
     },
-    [events],
+    [],
   );
+
+  // Store updateTimerState in ref (it's stable, but we need it in the effect)
+  const updateTimerStateRef = useRef(updateTimerState);
+  useEffect(() => {
+    updateTimerStateRef.current = updateTimerState;
+  }, [updateTimerState]);
 
   // ========================================================================
   // REST API OPERATIONS
@@ -192,7 +216,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
       // Update timer state if question is active
       if (data.gameFlow.current_question_id && data.gameFlow.current_question_start_time) {
-        updateTimerState(
+        updateTimerStateRef.current(
           data.gameFlow.current_question_id,
           data.gameFlow.current_question_index || 0,
           data.gameFlow.current_question_start_time,
@@ -202,11 +226,20 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch game flow';
       setError(errorMessage);
       console.error('useGameFlow: refreshFlow error', err);
-      events?.onError?.(errorMessage);
+      eventsRef.current?.onError?.(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [gameId, events, updateTimerState]);
+  }, [gameId]);
+
+  // Keep refs in sync with state and callbacks
+  useEffect(() => {
+    gameFlowRef.current = gameFlow;
+  }, [gameFlow]);
+
+  useEffect(() => {
+    refreshFlowRef.current = refreshFlow;
+  }, [refreshFlow]);
 
   /**
    * Start a specific question (Host only)
@@ -242,7 +275,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
               new Date(data.current_question_start_time).getTime()
             : DEFAULT_QUESTION_DURATION_MS;
 
-        updateTimerState(
+        updateTimerStateRef.current(
           questionId,
           data.current_question_index ?? questionIndex ?? 0,
           startIso,
@@ -250,9 +283,9 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         );
 
         // Emit WebSocket event (align with listener: game:question:started)
-        if (socket && isConnected) {
+        if (socketRef.current && isConnectedRef.current) {
           const startsAt = new Date(startIso).getTime();
-          socket.emit('game:question:started', {
+          socketRef.current.emit('game:question:started', {
             roomId: gameId,
             question: { id: questionId, index: data.current_question_index ?? questionIndex ?? 0 },
             startsAt,
@@ -260,19 +293,19 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
           });
         }
 
-        events?.onQuestionStart?.(questionId, questionIndex || 0);
+        eventsRef.current?.onQuestionStart?.(questionId, questionIndex || 0);
         return data;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to start question';
         setError(errorMessage);
         console.error('useGameFlow: startQuestion error', err);
-        events?.onError?.(errorMessage);
+        eventsRef.current?.onError?.(errorMessage);
         throw err;
       } finally {
         setLoading(false);
       }
     },
-    [isHost, gameId, socket, isConnected, events, updateTimerState],
+    [isHost, gameId],
   );
 
   /**
@@ -303,24 +336,24 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       }
 
       // Emit WebSocket event (align with listener: game:question:ended)
-      if (socket && isConnected) {
-        socket.emit('game:question:ended', {
+      if (socketRef.current && isConnectedRef.current) {
+        socketRef.current.emit('game:question:ended', {
           roomId: gameId,
-          questionId: gameFlow?.current_question_id,
+          questionId: gameFlowRef.current?.current_question_id,
         });
       }
 
-      events?.onAnswerReveal?.(gameFlow?.current_question_id || '', '');
+      eventsRef.current?.onAnswerReveal?.(gameFlowRef.current?.current_question_id || '', '');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to reveal answer';
       setError(errorMessage);
       console.error('useGameFlow: revealAnswer error', err);
-      events?.onError?.(errorMessage);
+      eventsRef.current?.onError?.(errorMessage);
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [isHost, gameId, socket, isConnected, gameFlow, events]);
+  }, [isHost, gameId]);
 
   /**
    * Advance to next question (Host only)
@@ -342,12 +375,12 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     setError(errorMessage);
     console.error('useGameFlow: nextQuestion called but not implemented', {
       gameId,
-      currentQuestionId: gameFlow?.current_question_id,
-      currentQuestionIndex: gameFlow?.current_question_index,
+      currentQuestionId: gameFlowRef.current?.current_question_id,
+      currentQuestionIndex: gameFlowRef.current?.current_question_index,
     });
-    events?.onError?.(errorMessage);
+    eventsRef.current?.onError?.(errorMessage);
     throw new Error(errorMessage);
-  }, [isHost, gameId, gameFlow, events]);
+  }, [isHost, gameId]);
 
   /**
    * Pause the game (Host only)
@@ -379,24 +412,24 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       }
 
       // Emit WebSocket event
-      if (socket && isConnected) {
-        socket.emit('game:pause', {
+      if (socketRef.current && isConnectedRef.current) {
+        socketRef.current.emit('game:pause', {
           gameId,
           timestamp: new Date().toISOString(),
         });
       }
 
-      events?.onGamePause?.();
+      eventsRef.current?.onGamePause?.();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to pause game';
       setError(errorMessage);
       console.error('useGameFlow: pauseGame error', err);
-      events?.onError?.(errorMessage);
+      eventsRef.current?.onError?.(errorMessage);
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [isHost, gameId, socket, isConnected, events]);
+  }, [isHost, gameId]);
 
   /**
    * Resume the game (Host only)
@@ -422,24 +455,24 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       setIsPaused(false);
 
       // Emit WebSocket event
-      if (socket && isConnected) {
-        socket.emit('game:resume', {
+      if (socketRef.current && isConnectedRef.current) {
+        socketRef.current.emit('game:resume', {
           gameId,
           timestamp: new Date().toISOString(),
         });
       }
 
-      events?.onGameResume?.();
+      eventsRef.current?.onGameResume?.();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to resume game';
       setError(errorMessage);
       console.error('useGameFlow: resumeGame error', err);
-      events?.onError?.(errorMessage);
+      eventsRef.current?.onError?.(errorMessage);
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [isHost, gameId, socket, isConnected, events]);
+  }, [isHost, gameId]);
 
   /**
    * End the game (Host only)
@@ -469,34 +502,36 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       }
 
       // Emit WebSocket event
-      if (socket && isConnected) {
-        socket.emit('game:end', {
+      if (socketRef.current && isConnectedRef.current) {
+        socketRef.current.emit('game:end', {
           gameId,
           timestamp: new Date().toISOString(),
         });
       }
 
-      events?.onGameEnd?.();
+      eventsRef.current?.onGameEnd?.();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to end game';
       setError(errorMessage);
       console.error('useGameFlow: endGame error', err);
-      events?.onError?.(errorMessage);
+      eventsRef.current?.onError?.(errorMessage);
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [isHost, gameId, socket, isConnected, events]);
+  }, [isHost, gameId]);
 
   useEffect(() => {
-    if (!socket || !isConnected || !gameId) return;
+    if (!socketRef.current || !isConnectedRef.current || !gameId) return;
     if (listenersSetupRef.current) return;
 
     console.log(`useGameFlow: Setting up WebSocket listeners for game ${gameId}`);
     listenersSetupRef.current = true;
 
+    const currentSocket = socketRef.current;
+
     // Join game room
-    socket.emit('room:join', { roomId: gameId });
+    currentSocket.emit('room:join', { roomId: gameId });
 
     // Question start event
     const handleQuestionStarted = (data: SocketQuestionStartedEvent) => {
@@ -515,30 +550,33 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         const idx =
           typeof data.question?.index === 'number'
             ? data.question.index
-            : (gameFlow?.current_question_index ?? 0);
+            : (gameFlowRef.current?.current_question_index ?? 0);
 
-        updateTimerState(data.question.id, idx, serverStartIso, durationMs);
-        events?.onQuestionStart?.(data.question.id, idx);
+        updateTimerStateRef.current(data.question.id, idx, serverStartIso, durationMs);
+        eventsRef.current?.onQuestionStart?.(data.question.id, idx);
       } else {
         // Fallback to client-side calculation if server timestamps not available
         const durationMs = DEFAULT_QUESTION_DURATION_MS;
         const idx =
           typeof data.question?.index === 'number'
             ? data.question.index
-            : (gameFlow?.current_question_index ?? 0);
+            : (gameFlowRef.current?.current_question_index ?? 0);
 
-        updateTimerState(data.question.id, idx, new Date().toISOString(), durationMs);
-        events?.onQuestionStart?.(data.question.id, idx);
+        updateTimerStateRef.current(data.question.id, idx, new Date().toISOString(), durationMs);
+        eventsRef.current?.onQuestionStart?.(data.question.id, idx);
       }
 
-      refreshFlow();
+      refreshFlowRef.current?.();
     };
 
     const handleQuestionChanged = (data: SocketQuestionChangedEvent) => {
       if (data.roomId !== gameId) return;
       console.log('useGameFlow: Question changed', data);
-      events?.onQuestionStart?.(data.question.id, gameFlow?.current_question_index ?? 0);
-      refreshFlow();
+      eventsRef.current?.onQuestionStart?.(
+        data.question.id,
+        gameFlowRef.current?.current_question_index ?? 0,
+      );
+      refreshFlowRef.current?.();
     };
 
     // Question end event
@@ -551,8 +589,8 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         timerIntervalRef.current = null;
       }
       setTimerState((prev) => (prev ? { ...prev, isActive: false, remainingMs: 0 } : null));
-      events?.onQuestionEnd?.(gameFlow?.current_question_id || '');
-      refreshFlow();
+      eventsRef.current?.onQuestionEnd?.(gameFlowRef.current?.current_question_id || '');
+      refreshFlowRef.current?.();
     };
 
     // Game pause event
@@ -565,7 +603,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         clearInterval(timerIntervalRef.current);
         timerIntervalRef.current = null;
       }
-      events?.onGamePause?.();
+      eventsRef.current?.onGamePause?.();
     };
 
     // Game resume event
@@ -574,26 +612,26 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       console.log('useGameFlow: Game resumed');
 
       setIsPaused(false);
-      events?.onGameResume?.();
+      eventsRef.current?.onGameResume?.();
     };
 
     // Register listeners
-    socket.on('game:question:started', handleQuestionStarted);
-    socket.on('game:question:changed', handleQuestionChanged);
-    socket.on('game:question:ended', handleQuestionEnd);
-    socket.on('game:pause', handleGamePause);
-    socket.on('game:resume', handleGameResume);
+    currentSocket.on('game:question:started', handleQuestionStarted);
+    currentSocket.on('game:question:changed', handleQuestionChanged);
+    currentSocket.on('game:question:ended', handleQuestionEnd);
+    currentSocket.on('game:pause', handleGamePause);
+    currentSocket.on('game:resume', handleGameResume);
 
     return () => {
       console.log(`useGameFlow: Cleaning up listeners for game ${gameId}`);
 
-      socket.off('game:question:started', handleQuestionStarted);
-      socket.off('game:question:changed', handleQuestionChanged);
-      socket.off('game:question:ended', handleQuestionEnd);
-      socket.off('game:pause', handleGamePause);
-      socket.off('game:resume', handleGameResume);
+      currentSocket.off('game:question:started', handleQuestionStarted);
+      currentSocket.off('game:question:changed', handleQuestionChanged);
+      currentSocket.off('game:question:ended', handleQuestionEnd);
+      currentSocket.off('game:pause', handleGamePause);
+      currentSocket.off('game:resume', handleGameResume);
 
-      socket.emit('room:leave', { roomId: gameId });
+      currentSocket.emit('room:leave', { roomId: gameId });
 
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -601,16 +639,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
       listenersSetupRef.current = false;
     };
-  }, [
-    socket,
-    isConnected,
-    gameId,
-    events,
-    updateTimerState,
-    refreshFlow,
-    gameFlow?.current_question_index,
-    gameFlow?.current_question_id,
-  ]);
+  }, [gameId]);
 
   // ========================================================================
   // INITIALIZATION
@@ -618,23 +647,23 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
   useEffect(() => {
     if (autoSync && gameId) {
-      refreshFlow();
+      refreshFlowRef.current?.();
     }
-  }, [autoSync, gameId, refreshFlow]);
+  }, [autoSync, gameId]);
 
   // Re-sync on socket reconnect
   useEffect(() => {
-    if (!socket) return;
+    if (!socketRef.current) return;
     const handleReconnect = () => {
       if (!gameId) return;
-      socket.emit('room:join', { roomId: gameId });
-      refreshFlow();
+      socketRef.current?.emit('room:join', { roomId: gameId });
+      refreshFlowRef.current?.();
     };
-    socket.on('connect', handleReconnect);
+    socketRef.current.on('connect', handleReconnect);
     return () => {
-      socket.off('connect', handleReconnect);
+      socketRef.current?.off('connect', handleReconnect);
     };
-  }, [socket, gameId, refreshFlow]);
+  }, [gameId]);
 
   // ========================================================================
   // RETURN

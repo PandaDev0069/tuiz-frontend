@@ -121,6 +121,11 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
   const listenersSetupRef = useRef(false);
   const currentQuestionIdRef = useRef<string | null>(null);
   const submittedOptionRef = useRef<string | null>(null);
+  const eventsRef = useRef<GameAnswerEvents | undefined>(events);
+  const clearAnswerRef = useRef<(() => void) | undefined>(undefined);
+  const refreshAnswersRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  const socketRef = useRef(socket);
+  const isConnectedRef = useRef(isConnected);
 
   // ========================================================================
   // REST API OPERATIONS
@@ -205,8 +210,8 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         setAnswerResult(answerData);
 
         // Emit WebSocket event
-        if (socket && isConnected) {
-          socket.emit('game:answer:submit', {
+        if (socketRef.current && isConnectedRef.current) {
+          socketRef.current.emit('game:answer:submit', {
             roomId: gameId,
             playerId,
             questionId,
@@ -214,7 +219,7 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
           });
         }
 
-        events?.onAnswerSubmitted?.({
+        eventsRef.current?.onAnswerSubmitted?.({
           questionId,
           selectedOption,
           responseTimeMs,
@@ -222,14 +227,14 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
 
         // Auto-reveal if enabled
         if (autoReveal) {
-          events?.onAnswerResult?.(answerData);
+          eventsRef.current?.onAnswerResult?.(answerData);
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to submit answer';
         setError(errorMessage);
         setAnswerStatus((prev) => ({ ...prev, isProcessing: false }));
         console.error('useGameAnswer: submitAnswer error', err);
-        events?.onError?.(errorMessage);
+        eventsRef.current?.onError?.(errorMessage);
         throw err;
       }
     },
@@ -240,10 +245,7 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
       questionNumber,
       correctAnswerId,
       answerStatus.hasAnswered,
-      socket,
-      isConnected,
       autoReveal,
-      events,
     ],
   );
 
@@ -282,29 +284,52 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch answers';
       setError(errorMessage);
       console.error('useGameAnswer: refreshAnswers error', err);
-      events?.onError?.(errorMessage);
+      eventsRef.current?.onError?.(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [gameId, playerId, events]);
+  }, [gameId, playerId]);
 
+  // Keep refs in sync
   useEffect(() => {
     submittedOptionRef.current = answerStatus.submittedOption;
   }, [answerStatus.submittedOption]);
+
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
+
+  useEffect(() => {
+    clearAnswerRef.current = clearAnswer;
+  }, [clearAnswer]);
+
+  useEffect(() => {
+    refreshAnswersRef.current = refreshAnswers;
+  }, [refreshAnswers]);
+
+  useEffect(() => {
+    socketRef.current = socket;
+  }, [socket]);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
 
   // ========================================================================
   // WEBSOCKET EVENT HANDLERS
   // ========================================================================
 
   useEffect(() => {
-    if (!socket || !isConnected || !gameId || !playerId) return;
+    if (!socketRef.current || !isConnectedRef.current || !gameId || !playerId) return;
     if (listenersSetupRef.current) return;
 
     console.log(`useGameAnswer: Setting up WebSocket listeners for player ${playerId}`);
     listenersSetupRef.current = true;
 
+    const currentSocket = socketRef.current;
+
     // Join game room
-    socket.emit('room:join', { roomId: gameId });
+    currentSocket.emit('room:join', { roomId: gameId });
 
     /**
      * Answer confirmation from server
@@ -313,7 +338,7 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
       if (data.roomId !== gameId || data.playerId !== playerId) return;
 
       console.log('useGameAnswer: Answer accepted', data.questionId);
-      events?.onAnswerConfirmed?.(data.questionId);
+      eventsRef.current?.onAnswerConfirmed?.(data.questionId);
     };
 
     /**
@@ -331,27 +356,27 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
       if (data.roomId !== gameId) return;
 
       console.log('useGameAnswer: New question started, clearing answer');
-      clearAnswer();
+      clearAnswerRef.current?.();
       currentQuestionIdRef.current = data.question.id;
     };
 
     // Register listeners
-    socket.on('game:answer:accepted', handleAnswerAccepted);
-    socket.on('game:answer:stats:update', handleAnswerStatsUpdate);
-    socket.on('game:question:started', handleQuestionStart);
+    currentSocket.on('game:answer:accepted', handleAnswerAccepted);
+    currentSocket.on('game:answer:stats:update', handleAnswerStatsUpdate);
+    currentSocket.on('game:question:started', handleQuestionStart);
 
     return () => {
       console.log(`useGameAnswer: Cleaning up listeners for player ${playerId}`);
 
-      socket.off('game:answer:accepted', handleAnswerAccepted);
-      socket.off('game:answer:stats:update', handleAnswerStatsUpdate);
-      socket.off('game:question:started', handleQuestionStart);
+      currentSocket.off('game:answer:accepted', handleAnswerAccepted);
+      currentSocket.off('game:answer:stats:update', handleAnswerStatsUpdate);
+      currentSocket.off('game:question:started', handleQuestionStart);
 
-      socket.emit('room:leave', { roomId: gameId });
+      currentSocket.emit('room:leave', { roomId: gameId });
 
       listenersSetupRef.current = false;
     };
-  }, [socket, isConnected, gameId, playerId, clearAnswer, events]);
+  }, [gameId, playerId]);
 
   // ========================================================================
   // QUESTION CHANGE HANDLING
@@ -363,9 +388,9 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
   useEffect(() => {
     if (questionId !== currentQuestionIdRef.current) {
       currentQuestionIdRef.current = questionId;
-      clearAnswer();
+      clearAnswerRef.current?.();
     }
-  }, [questionId, clearAnswer]);
+  }, [questionId]);
 
   // ========================================================================
   // INITIALIZATION
@@ -376,9 +401,9 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
    */
   useEffect(() => {
     if (gameId && playerId) {
-      refreshAnswers();
+      refreshAnswersRef.current?.();
     }
-  }, [gameId, playerId, refreshAnswers]);
+  }, [gameId, playerId]);
 
   // ========================================================================
   // RETURN
