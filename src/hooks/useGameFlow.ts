@@ -111,7 +111,7 @@ function calculateRemainingTime(startTime: string | null, durationMs: number): n
 
 export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   const { gameId, isHost = false, autoSync = true, events } = options;
-  const { socket, isConnected } = useSocket();
+  const { socket, isConnected, joinRoom, leaveRoom } = useSocket();
 
   // State
   const [gameFlow, setGameFlow] = useState<GameFlow | null>(null);
@@ -130,6 +130,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   const isConnectedRef = useRef(isConnected);
   const isHostRef = useRef(isHost);
   const revealAnswerRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  const hasJoinedRoomRef = useRef(false);
 
   // Keep refs in sync
   useEffect(() => {
@@ -554,9 +555,27 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     listenersSetupRef.current = true;
 
     const currentSocket = socketRef.current;
+    const safeJoin = (roomId: string) => {
+      if (!roomId) return;
+      if (typeof joinRoom === 'function') {
+        joinRoom(roomId);
+      } else {
+        currentSocket.emit('room:join', { roomId });
+      }
+    };
+    const safeLeave = (roomId: string) => {
+      if (!roomId) return;
+      if (typeof leaveRoom === 'function') {
+        leaveRoom(roomId);
+      } else {
+        currentSocket.emit('room:leave', { roomId });
+      }
+    };
 
-    // Join game room
-    currentSocket.emit('room:join', { roomId: gameId });
+    if (!hasJoinedRoomRef.current) {
+      safeJoin(gameId);
+      hasJoinedRoomRef.current = true;
+    }
 
     // Question start event
     const handleQuestionStarted = (data: SocketQuestionStartedEvent) => {
@@ -718,7 +737,10 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       currentSocket.off('game:pause', handleGamePause);
       currentSocket.off('game:resume', handleGameResume);
 
-      currentSocket.emit('room:leave', { roomId: gameId });
+      if (hasJoinedRoomRef.current) {
+        safeLeave(gameId);
+        hasJoinedRoomRef.current = false;
+      }
 
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
@@ -726,7 +748,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
       listenersSetupRef.current = false;
     };
-  }, [gameId]);
+  }, [gameId, joinRoom, leaveRoom]);
 
   // ========================================================================
   // INITIALIZATION
@@ -743,14 +765,21 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     if (!socketRef.current) return;
     const handleReconnect = () => {
       if (!gameId) return;
-      socketRef.current?.emit('room:join', { roomId: gameId });
+      if (!hasJoinedRoomRef.current) {
+        if (typeof joinRoom === 'function') {
+          joinRoom(gameId);
+        } else {
+          socketRef.current?.emit('room:join', { roomId: gameId });
+        }
+        hasJoinedRoomRef.current = true;
+      }
       refreshFlowRef.current?.();
     };
     socketRef.current.on('connect', handleReconnect);
     return () => {
       socketRef.current?.off('connect', handleReconnect);
     };
-  }, [gameId]);
+  }, [gameId, joinRoom]);
 
   // ========================================================================
   // RETURN

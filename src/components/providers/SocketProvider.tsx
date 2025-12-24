@@ -13,6 +13,8 @@ interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
   connectionError: string | null;
+  joinRoom: (roomId: string) => void;
+  leaveRoom: (roomId: string) => void;
 }
 
 // Create Socket context
@@ -37,6 +39,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const deviceIdRef = useRef<string | null>(null);
+  const joinedRoomsRef = useRef<Set<string>>(new Set());
 
   const clearHeartbeat = () => {
     if (heartbeatRef.current) {
@@ -194,9 +197,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     // Send initial greeting
     socketInstance.emit('client:hello');
 
+    const joinedRoomsOnSetup = joinedRoomsRef.current;
+
     return () => {
       console.log('Cleaning up Socket.IO connection');
       clearHeartbeat();
+      joinedRoomsOnSetup.clear();
       socketInstance.close();
       socketRef.current = null;
       setIsConnected(false);
@@ -211,8 +217,25 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     }
   }, [connectionError]);
 
+  // Safe room join/leave helpers with deduping
+  const joinRoom = (roomId: string) => {
+    if (!socketRef.current || !roomId) return;
+    if (joinedRoomsRef.current.has(roomId)) return;
+    socketRef.current.emit('room:join', { roomId });
+    joinedRoomsRef.current.add(roomId);
+  };
+
+  const leaveRoom = (roomId: string) => {
+    if (!socketRef.current || !roomId) return;
+    if (!joinedRoomsRef.current.has(roomId)) return;
+    socketRef.current.emit('room:leave', { roomId });
+    joinedRoomsRef.current.delete(roomId);
+  };
+
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, isConnected, connectionError }}>
+    <SocketContext.Provider
+      value={{ socket: socketRef.current, isConnected, connectionError, joinRoom, leaveRoom }}
+    >
       {/* Debug Panel - only in development */}
       <DebugPanel isSocketConnected={isConnected} socketError={connectionError} />
       {children}
