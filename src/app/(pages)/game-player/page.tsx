@@ -36,7 +36,9 @@ type PlayerPhase =
 function PlayerGameContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const gameId = searchParams.get('gameId') || '';
+  const gameIdParam = searchParams.get('gameId') || '';
+  const roomCode = searchParams.get('code') || '';
+  const [gameId, setGameId] = useState<string>(gameIdParam);
   const phaseParam = (searchParams.get('phase') as PlayerPhase) || 'countdown';
   const questionIdParam = searchParams.get('questionId') || 'placeholder-q1';
   const questionIndexParam = Number(searchParams.get('questionIndex') || '0');
@@ -155,6 +157,7 @@ function PlayerGameContent() {
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
   const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
   const [isMobile, setIsMobile] = useState(true);
+  const hasJoinedRoomRef = useRef(false);
 
   // Refs for stable access
   const gameFlowRef = useRef(gameFlow);
@@ -175,31 +178,56 @@ function PlayerGameContent() {
     isConnectedRef.current = isConnected;
   }, [isConnected]);
 
-  // Load quiz data once (for fallback and settings)
+  // Resolve gameId from room code (fallback) and load quiz data (best-effort)
   useEffect(() => {
-    if (!gameId) return;
-    const loadQuiz = async () => {
+    let cancelled = false;
+
+    const resolveGameId = async () => {
+      // If already have gameId, keep it
+      if (gameId) return gameId;
+
+      // Try sessionStorage
+      const stored = roomCode ? sessionStorage.getItem(`game_${roomCode}`) : null;
+      if (stored) {
+        if (!cancelled) setGameId(stored);
+        return stored;
+      }
+      return null;
+    };
+
+    const loadQuiz = async (resolvedGameId: string) => {
       try {
-        const { data: game } = await gameApi.getGame(gameId);
+        const { data: game } = await gameApi.getGame(resolvedGameId);
         const quizId = game?.quiz_id || game?.quiz_set_id;
         if (quizId) {
           const quiz = await quizService.getQuizComplete(quizId);
           const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
-          setQuestions(sorted);
-          // Store play settings for point calculation
-          if (quiz.play_settings) {
-            setQuizPlaySettings({
-              time_bonus: quiz.play_settings.time_bonus ?? false,
-              streak_bonus: quiz.play_settings.streak_bonus ?? false,
-            });
+          if (!cancelled) {
+            setQuestions(sorted);
+            if (quiz.play_settings) {
+              setQuizPlaySettings({
+                time_bonus: quiz.play_settings.time_bonus ?? false,
+                streak_bonus: quiz.play_settings.streak_bonus ?? false,
+              });
+            }
           }
         }
       } catch (err) {
-        console.error('Failed to load quiz for game', err);
+        if (!cancelled) {
+          console.warn('Failed to load quiz for game (non-blocking)', err);
+        }
       }
     };
-    loadQuiz();
-  }, [gameId]);
+
+    resolveGameId().then((resolvedId) => {
+      if (!resolvedId) return;
+      loadQuiz(resolvedId);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, roomCode]);
 
   // Fetch current question from API when question changes (with full metadata)
   useEffect(() => {
@@ -212,7 +240,6 @@ function PlayerGameContent() {
       try {
         const { data, error } = await gameApi.getCurrentQuestion(gameId);
         if (error || !data) {
-          console.error('Failed to fetch current question:', error);
           return;
         }
 
@@ -242,7 +269,7 @@ function PlayerGameContent() {
           timeLimit: data.question.time_limit,
         });
       } catch (err) {
-        console.error('Error fetching current question:', err);
+        console.warn('Error fetching current question (non-blocking)', err);
       }
     };
 
@@ -297,8 +324,6 @@ function PlayerGameContent() {
     if (!socketRef.current || !isConnectedRef.current || !gameId) return;
 
     const currentSocket = socketRef.current;
-    const hasJoinedRoomRef = { current: false }; // Use ref-like object to persist across closures
-
     // Join the game room first to receive events
     const joinRoom = () => {
       if (hasJoinedRoomRef.current) {
