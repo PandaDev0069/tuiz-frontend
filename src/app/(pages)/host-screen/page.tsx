@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, Suspense, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PageContainer, Container, Main } from '@/components/ui';
 import { QRCode } from '@/components/ui/QRCode';
@@ -46,6 +46,7 @@ function HostScreenContent() {
     serverTime: string | null;
     isActive: boolean;
   } | null>(null);
+  const hasJoinedRoomRef = useRef(false);
 
   useEffect(() => {
     setJoinUrl(`https://tuiz-info-king.vercel.app/join`);
@@ -186,8 +187,6 @@ function HostScreenContent() {
   useEffect(() => {
     if (!socket || !isConnected || !gameId) return;
 
-    const hasJoinedRoomRef = { current: false }; // Use ref-like object to persist across closures
-
     // Join the game room
     const joinRoom = () => {
       if (hasJoinedRoomRef.current) {
@@ -278,7 +277,9 @@ function HostScreenContent() {
         hasJoinedRoomRef.current = false;
       }
     };
-  }, [socket, isConnected, gameId, roomCode, gameFlow?.current_question_id]);
+    // Deliberately do not depend on gameFlow/question to avoid join/leave churn
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, isConnected, gameId, roomCode]);
 
   // Sync phase with game flow state
   useEffect(() => {

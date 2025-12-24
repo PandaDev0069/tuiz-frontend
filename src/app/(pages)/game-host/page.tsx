@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { HostPodiumScreen, HostGameEndScreen } from '@/components/game';
@@ -77,6 +77,7 @@ function HostGameContent() {
   const [players, setPlayers] = useState<PlayersResponse['players']>([]);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionWithAnswers | null>(null);
+  const hasJoinedRoomRef = useRef(false);
 
   // Fetch players list
   const fetchPlayers = useCallback(async () => {
@@ -136,8 +137,6 @@ function HostGameContent() {
   useEffect(() => {
     if (!socket || !gameId) return;
 
-    const hasJoinedRoomRef = { current: false }; // Use ref-like object to persist across closures
-
     // Join the game room to receive and emit events
     // Note: We may already be in the room from host-waiting-room, but we'll join anyway
     // The backend will handle duplicate joins gracefully
@@ -175,7 +174,9 @@ function HostGameContent() {
         hasJoinedRoomRef.current = false;
       }
     };
-  }, [socket, gameId, gameFlow?.current_question_id]);
+    // Deliberately omit gameFlow dependencies to avoid join/leave churn on question change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, gameId]);
 
   const emitPhaseChange = useCallback(
     (phase: HostPhase) => {
