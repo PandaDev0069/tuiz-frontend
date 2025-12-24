@@ -292,11 +292,31 @@ function PlayerGameContent() {
     handlePlayerKickedRef.current = handlePlayerKicked;
   }, [handlePlayerKicked]);
 
-  // Listen for answer stats updates and phase changes
+  // Join WebSocket room and listen for events
   useEffect(() => {
     if (!socketRef.current || !isConnectedRef.current || !gameId) return;
 
     const currentSocket = socketRef.current;
+    const hasJoinedRoomRef = { current: false }; // Use ref-like object to persist across closures
+
+    // Join the game room first to receive events
+    const joinRoom = () => {
+      if (hasJoinedRoomRef.current) {
+        console.log('[GamePlayer] Already joined room, skipping duplicate join');
+        return;
+      }
+      console.log('[GamePlayer] Joining room:', gameId);
+      hasJoinedRoomRef.current = true;
+      currentSocket.emit('room:join', {
+        roomId: gameId,
+        gameId: gameId,
+        deviceId: deviceId,
+        playerId: playerId,
+      });
+    };
+
+    // Join room immediately
+    joinRoom();
 
     const handleStatsUpdate = (data: {
       roomId: string;
@@ -369,8 +389,15 @@ function PlayerGameContent() {
       currentSocket.off('game:pause', handleGamePause);
       currentSocket.off('game:resume', handleGameResume);
       currentSocket.off('game:end', handleGameEnd);
+
+      // Leave room on unmount
+      if (gameId && hasJoinedRoomRef.current) {
+        console.log('[GamePlayer] Leaving room on unmount');
+        currentSocket.emit('room:leave', { roomId: gameId });
+        hasJoinedRoomRef.current = false;
+      }
     };
-  }, [gameId, playerId, router]);
+  }, [gameId, playerId, router, deviceId]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);

@@ -217,10 +217,17 @@ function WaitingRoomContent() {
     if (!socket || !isConnected || !gameId || !isInitialized || !playerId) return;
 
     let reconnectAttempted = false;
+    const hasJoinedRoomRef = { current: false }; // Use ref-like object to persist across closures
 
     // Join the game room via WebSocket
     // Backend will create room_participants and websocket_connections records
     const joinRoom = () => {
+      if (hasJoinedRoomRef.current) {
+        console.log('[WaitingRoom] Already joined room, skipping duplicate join');
+        return;
+      }
+      console.log('[WaitingRoom] Joining room:', gameId);
+      hasJoinedRoomRef.current = true;
       socket.emit('room:join', {
         roomId: gameId,
         gameId: gameId,
@@ -255,18 +262,19 @@ function WaitingRoomContent() {
       if (reconnectAttempted) return;
       reconnectAttempted = true;
 
-      console.log('WebSocket reconnected, verifying player status...');
+      console.log('[WaitingRoom] WebSocket reconnected, verifying player status...');
 
       // Check if player still exists
       const existingPlayer = await checkExistingPlayer();
       if (existingPlayer) {
-        // Player exists, rejoin room
+        // Player exists, rejoin room (reset flag to allow rejoin)
+        hasJoinedRoomRef.current = false;
         setPlayerId(existingPlayer.id);
         joinRoom();
         toast.success('再接続しました');
       } else {
         // Player doesn't exist, need to rejoin game
-        console.warn('Player not found after reconnection, may need to rejoin');
+        console.warn('[WaitingRoom] Player not found after reconnection, may need to rejoin');
         toast.error('接続が切断されました。ページを再読み込みしてください。');
       }
     };
@@ -330,8 +338,10 @@ function WaitingRoomContent() {
       socket.off('connect', handleReconnect);
 
       // Leave room on unmount
-      if (gameId) {
+      if (gameId && hasJoinedRoomRef.current) {
+        console.log('[WaitingRoom] Leaving room on unmount');
         socket.emit('room:leave', { roomId: gameId });
+        hasJoinedRoomRef.current = false;
       }
     };
   }, [

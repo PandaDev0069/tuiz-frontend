@@ -354,13 +354,20 @@ function HostWaitingRoomContent() {
         return;
       }
 
+      // Wait a moment to ensure all players have joined the room before emitting events
+      // This prevents race conditions where events are emitted before players are listening
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       // Emit WebSocket events to notify all clients (players and public screen)
       const actualGameCode = gameCode || roomCode;
       if (socket && socket.connected) {
+        console.log('[HostWaitingRoom] Emitting game:started and phase:change events');
         // Emit game:started event for players
         socket.emit('game:started', { roomId: gameId, roomCode: actualGameCode });
         // Emit phase change to countdown for public screen and players
         socket.emit('game:phase:change', { roomId: gameId, phase: 'countdown' });
+      } else {
+        console.warn('[HostWaitingRoom] Socket not connected, cannot emit events');
       }
 
       // Leave the room before navigating

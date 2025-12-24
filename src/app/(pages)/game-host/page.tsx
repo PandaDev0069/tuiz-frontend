@@ -132,9 +132,24 @@ function HostGameContent() {
     return () => clearInterval(interval);
   }, [gameId, fetchPlayers]);
 
-  // Listen for answer stats updates
+  // Join WebSocket room and listen for events
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !gameId) return;
+
+    const hasJoinedRoomRef = { current: false }; // Use ref-like object to persist across closures
+
+    // Join the game room to receive and emit events
+    const joinRoom = () => {
+      if (hasJoinedRoomRef.current) {
+        console.log('[GameHost] Already joined room, skipping duplicate join');
+        return;
+      }
+      console.log('[GameHost] Joining room:', gameId);
+      hasJoinedRoomRef.current = true;
+      socket.emit('room:join', { roomId: gameId });
+    };
+
+    joinRoom();
 
     const handleStatsUpdate = (data: {
       roomId: string;
@@ -149,12 +164,22 @@ function HostGameContent() {
     socket.on('game:answer:stats:update', handleStatsUpdate);
     return () => {
       socket.off('game:answer:stats:update', handleStatsUpdate);
+      // Leave room on unmount
+      if (gameId && hasJoinedRoomRef.current) {
+        console.log('[GameHost] Leaving room on unmount');
+        socket.emit('room:leave', { roomId: gameId });
+        hasJoinedRoomRef.current = false;
+      }
     };
   }, [socket, gameId, gameFlow?.current_question_id]);
 
   const emitPhaseChange = useCallback(
     (phase: HostPhase) => {
-      if (!socket || !gameId) return;
+      if (!socket || !gameId) {
+        console.warn('[GameHost] Cannot emit phase change: socket or gameId missing');
+        return;
+      }
+      console.log('[GameHost] Emitting phase change:', phase, 'for room:', gameId);
       socket.emit('game:phase:change', { roomId: gameId, phase });
     },
     [socket, gameId],

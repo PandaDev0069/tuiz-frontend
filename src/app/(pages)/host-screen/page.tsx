@@ -186,8 +186,20 @@ function HostScreenContent() {
   useEffect(() => {
     if (!socket || !isConnected || !gameId) return;
 
+    const hasJoinedRoomRef = { current: false }; // Use ref-like object to persist across closures
+
     // Join the game room
-    socket.emit('room:join', { roomId: gameId });
+    const joinRoom = () => {
+      if (hasJoinedRoomRef.current) {
+        console.log('[HostScreen] Already joined room, skipping duplicate join');
+        return;
+      }
+      console.log('[HostScreen] Joining room:', gameId);
+      hasJoinedRoomRef.current = true;
+      socket.emit('room:join', { roomId: gameId });
+    };
+
+    joinRoom();
 
     // Listen for phase changes from host
     const handlePhaseChange = (data: { roomId: string; phase: PublicPhase }) => {
@@ -258,7 +270,13 @@ function HostScreenContent() {
       socket.off('game:pause', handleGamePause);
       socket.off('game:resume', handleGameResume);
       socket.off('game:end', handleGameEnd);
-      socket.emit('room:leave', { roomId: gameId });
+
+      // Leave room on unmount
+      if (gameId && hasJoinedRoomRef.current) {
+        console.log('[HostScreen] Leaving room on unmount');
+        socket.emit('room:leave', { roomId: gameId });
+        hasJoinedRoomRef.current = false;
+      }
     };
   }, [socket, isConnected, gameId, roomCode, gameFlow?.current_question_id]);
 
