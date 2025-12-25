@@ -9,6 +9,7 @@ interface PublicCountdownScreenProps {
   message?: string;
   questionNumber?: number;
   totalQuestions?: number;
+  startedAt?: number; // Server timestamp when countdown started (for synchronization)
 }
 
 export const PublicCountdownScreen: React.FC<PublicCountdownScreenProps> = ({
@@ -17,8 +18,18 @@ export const PublicCountdownScreen: React.FC<PublicCountdownScreenProps> = ({
   message = '準備してください！',
   questionNumber,
   totalQuestions,
+  startedAt,
 }) => {
-  const [currentTime, setCurrentTime] = useState(countdownTime);
+  // Calculate initial time based on server timestamp if provided
+  const getInitialTime = () => {
+    if (startedAt) {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      return Math.max(0, countdownTime - elapsed);
+    }
+    return countdownTime;
+  };
+
+  const [currentTime, setCurrentTime] = useState(getInitialTime);
   const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {

@@ -111,7 +111,7 @@ function calculateRemainingTime(startTime: string | null, durationMs: number): n
 
 export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   const { gameId, isHost = false, autoSync = true, events } = options;
-  const { socket, isConnected, joinRoom, leaveRoom } = useSocket();
+  const { socket, isConnected, isRegistered, joinRoom, leaveRoom } = useSocket();
 
   // State
   const [gameFlow, setGameFlow] = useState<GameFlow | null>(null);
@@ -548,7 +548,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   }, [isHost, gameId]);
 
   useEffect(() => {
-    if (!socketRef.current || !isConnectedRef.current || !gameId) return;
+    if (!socketRef.current || !isConnectedRef.current || !isRegistered || !gameId) return;
     if (listenersSetupRef.current) return;
 
     console.log(`useGameFlow: Setting up WebSocket listeners for game ${gameId}`);
@@ -746,9 +746,11 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         clearInterval(timerIntervalRef.current);
       }
 
+      // Do not force leave here to avoid leave/rejoin churn on React double-invocation;
+      // room membership will be cleaned up by socket disconnect or other page transitions.
       listenersSetupRef.current = false;
     };
-  }, [gameId, joinRoom, leaveRoom]);
+  }, [gameId, isRegistered, joinRoom, leaveRoom]);
 
   // ========================================================================
   // INITIALIZATION

@@ -135,6 +135,47 @@ export function getOrCreateDeviceId(): string {
 }
 
 /**
+ * Get or create a device ID with optional per-tab scope.
+ * Per-tab IDs use sessionStorage (different per browser tab/window) to avoid
+ * clobbering the primary device ID used by the host.
+ */
+export function getOrCreateDeviceIdScoped(options?: { perTab?: boolean }): string {
+  const perTab = options?.perTab;
+
+  if (!isBrowser()) {
+    throw new Error('getOrCreateDeviceIdScoped can only be called in a browser environment');
+  }
+
+  if (!perTab) {
+    return getOrCreateDeviceId();
+  }
+
+  // Per-tab scope: sessionStorage key
+  const TAB_KEY = 'tuiz_device_id_tab';
+  const VERSION_KEY = 'tuiz_device_id_tab_version';
+
+  try {
+    const storedId = sessionStorage.getItem(TAB_KEY);
+    const storedVersion = sessionStorage.getItem(VERSION_KEY);
+
+    if (storedId && storedVersion === CURRENT_VERSION) {
+      console.info('[DeviceID] Using existing per-tab device ID:', storedId);
+      return storedId;
+    }
+
+    const newId = generateUUID();
+    sessionStorage.setItem(TAB_KEY, newId);
+    sessionStorage.setItem(VERSION_KEY, CURRENT_VERSION);
+    console.info('[DeviceID] Generated per-tab device ID:', newId);
+    return newId;
+  } catch (error) {
+    console.error('[DeviceID] Error handling per-tab device ID:', error);
+    // Fallback to global ID if sessionStorage fails
+    return getOrCreateDeviceId();
+  }
+}
+
+/**
  * Reset device ID (useful for testing or user privacy controls)
  * Generates and stores a new device ID
  *

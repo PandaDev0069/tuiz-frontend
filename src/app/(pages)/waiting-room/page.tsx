@@ -16,7 +16,7 @@ function WaitingRoomContent() {
   const playerName = searchParams.get('name') || '';
   const roomCode = searchParams.get('code') || '';
   const gameIdParam = searchParams.get('gameId') || '';
-  const { socket, isConnected } = useSocket();
+  const { socket, isConnected, joinRoom, leaveRoom } = useSocket();
   const { deviceId, isLoading: isDeviceIdLoading } = useDeviceId();
 
   // State management
@@ -286,22 +286,17 @@ function WaitingRoomContent() {
 
     // Join the game room via WebSocket
     // Backend will create room_participants and websocket_connections records
-    const joinRoom = () => {
+    const joinRoomSafe = () => {
       if (hasJoinedRoomRef.current) {
         console.log('[WaitingRoom] Already joined room, skipping duplicate join');
         return;
       }
       console.log('[WaitingRoom] Joining room:', gameId);
+      joinRoom(gameId);
       hasJoinedRoomRef.current = true;
-      socket.emit('room:join', {
-        roomId: gameId,
-        gameId: gameId,
-        deviceId: deviceId,
-        playerId: playerId,
-      });
     };
 
-    joinRoom();
+    joinRoomSafe();
 
     // Listen for game start event
     const handleGameStarted = (data: { roomId?: string; gameId?: string; roomCode?: string }) => {
@@ -316,10 +311,14 @@ function WaitingRoomContent() {
     };
 
     // Listen for explicit phase changes (fallback if game:started missed)
-    const handlePhaseChange = (data: { roomId: string; phase: string }) => {
+    const handlePhaseChange = (data: { roomId: string; phase: string; startedAt?: number }) => {
       if (isNavigatingRef.current) return;
       if (data.roomId === gameId) {
         isNavigatingRef.current = true;
+        // Store countdown start timestamp in sessionStorage for the game-player page to use
+        if (data.phase === 'countdown' && data.startedAt) {
+          sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
+        }
         router.push(
           `/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId || playerName}`,
         );
@@ -350,7 +349,9 @@ function WaitingRoomContent() {
         if (typeof window !== 'undefined' && gameId) {
           sessionStorage.setItem(`player_${gameId}_${deviceId || 'unknown'}`, existingPlayer.id);
         }
-        joinRoom();
+        if (gameId) {
+          joinRoom(gameId);
+        }
         // Re-sync current phase in case we missed events while disconnected
         syncGameState();
         toast.success('再接続しました');
@@ -427,7 +428,7 @@ function WaitingRoomContent() {
       // Leave room on unmount unless we are navigating to the game
       if (gameId && hasJoinedRoomRef.current && !isNavigatingRef.current) {
         console.log('[WaitingRoom] Leaving room on unmount');
-        socket.emit('room:leave', { roomId: gameId });
+        leaveRoom(gameId);
         hasJoinedRoomRef.current = false;
       }
     };
@@ -443,6 +444,8 @@ function WaitingRoomContent() {
     router,
     checkExistingPlayer,
     syncGameState,
+    joinRoom,
+    leaveRoom,
   ]);
 
   // Countdown state

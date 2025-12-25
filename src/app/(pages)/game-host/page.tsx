@@ -70,7 +70,7 @@ function HostGameContent() {
     autoRefresh: true,
   });
 
-  const { socket } = useSocket();
+  const { socket, joinRoom: socketJoinRoom, leaveRoom: socketLeaveRoom } = useSocket();
 
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
@@ -78,6 +78,7 @@ function HostGameContent() {
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionWithAnswers | null>(null);
   const hasJoinedRoomRef = useRef(false);
+  const socketIdRef = useRef<string | null>(null);
 
   // Fetch players list
   const fetchPlayers = useCallback(async () => {
@@ -135,24 +136,28 @@ function HostGameContent() {
 
   // Join WebSocket room and listen for events
   useEffect(() => {
-    if (!socket || !gameId) return;
+    if (!socket || !gameId || !socket.connected) return;
+
+    // Track socket ID to prevent re-runs on socket object reference changes
+    const currentSocketId = socket.id || null;
+    if (socketIdRef.current !== currentSocketId) {
+      if (socketIdRef.current) {
+        console.log('[GameHost] Socket ID changed, resetting room state');
+        hasJoinedRoomRef.current = false;
+      }
+      socketIdRef.current = currentSocketId;
+    }
 
     // Join the game room to receive and emit events
-    // Note: We may already be in the room from host-waiting-room, but we'll join anyway
-    // The backend will handle duplicate joins gracefully
-    const joinRoom = () => {
-      if (hasJoinedRoomRef.current) {
-        console.log('[GameHost] Already joined room, skipping duplicate join');
-        return;
-      }
-      console.log('[GameHost] Joining room:', gameId);
-      hasJoinedRoomRef.current = true;
-      socket.emit('room:join', { roomId: gameId });
-    };
-
-    // Join immediately on mount - this ensures we're in the room even if
-    // the host-waiting-room cleanup hasn't run yet
-    joinRoom();
+    // Note: We may already be in the room from host-waiting-room, but socketJoinRoom
+    // has built-in deduplication so it's safe to call
+    if (hasJoinedRoomRef.current) {
+      console.log('[GameHost] Already joined room, skipping duplicate join');
+      return;
+    }
+    console.log('[GameHost] Joining room:', gameId);
+    hasJoinedRoomRef.current = true;
+    socketJoinRoom(gameId);
 
     const handleStatsUpdate = (data: {
       roomId: string;
@@ -168,15 +173,16 @@ function HostGameContent() {
     return () => {
       socket.off('game:answer:stats:update', handleStatsUpdate);
       // Leave room on unmount
-      if (gameId && hasJoinedRoomRef.current) {
+      if (gameId && hasJoinedRoomRef.current && socket) {
         console.log('[GameHost] Leaving room on unmount');
-        socket.emit('room:leave', { roomId: gameId });
+        socketLeaveRoom(gameId);
         hasJoinedRoomRef.current = false;
       }
     };
+    // Use socket.id and socket.connected instead of socket object to prevent re-runs on reference changes
     // Deliberately omit gameFlow dependencies to avoid join/leave churn on question change
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, gameId]);
+  }, [socket?.id, socket?.connected, gameId, socketJoinRoom, socketLeaveRoom]);
 
   const emitPhaseChange = useCallback(
     (phase: HostPhase) => {

@@ -23,7 +23,7 @@ function HostWaitingRoomContent() {
   const roomCode = searchParams.get('code') || '';
   const quizId = searchParams.get('quizId') || '';
   const gameIdParam = searchParams.get('gameId') || '';
-  const { socket } = useSocket();
+  const { socket, joinRoom: socketJoinRoom, leaveRoom: socketLeaveRoom } = useSocket();
 
   const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
   const [gameCode, setGameCode] = useState<string | null>(roomCode || null);
@@ -67,6 +67,9 @@ function HostWaitingRoomContent() {
   const hasJoinedRoomRef = useRef(false);
   // Ref to track the current gameId we're in the room for
   const currentRoomGameIdRef = useRef<string | null>(null);
+  // Ref to track socket connection state to prevent re-runs on socket object changes
+  const socketConnectedRef = useRef(false);
+  const socketIdRef = useRef<string | null>(null);
 
   // Fetch players from backend
   const fetchPlayers = useCallback(async () => {
@@ -197,28 +200,46 @@ function HostWaitingRoomContent() {
       return;
     }
 
+    // Track socket connection state to prevent re-runs on socket object reference changes
+    const currentSocketId = socket.id || null;
+    const isSocketConnected = socket.connected;
+    const previousGameId = currentRoomGameIdRef.current;
+    const wasInDifferentRoom =
+      hasJoinedRoomRef.current && previousGameId && previousGameId !== gameId;
+
+    // If socket ID changed or disconnected, reset join state
+    if (socketIdRef.current !== currentSocketId || !isSocketConnected) {
+      if (socketIdRef.current && socketIdRef.current !== currentSocketId) {
+        console.log('[HostWaitingRoom] Socket ID changed, resetting room state');
+        // Leave previous room if we were in one
+        if (hasJoinedRoomRef.current && previousGameId) {
+          socketLeaveRoom(previousGameId);
+        }
+        hasJoinedRoomRef.current = false;
+        currentRoomGameIdRef.current = null;
+      }
+      socketIdRef.current = currentSocketId;
+      socketConnectedRef.current = isSocketConnected;
+    }
+
+    // If we were in a different room, leave it first (only if gameId actually changed)
+    if (wasInDifferentRoom) {
+      console.log('[HostWaitingRoom] Leaving previous room:', previousGameId);
+      socketLeaveRoom(previousGameId);
+      hasJoinedRoomRef.current = false;
+    }
+
     // Skip if already joined to the same room (prevent re-join on effect re-run)
     if (hasJoinedRoomRef.current && currentRoomGameIdRef.current === gameId) {
       console.log('[HostWaitingRoom] Already joined room for this gameId, skipping duplicate join');
       return;
     }
 
-    // If we were in a different room, leave it first
-    if (
-      hasJoinedRoomRef.current &&
-      currentRoomGameIdRef.current &&
-      currentRoomGameIdRef.current !== gameId
-    ) {
-      console.log('[HostWaitingRoom] Leaving previous room:', currentRoomGameIdRef.current);
-      socket.emit('room:leave', { roomId: currentRoomGameIdRef.current });
-      hasJoinedRoomRef.current = false;
-    }
-
-    // Join the game room to receive events
+    // Join the game room to receive events using SocketProvider helper (has built-in deduplication)
     console.log('[HostWaitingRoom] Joining room:', gameId);
     hasJoinedRoomRef.current = true;
     currentRoomGameIdRef.current = gameId;
-    socket.emit('room:join', { roomId: gameId });
+    socketJoinRoom(gameId);
 
     // Listen for player join/leave events
     const handlePlayerJoined = (data?: { playerId?: string; playerName?: string }) => {
@@ -264,35 +285,21 @@ function HostWaitingRoomContent() {
     socket.on('game:player-kicked', handlePlayerKicked);
 
     return () => {
-      // Only clean up event listeners, don't leave room here
-      // Room leave is handled by checking if gameId changed or component unmounting
+      // Only clean up event listeners
+      // DO NOT leave room here - room leave is handled in the effect body when:
+      // 1. gameId changes (handled above)
+      // 2. socket ID changes (handled above)
+      // 3. Component unmounts (handled by separate unmount effect below)
       socket.off('room:user-joined', handlePlayerJoined);
       socket.off('room:user-left', handlePlayerLeft);
       socket.off('game:player-joined', handlePlayerJoined);
       socket.off('game:player-left', handlePlayerLeft);
       socket.off('game:room-locked', handleRoomLocked);
       socket.off('game:player-kicked', handlePlayerKicked);
-
-      // Only leave room if:
-      // 1. We're not navigating (actual unmount)
-      // 2. We actually joined this room
-      // 3. The gameId matches (not just a dependency change)
-      if (
-        !isNavigatingRef.current &&
-        hasJoinedRoomRef.current &&
-        currentRoomGameIdRef.current === gameId
-      ) {
-        console.log('[HostWaitingRoom] Leaving room on unmount (not navigating)');
-        socket.emit('room:leave', { roomId: gameId });
-        hasJoinedRoomRef.current = false;
-        currentRoomGameIdRef.current = null;
-      } else if (isNavigatingRef.current) {
-        console.log('[HostWaitingRoom] Skipping room leave - navigating to game-host');
-        // Keep hasJoinedRoomRef.current = true so game-host knows we're already in room
-      }
-      // If gameId changed, the new effect run will handle leaving the old room
     };
-  }, [socket, gameId]);
+    // Use socket.id and socket.connected instead of socket object to prevent re-runs on reference changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket?.id, socket?.connected, gameId, socketJoinRoom, socketLeaveRoom]);
 
   // Player management functions
   const handlePlayerBan = async (playerId: string) => {

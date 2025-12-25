@@ -1,10 +1,10 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { cfg } from '@/config/config';
 import { DebugPanel } from '@/components/debug';
-import { getOrCreateDeviceId } from '@/lib/deviceId';
+import { getOrCreateDeviceIdScoped } from '@/lib/deviceId';
 
 const HEARTBEAT_INTERVAL_MS = 30000;
 
@@ -12,6 +12,7 @@ const HEARTBEAT_INTERVAL_MS = 30000;
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
+  isRegistered: boolean;
   connectionError: string | null;
   joinRoom: (roomId: string) => void;
   leaveRoom: (roomId: string) => void;
@@ -21,6 +22,7 @@ interface SocketContextType {
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
+  isRegistered: false,
   connectionError: null,
   joinRoom: () => {},
   leaveRoom: () => {},
@@ -37,11 +39,13 @@ export function useSocket() {
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
   const deviceIdRef = useRef<string | null>(null);
   const joinedRoomsRef = useRef<Set<string>>(new Set());
+  const isRegisteredRef = useRef(false);
 
   const clearHeartbeat = () => {
     if (heartbeatRef.current) {
@@ -54,7 +58,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        deviceIdRef.current = getOrCreateDeviceId();
+        const isPublicScreen =
+          typeof window !== 'undefined' &&
+          (window.location.pathname.includes('/host-screen') || window.name === 'host-screen');
+
+        // Public screen runs in a separate window; use per-tab ID to avoid clobbering host ID
+        deviceIdRef.current = getOrCreateDeviceIdScoped({ perTab: isPublicScreen });
       } catch (error) {
         console.error('[SocketProvider] Failed to get device ID:', error);
         // Generate a temporary device ID if we can't get one
@@ -100,12 +109,16 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         socketInstance.emit('ws:heartbeat');
       }, HEARTBEAT_INTERVAL_MS);
       setIsConnected(true);
+      setIsRegistered(false); // wait for ws:connected
+      isRegisteredRef.current = false;
       setConnectionError(null);
     });
 
     socketInstance.on('ws:connected', (data) => {
       console.log('Socket.IO registration confirmed', data);
       setIsConnected(true);
+      setIsRegistered(true);
+      isRegisteredRef.current = true;
       setConnectionError(null);
     });
 
@@ -113,6 +126,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       console.log('Socket.IO disconnected:', reason);
       clearHeartbeat();
       setIsConnected(false);
+      setIsRegistered(false);
+      isRegisteredRef.current = false;
     });
 
     socketInstance.on('connect_error', (error) => {
@@ -125,6 +140,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       });
       setConnectionError(errorMessage);
       setIsConnected(false);
+      setIsRegistered(false);
+      isRegisteredRef.current = false;
 
       // Log additional debugging info
       console.log('Connection details:', {
@@ -138,6 +155,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     socketInstance.on('reconnect', (attemptNumber) => {
       console.log('Socket.IO reconnected after', attemptNumber, 'attempts');
       setIsConnected(true);
+      setIsRegistered(false); // wait for ws:connected
+      isRegisteredRef.current = false;
       setConnectionError(null);
     });
 
@@ -149,11 +168,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         type: (error as { type?: string })?.type,
       });
       setConnectionError(`Reconnection failed: ${errorMessage}`);
+      setIsRegistered(false);
+      isRegisteredRef.current = false;
     });
 
     socketInstance.on('reconnect_failed', () => {
       console.error('Socket.IO reconnection failed after all attempts');
       setConnectionError('Reconnection failed after all attempts');
+      setIsRegistered(false);
+      isRegisteredRef.current = false;
     });
 
     socketInstance.on('ws:error', (data) => {
@@ -173,6 +196,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       });
 
       setConnectionError(errorMessage);
+      setIsRegistered(false);
+      isRegisteredRef.current = false;
     });
 
     socketInstance.on('ws:pong', () => {
@@ -208,6 +233,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       socketInstance.close();
       socketRef.current = null;
       setIsConnected(false);
+      setIsRegistered(false);
+      isRegisteredRef.current = false;
       setConnectionError(null);
     };
   }, []); // Empty deps - only run once on mount (client-side)
@@ -220,23 +247,31 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [connectionError]);
 
   // Safe room join/leave helpers with deduping
-  const joinRoom = (roomId: string) => {
-    if (!socketRef.current || !roomId) return;
+  // Use useCallback to ensure stable function references
+  const joinRoom = useCallback((roomId: string) => {
+    if (!socketRef.current || !roomId || !isRegisteredRef.current) return;
     if (joinedRoomsRef.current.has(roomId)) return;
     socketRef.current.emit('room:join', { roomId });
     joinedRoomsRef.current.add(roomId);
-  };
+  }, []); // Empty deps - functions use refs which are stable
 
-  const leaveRoom = (roomId: string) => {
-    if (!socketRef.current || !roomId) return;
+  const leaveRoom = useCallback((roomId: string) => {
+    if (!socketRef.current || !roomId || !isRegisteredRef.current) return;
     if (!joinedRoomsRef.current.has(roomId)) return;
     socketRef.current.emit('room:leave', { roomId });
     joinedRoomsRef.current.delete(roomId);
-  };
+  }, []); // Empty deps - functions use refs which are stable
 
   return (
     <SocketContext.Provider
-      value={{ socket: socketRef.current, isConnected, connectionError, joinRoom, leaveRoom }}
+      value={{
+        socket: socketRef.current,
+        isConnected,
+        isRegistered,
+        connectionError,
+        joinRoom,
+        leaveRoom,
+      }}
     >
       {/* Debug Panel - only in development */}
       <DebugPanel isSocketConnected={isConnected} socketError={connectionError} />

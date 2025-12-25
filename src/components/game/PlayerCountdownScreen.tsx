@@ -10,6 +10,7 @@ interface PlayerCountdownScreenProps {
   questionNumber?: number;
   totalQuestions?: number;
   isMobile?: boolean;
+  startedAt?: number; // Server timestamp when countdown started (for synchronization)
 }
 
 export const PlayerCountdownScreen: React.FC<PlayerCountdownScreenProps> = ({
@@ -19,8 +20,18 @@ export const PlayerCountdownScreen: React.FC<PlayerCountdownScreenProps> = ({
   questionNumber,
   totalQuestions,
   isMobile = true,
+  startedAt,
 }) => {
-  const [currentTime, setCurrentTime] = useState(countdownTime);
+  // Calculate initial time based on server timestamp if provided
+  const getInitialTime = () => {
+    if (startedAt) {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      return Math.max(0, countdownTime - elapsed);
+    }
+    return countdownTime;
+  };
+
+  const [currentTime, setCurrentTime] = useState(getInitialTime);
   const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {

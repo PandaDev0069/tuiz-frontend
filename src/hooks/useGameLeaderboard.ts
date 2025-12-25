@@ -111,7 +111,7 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
     enableAnimations = true,
     events,
   } = options;
-  const { socket, isConnected } = useSocket();
+  const { socket, isConnected, isRegistered, joinRoom, leaveRoom } = useSocket();
 
   // State
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -217,14 +217,14 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
   // ========================================================================
 
   useEffect(() => {
-    if (!socket || !isConnected || !gameId) return;
+    if (!socket || !isConnected || !isRegistered || !gameId) return;
     if (listenersSetupRef.current) return;
 
     console.log(`useGameLeaderboard: Setting up WebSocket listeners for game ${gameId}`);
     listenersSetupRef.current = true;
 
-    // Join game room
-    socket.emit('room:join', { roomId: gameId });
+    // Join game room (dedup + registration guarded)
+    joinRoom(gameId);
 
     /**
      * Leaderboard update event - trigger refresh to fetch full data
@@ -258,11 +258,11 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
       socket.off('game:leaderboard:update', handleLeaderboardUpdate);
       socket.off('game:question:ended', handleQuestionEnd);
 
-      socket.emit('room:leave', { roomId: gameId });
+      leaveRoom(gameId);
 
       listenersSetupRef.current = false;
     };
-  }, [socket, isConnected, gameId, autoRefresh]);
+  }, [socket, isConnected, isRegistered, gameId, autoRefresh, joinRoom, leaveRoom]);
 
   // ========================================================================
   // POLLING (if interval specified)

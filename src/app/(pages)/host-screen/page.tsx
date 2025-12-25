@@ -34,7 +34,7 @@ function HostScreenContent() {
   const searchParams = useSearchParams();
   const roomCode = searchParams.get('code') || '';
   const gameIdParam = searchParams.get('gameId') || '';
-  const { socket, isConnected } = useSocket();
+  const { socket, isConnected, joinRoom, leaveRoom } = useSocket();
 
   const [joinUrl, setJoinUrl] = useState('');
   const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
@@ -46,6 +46,7 @@ function HostScreenContent() {
     serverTime: string | null;
     isActive: boolean;
   } | null>(null);
+  const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
   const hasJoinedRoomRef = useRef(false);
 
   useEffect(() => {
@@ -187,24 +188,32 @@ function HostScreenContent() {
   useEffect(() => {
     if (!socket || !isConnected || !gameId) return;
 
-    // Join the game room
-    const joinRoom = () => {
+    // Join the game room using provider helper (dedup + registration guard)
+    const doJoinRoom = () => {
       if (hasJoinedRoomRef.current) {
         console.log('[HostScreen] Already joined room, skipping duplicate join');
         return;
       }
       console.log('[HostScreen] Joining room:', gameId);
+      joinRoom(gameId);
       hasJoinedRoomRef.current = true;
-      socket.emit('room:join', { roomId: gameId });
     };
 
-    joinRoom();
+    doJoinRoom();
 
     // Listen for phase changes from host
-    const handlePhaseChange = (data: { roomId: string; phase: PublicPhase }) => {
+    const handlePhaseChange = (data: {
+      roomId: string;
+      phase: PublicPhase;
+      startedAt?: number;
+    }) => {
       if (data.roomId === gameId) {
-        console.log('Public Screen: Phase changed to', data.phase);
+        console.log('Public Screen: Phase changed to', data.phase, 'startedAt:', data.startedAt);
         setCurrentPhase(data.phase);
+        // Store countdown start timestamp for synchronization
+        if (data.phase === 'countdown' && data.startedAt) {
+          setCountdownStartedAt(data.startedAt);
+        }
       }
     };
 
@@ -273,7 +282,7 @@ function HostScreenContent() {
       // Leave room on unmount
       if (gameId && hasJoinedRoomRef.current) {
         console.log('[HostScreen] Leaving room on unmount');
-        socket.emit('room:leave', { roomId: gameId });
+        leaveRoom(gameId);
         hasJoinedRoomRef.current = false;
       }
     };
@@ -370,6 +379,7 @@ function HostScreenContent() {
           countdownTime={3}
           questionNumber={questionIndex + 1}
           totalQuestions={questions.length}
+          startedAt={countdownStartedAt}
           onCountdownComplete={() => {
             // Phase will be updated by game flow event or WebSocket
             // Don't manually change phase here

@@ -48,6 +48,7 @@ function PlayerGameContent() {
   const playerId = playerParam || deviceId || 'anonymous-player';
 
   const [currentPhase, setCurrentPhase] = useState<PlayerPhase>(phaseParam);
+  const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
 
   const { gameFlow, timerState, isConnected } = useGameFlow({
     gameId,
@@ -153,7 +154,7 @@ function PlayerGameContent() {
     autoRefresh: true,
   });
 
-  const { socket } = useSocket();
+  const { socket, joinRoom, leaveRoom } = useSocket();
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
   const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
   const [isMobile, setIsMobile] = useState(true);
@@ -319,29 +320,39 @@ function PlayerGameContent() {
     handlePlayerKickedRef.current = handlePlayerKicked;
   }, [handlePlayerKicked]);
 
+  // Restore countdown start timestamp from sessionStorage if available (for late joiners)
+  useEffect(() => {
+    if (currentPhase === 'countdown' && !countdownStartedAt) {
+      const stored = sessionStorage.getItem(`countdown_started_${gameId}`);
+      if (stored) {
+        const timestamp = parseInt(stored, 10);
+        if (!isNaN(timestamp)) {
+          setCountdownStartedAt(timestamp);
+          // Clean up after use
+          sessionStorage.removeItem(`countdown_started_${gameId}`);
+        }
+      }
+    }
+  }, [currentPhase, gameId, countdownStartedAt]);
+
   // Join WebSocket room and listen for events
   useEffect(() => {
     if (!socketRef.current || !isConnectedRef.current || !gameId) return;
 
     const currentSocket = socketRef.current;
     // Join the game room first to receive events
-    const joinRoom = () => {
+    const joinRoomSafe = () => {
       if (hasJoinedRoomRef.current) {
         console.log('[GamePlayer] Already joined room, skipping duplicate join');
         return;
       }
       console.log('[GamePlayer] Joining room:', gameId);
+      joinRoom(gameId);
       hasJoinedRoomRef.current = true;
-      currentSocket.emit('room:join', {
-        roomId: gameId,
-        gameId: gameId,
-        deviceId: deviceId,
-        playerId: playerId,
-      });
     };
 
     // Join room immediately
-    joinRoom();
+    joinRoomSafe();
 
     const handleStatsUpdate = (data: {
       roomId: string;
@@ -354,9 +365,18 @@ function PlayerGameContent() {
     };
 
     // Listen for phase transitions from host
-    const handlePhaseChange = (data: { roomId: string; phase: PlayerPhase }) => {
+    const handlePhaseChange = (data: {
+      roomId: string;
+      phase: PlayerPhase;
+      startedAt?: number;
+    }) => {
       if (data.roomId === gameId) {
+        console.log('Player: Phase changed to', data.phase, 'startedAt:', data.startedAt);
         setCurrentPhase(data.phase);
+        // Store countdown start timestamp for synchronization
+        if (data.phase === 'countdown' && data.startedAt) {
+          setCountdownStartedAt(data.startedAt);
+        }
         router.replace(`/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId}`);
       }
     };
@@ -418,11 +438,11 @@ function PlayerGameContent() {
       // Leave room on unmount
       if (gameId && hasJoinedRoomRef.current) {
         console.log('[GamePlayer] Leaving room on unmount');
-        currentSocket.emit('room:leave', { roomId: gameId });
+        leaveRoom(gameId);
         hasJoinedRoomRef.current = false;
       }
     };
-  }, [gameId, playerId, router, deviceId]);
+  }, [gameId, playerId, router, deviceId, joinRoom, leaveRoom]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -651,6 +671,7 @@ function PlayerGameContent() {
           questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
           totalQuestions={questions.length || totalQuestions}
           isMobile={isMobile}
+          startedAt={countdownStartedAt}
           onCountdownComplete={() => {
             // Countdown complete - phase will transition to question via WebSocket event
             console.log('Countdown complete, waiting for question start');
