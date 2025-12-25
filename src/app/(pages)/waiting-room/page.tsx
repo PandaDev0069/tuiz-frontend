@@ -299,12 +299,22 @@ function WaitingRoomContent() {
     joinRoomSafe();
 
     // Listen for game start event
-    const handleGameStarted = (data: { roomId?: string; gameId?: string; roomCode?: string }) => {
+    const handleGameStarted = (data: {
+      roomId?: string;
+      gameId?: string;
+      roomCode?: string;
+      startedAt?: number;
+    }) => {
       const targetGameId = data.gameId || data.roomId;
       if (isNavigatingRef.current) return;
       if (targetGameId === gameId || data.roomCode === roomCode) {
         isNavigatingRef.current = true;
-        router.push(
+        // Persist countdown start timestamp for the player page to sync timers
+        if (data.startedAt) {
+          sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
+        }
+        // Use replace for faster navigation (no history entry)
+        router.replace(
           `/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId || playerName}`,
         );
       }
@@ -312,14 +322,16 @@ function WaitingRoomContent() {
 
     // Listen for explicit phase changes (fallback if game:started missed)
     const handlePhaseChange = (data: { roomId: string; phase: string; startedAt?: number }) => {
-      if (isNavigatingRef.current) return;
       if (data.roomId === gameId) {
-        isNavigatingRef.current = true;
-        // Store countdown start timestamp in sessionStorage for the game-player page to use
+        // Always store countdown start timestamp so game-player can sync even if navigation is in-flight
         if (data.phase === 'countdown' && data.startedAt) {
           sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
         }
-        router.push(
+        if (isNavigatingRef.current) return;
+
+        isNavigatingRef.current = true;
+        // Use replace for faster navigation (no history entry)
+        router.replace(
           `/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId || playerName}`,
         );
       }
@@ -432,18 +444,14 @@ function WaitingRoomContent() {
         hasJoinedRoomRef.current = false;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    socket,
+    // Keep deps minimal to avoid repeated join/leave churn during navigation
+    socket?.id,
     isConnected,
     gameId,
-    roomCode,
-    playerId,
-    playerName,
-    deviceId,
     isInitialized,
-    router,
-    checkExistingPlayer,
-    syncGameState,
+    playerId,
     joinRoom,
     leaveRoom,
   ]);

@@ -230,8 +230,39 @@ export function getErrorMessage(error: ApiError): string {
 }
 
 // Handle API errors with optional configuration
-export function handleApiError(error: ApiError, config: ErrorHandlingConfig = {}): string {
-  const message = config.customMessage || getErrorMessage(error);
+export function handleApiError(
+  error: ApiError | Error | unknown,
+  config: ErrorHandlingConfig = {},
+): string {
+  // Normalize error to ApiError format
+  let apiError: ApiError;
+
+  if (error && typeof error === 'object') {
+    // Check if it's already an ApiError
+    if ('error' in error && 'message' in error) {
+      apiError = error as ApiError;
+    } else if (error instanceof Error) {
+      // Convert plain Error to ApiError
+      apiError = {
+        error: 'server_error',
+        message: error.message || '不明なエラーが発生しました。',
+      };
+    } else {
+      // Unknown error format
+      apiError = {
+        error: 'server_error',
+        message: '不明なエラーが発生しました。',
+      };
+    }
+  } else {
+    // Not an object, create default error
+    apiError = {
+      error: 'server_error',
+      message: String(error || '不明なエラーが発生しました。'),
+    };
+  }
+
+  const message = config.customMessage || getErrorMessage(apiError);
 
   if (config.showToast !== false) {
     // Import toast dynamically to avoid circular dependencies
@@ -240,13 +271,14 @@ export function handleApiError(error: ApiError, config: ErrorHandlingConfig = {}
     });
   }
 
-  // Log error for debugging (exclude in production)
-  if (cfg.isDev) {
+  // Log error for debugging (exclude in production) unless suppressed
+  if (cfg.isDev && config.logToConsole !== false) {
     console.error('API Error:', {
-      error: error.error,
-      message: error.message,
-      requestId: error.requestId,
-      details: error.details,
+      error: apiError.error,
+      message: apiError.message,
+      requestId: apiError.requestId,
+      details: apiError.details,
+      originalError: error,
     });
   }
 

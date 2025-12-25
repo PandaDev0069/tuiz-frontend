@@ -312,6 +312,11 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
       const { data, error: apiError } = await gameApi.getPlayerAnswers(gameId, playerId);
 
       if (apiError || !data) {
+        // If endpoint not implemented yet, swallow and continue without blocking gameplay
+        if (apiError?.message === 'Route not found') {
+          console.warn('useGameAnswer: getPlayerAnswers route not found; skipping history fetch');
+          return;
+        }
         throw new Error(apiError?.message || 'Failed to fetch answers');
       }
 

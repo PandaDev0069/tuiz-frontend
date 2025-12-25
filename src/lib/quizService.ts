@@ -83,8 +83,14 @@ class QuizService {
       );
       return response;
     } catch (error) {
-      handleApiError(error as ApiError);
-      throw error;
+      const apiError = error as ApiError;
+      // If endpoint missing, suppress console/log noise; surface as rejection for caller handling
+      if (apiError?.message === 'Route not found') {
+        handleApiError(apiError, { showToast: false, logToConsole: false });
+      } else {
+        handleApiError(apiError);
+      }
+      throw apiError;
     }
   }
 

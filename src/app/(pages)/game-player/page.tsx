@@ -50,6 +50,19 @@ function PlayerGameContent() {
   const [currentPhase, setCurrentPhase] = useState<PlayerPhase>(phaseParam);
   const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
 
+  // If we're already in countdown phase from URL, try to restore timestamp immediately
+  useEffect(() => {
+    if (phaseParam === 'countdown' && !countdownStartedAt) {
+      const stored = sessionStorage.getItem(`countdown_started_${gameId}`);
+      if (stored) {
+        const timestamp = parseInt(stored, 10);
+        if (!isNaN(timestamp)) {
+          setCountdownStartedAt(timestamp);
+        }
+      }
+    }
+  }, [phaseParam, gameId, countdownStartedAt]);
+
   const { gameFlow, timerState, isConnected } = useGameFlow({
     gameId,
     autoSync: true,
@@ -336,23 +349,26 @@ function PlayerGameContent() {
   }, [currentPhase, gameId, countdownStartedAt]);
 
   // Join WebSocket room and listen for events
+  // Set up listeners as soon as socket is available, join room when connected
   useEffect(() => {
-    if (!socketRef.current || !isConnectedRef.current || !gameId) return;
+    if (!gameId) return;
 
     const currentSocket = socketRef.current;
-    // Join the game room first to receive events
-    const joinRoomSafe = () => {
-      if (hasJoinedRoomRef.current) {
-        console.log('[GamePlayer] Already joined room, skipping duplicate join');
-        return;
-      }
-      console.log('[GamePlayer] Joining room:', gameId);
-      joinRoom(gameId);
-      hasJoinedRoomRef.current = true;
-    };
+    if (!currentSocket) {
+      // Wait for socket to be available
+      const checkSocket = setInterval(() => {
+        if (socketRef.current) {
+          clearInterval(checkSocket);
+          // Re-run effect when socket becomes available
+          // This is handled by the socket dependency
+        }
+      }, 50);
+      return () => clearInterval(checkSocket);
+    }
 
-    // Join room immediately
-    joinRoomSafe();
+    // Set up event listeners FIRST (before room join)
+    // This ensures we don't miss events during navigation/page load
+    // Socket will queue events if not connected yet
 
     const handleStatsUpdate = (data: {
       roomId: string;
@@ -418,6 +434,7 @@ function PlayerGameContent() {
       }
     };
 
+    // Set up listeners immediately (even before room join - socket will queue events)
     currentSocket.on('game:answer:stats:update', handleStatsUpdate);
     currentSocket.on('game:phase:change', handlePhaseChange);
     currentSocket.on('game:player-kicked', (data) => handlePlayerKickedRef.current?.(data));
@@ -426,6 +443,67 @@ function PlayerGameContent() {
     currentSocket.on('game:resume', handleGameResume);
     currentSocket.on('game:end', handleGameEnd);
 
+    // Join room when connected (listeners are already set up above)
+    const joinRoomSafe = () => {
+      if (hasJoinedRoomRef.current) {
+        console.log('[GamePlayer] Already joined room, skipping duplicate join');
+        return;
+      }
+      if (isConnectedRef.current) {
+        console.log('[GamePlayer] Joining room:', gameId);
+        joinRoom(gameId);
+        hasJoinedRoomRef.current = true;
+      }
+    };
+
+    // Try to join immediately if already connected
+    joinRoomSafe();
+
+    // If not connected yet, wait for connection
+    if (!isConnectedRef.current) {
+      const onConnect = () => {
+        joinRoomSafe();
+        currentSocket.off('connect', onConnect);
+      };
+      currentSocket.on('connect', onConnect);
+
+      // Also check periodically as fallback
+      const checkConnection = setInterval(() => {
+        if (isConnectedRef.current && !hasJoinedRoomRef.current) {
+          joinRoomSafe();
+          clearInterval(checkConnection);
+          currentSocket.off('connect', onConnect);
+        }
+      }, 100);
+
+      // Cleanup after 5 seconds
+      const cleanupTimeout = setTimeout(() => {
+        clearInterval(checkConnection);
+        currentSocket.off('connect', onConnect);
+      }, 5000);
+
+      return () => {
+        clearInterval(checkConnection);
+        clearTimeout(cleanupTimeout);
+        currentSocket.off('connect', onConnect);
+        currentSocket.off('game:answer:stats:update', handleStatsUpdate);
+        currentSocket.off('game:phase:change', handlePhaseChange);
+        currentSocket.off('game:player-kicked');
+        currentSocket.off('game:started', handleGameStarted);
+        currentSocket.off('game:pause', handleGamePause);
+        currentSocket.off('game:resume', handleGameResume);
+        currentSocket.off('game:end', handleGameEnd);
+
+        // Leave room on unmount
+        if (gameId && hasJoinedRoomRef.current) {
+          console.log('[GamePlayer] Leaving room on unmount');
+          leaveRoom(gameId);
+          hasJoinedRoomRef.current = false;
+        }
+      };
+    }
+
+    // Cleanup for when socket is already connected
     return () => {
       currentSocket.off('game:answer:stats:update', handleStatsUpdate);
       currentSocket.off('game:phase:change', handlePhaseChange);
@@ -434,6 +512,7 @@ function PlayerGameContent() {
       currentSocket.off('game:pause', handleGamePause);
       currentSocket.off('game:resume', handleGameResume);
       currentSocket.off('game:end', handleGameEnd);
+      currentSocket.off('connect'); // Clean up any connect listeners
 
       // Leave room on unmount
       if (gameId && hasJoinedRoomRef.current) {
