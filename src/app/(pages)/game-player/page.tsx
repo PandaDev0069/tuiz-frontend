@@ -404,6 +404,20 @@ function PlayerGameContent() {
       }
     };
 
+    const handleAnswerLocked = (data: {
+      roomId: string;
+      questionId: string;
+      counts?: Record<string, number>;
+    }) => {
+      if (data.roomId !== gameId) return;
+      if (data.counts && data.questionId === gameFlowRef.current?.current_question_id) {
+        setAnswerStats(data.counts);
+      }
+      console.log('Player: Answer locked, moving to reveal');
+      setCurrentPhase('answer_reveal');
+      router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+    };
+
     // Listen for phase transitions from host
     const handlePhaseChange = (data: {
       roomId: string;
@@ -462,6 +476,7 @@ function PlayerGameContent() {
     // Stats events (support legacy and new naming)
     currentSocket.on('game:answer:stats:update', handleStatsUpdate);
     currentSocket.on('game:answer:stats', handleStatsUpdate);
+    currentSocket.on('game:answer:locked', handleAnswerLocked);
     currentSocket.on('game:phase:change', handlePhaseChange);
     currentSocket.on('game:player-kicked', (data) => handlePlayerKickedRef.current?.(data));
     currentSocket.on('game:started', handleGameStarted);
@@ -514,6 +529,7 @@ function PlayerGameContent() {
         currentSocket.off('connect', onConnect);
         currentSocket.off('game:answer:stats:update', handleStatsUpdate);
         currentSocket.off('game:answer:stats', handleStatsUpdate);
+        currentSocket.off('game:answer:locked', handleAnswerLocked);
         currentSocket.off('game:phase:change', handlePhaseChange);
         currentSocket.off('game:player-kicked');
         currentSocket.off('game:started', handleGameStarted);
@@ -534,6 +550,7 @@ function PlayerGameContent() {
     return () => {
       currentSocket.off('game:answer:stats:update', handleStatsUpdate);
       currentSocket.off('game:answer:stats', handleStatsUpdate);
+      currentSocket.off('game:answer:locked', handleAnswerLocked);
       currentSocket.off('game:phase:change', handlePhaseChange);
       currentSocket.off('game:player-kicked');
       currentSocket.off('game:started', handleGameStarted);
