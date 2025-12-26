@@ -22,6 +22,15 @@ function HostQuestionScreenContent() {
   });
 
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Update current time every second to force timer re-renders
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Load quiz data
   useEffect(() => {
@@ -124,7 +133,12 @@ function HostQuestionScreenContent() {
 
   const currentTimeSeconds = Math.max(
     0,
-    Math.round((timerState?.remainingMs || currentQuestion.timeLimit * 1000) / 1000),
+    Math.round(
+      (timerState?.remainingMs ??
+        (gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
+          ? Math.max(0, new Date(gameFlow.current_question_end_time).getTime() - currentTime)
+          : currentQuestion.timeLimit * 1000)) / 1000,
+    ),
   );
 
   // Get the current question ID from the loaded questions or gameFlow

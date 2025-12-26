@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useMemo, useRef } from 'react';
+import React, { useState, useEffect, Suspense, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PageContainer, Container, Main } from '@/components/ui';
 import { QRCode } from '@/components/ui/QRCode';
 import {
   PublicCountdownScreen,
   HostQuestionScreen,
+  HostAnswerScreen,
   HostAnswerRevealScreen,
   HostLeaderboardScreen,
   HostExplanationScreen,
@@ -24,6 +25,7 @@ type PublicPhase =
   | 'waiting'
   | 'countdown'
   | 'question'
+  | 'answering'
   | 'answer_reveal'
   | 'leaderboard'
   | 'explanation'
@@ -45,8 +47,13 @@ function HostScreenContent() {
     question: Question;
     serverTime: string | null;
     isActive: boolean;
+    answeringTime?: number;
+    showQuestionTime?: number;
   } | null>(null);
   const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
+  const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
+  const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const hasJoinedRoomRef = useRef(false);
 
   useEffect(() => {
@@ -111,7 +118,11 @@ function HostScreenContent() {
     events: {
       onQuestionStart: (questionId, questionIndex) => {
         console.log('Public Screen: Question started', questionId, questionIndex);
-        setCurrentPhase('question');
+        setIsDisplayPhaseDone(false);
+        // Don't transition if we're in countdown - let countdown complete first
+        if (currentPhase !== 'countdown') {
+          setCurrentPhase('question');
+        }
       },
       onQuestionEnd: () => {
         console.log('Public Screen: Question ended');
@@ -150,11 +161,15 @@ function HostScreenContent() {
         }
 
         // Transform API response to Question format
+        const answeringTime = data.question.answering_time || 30;
+        const timeLimit = data.question.time_limit || 40;
+        const showQuestionTime = Math.max(0, timeLimit - answeringTime);
+
         const question: Question = {
           id: data.question.id,
           text: data.question.text,
           image: data.question.image_url || undefined,
-          timeLimit: data.question.time_limit,
+          timeLimit: timeLimit,
           choices: data.answers
             .sort((a, b) => a.order_index - b.order_index)
             .map((a, i) => ({
@@ -171,6 +186,8 @@ function HostScreenContent() {
           question,
           serverTime: data.server_time,
           isActive: data.is_active,
+          answeringTime,
+          showQuestionTime,
         });
       } catch (err) {
         console.error('Error fetching current question:', err);
@@ -214,6 +231,7 @@ function HostScreenContent() {
         if (data.phase === 'countdown' && data.startedAt) {
           setCountdownStartedAt(data.startedAt);
         }
+        // Phase change handled by game flow events
       }
     };
 
@@ -290,21 +308,73 @@ function HostScreenContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, isConnected, gameId, roomCode]);
 
-  // Sync phase with game flow state
+  // Reset display phase when question changes
+  useEffect(() => {
+    if (!gameFlow?.current_question_id) return;
+    setIsDisplayPhaseDone(false);
+    setAnswerRemainingMs(null);
+  }, [gameFlow?.current_question_id]);
+
+  // Update current time every second to force timer re-renders
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Sync phase with game flow state - but don't interrupt countdown
   useEffect(() => {
     if (!gameFlow) return;
-
-    // If question is active, we're in question phase
+    // Don't transition if we're in countdown phase - let countdown complete naturally
+    if (currentPhase === 'countdown') return;
     if (gameFlow.current_question_id && timerState?.isActive) {
-      if (currentPhase !== 'question') {
+      const canPromoteToQuestion =
+        currentPhase === 'waiting' ||
+        currentPhase === 'leaderboard' ||
+        currentPhase === 'explanation' ||
+        currentPhase === 'ended' ||
+        currentPhase === 'podium';
+      if (canPromoteToQuestion) {
+        setIsDisplayPhaseDone(false);
         setCurrentPhase('question');
       }
     }
-    // If question exists but timer is not active, might be in answer reveal
-    else if (gameFlow.current_question_id && !timerState?.isActive && currentPhase === 'question') {
-      // Wait for explicit phase change from host
+  }, [gameFlow, gameFlow?.current_question_id, timerState?.isActive, currentPhase]);
+
+  // Derive per-question timing - prefer API data, fallback to questions array
+  const questionTimings = useMemo(() => {
+    // Prefer API data if available (most accurate)
+    if (
+      currentQuestionData?.showQuestionTime !== undefined &&
+      currentQuestionData?.answeringTime !== undefined
+    ) {
+      return {
+        showQuestionTime: currentQuestionData.showQuestionTime,
+        answeringTime: currentQuestionData.answeringTime,
+      };
     }
-  }, [gameFlow, timerState, currentPhase]);
+    // Fallback to questions array
+    const idx = gameFlow?.current_question_index ?? 0;
+    const q = questions[idx];
+    if (q) {
+      return {
+        showQuestionTime: q.show_question_time || 10,
+        answeringTime: q.answering_time || 30,
+      };
+    }
+    return {
+      showQuestionTime: 10,
+      answeringTime: 30,
+    };
+  }, [
+    currentQuestionData?.showQuestionTime,
+    currentQuestionData?.answeringTime,
+    questions,
+    gameFlow?.current_question_index,
+  ]);
+
+  // Timer updates are handled by useGameFlow hook via timerState
 
   // Use current question from API if available, otherwise fallback to local quiz data
   const currentQuestion: Question = useMemo(() => {
@@ -344,9 +414,49 @@ function HostScreenContent() {
     };
   }, [currentQuestionData, questions, gameFlow?.current_question_index]);
 
+  // Calculate display remaining time (exactly like player screen)
+  const derivedRemainingMsFromFlow =
+    gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
+      ? Math.max(0, new Date(gameFlow.current_question_end_time).getTime() - currentTime)
+      : null;
+
+  const displayRemainingMs =
+    timerState?.remainingMs ?? derivedRemainingMsFromFlow ?? currentQuestion.timeLimit * 1000;
+
+  const startAnsweringPhase = useCallback(() => {
+    console.log('Public Screen: Display phase complete, moving to answering');
+    setCurrentPhase('answering');
+    const answeringDurationMs =
+      (questionTimings.answeringTime ?? currentQuestion.timeLimit ?? 30) * 1000;
+    setAnswerRemainingMs(answeringDurationMs);
+  }, [questionTimings.answeringTime, currentQuestion.timeLimit]);
+
+  // Move to answering once the question display timer expires (player-style)
+  useEffect(() => {
+    if (currentPhase !== 'question') return;
+    if (displayRemainingMs <= 0 && !isDisplayPhaseDone) {
+      startAnsweringPhase();
+    }
+  }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
+
+  // Client-side answering countdown (separate from display timer) - exactly like player screen
+  useEffect(() => {
+    if (currentPhase !== 'answering' || answerRemainingMs === null || answerRemainingMs <= 0)
+      return;
+    const interval = setInterval(() => {
+      setAnswerRemainingMs((prev) => (prev !== null && prev > 1000 ? prev - 1000 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [currentPhase, answerRemainingMs]);
+
+  // Calculate answering remaining time (exactly like player screen)
+  const answeringRemainingMs =
+    answerRemainingMs ?? (questionTimings.answeringTime ?? currentQuestion.timeLimit ?? 30) * 1000;
+
+  // Current time in seconds (exactly like player screen)
   const currentTimeSeconds = Math.max(
     0,
-    Math.round((timerState?.remainingMs || currentQuestion.timeLimit * 1000) / 1000),
+    Math.round((currentPhase === 'question' ? displayRemainingMs : answeringRemainingMs) / 1000),
   );
 
   const questionIndex = gameFlow?.current_question_index ?? 0;
@@ -381,8 +491,11 @@ function HostScreenContent() {
           totalQuestions={questions.length}
           startedAt={countdownStartedAt}
           onCountdownComplete={() => {
-            // Phase will be updated by game flow event or WebSocket
-            // Don't manually change phase here
+            // Countdown completed - now transition to question phase
+            if (gameFlow?.current_question_id) {
+              setIsDisplayPhaseDone(false);
+              setCurrentPhase('question');
+            }
           }}
         />
       );
@@ -391,6 +504,20 @@ function HostScreenContent() {
       return (
         <HostQuestionScreen
           question={currentQuestion}
+          currentTime={currentTimeSeconds}
+          questionNumber={questionIndex + 1}
+          totalQuestions={questions.length}
+          // No controls on public screen - read-only display
+        />
+      );
+
+    case 'answering':
+      return (
+        <HostAnswerScreen
+          question={{
+            ...currentQuestion,
+            timeLimit: Math.max(1, questionTimings.answeringTime),
+          }}
           currentTime={currentTimeSeconds}
           questionNumber={questionIndex + 1}
           totalQuestions={questions.length}
