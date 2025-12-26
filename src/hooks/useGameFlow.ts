@@ -40,6 +40,12 @@ export interface UseGameFlowOptions {
   isHost?: boolean;
   autoSync?: boolean; // Auto-sync with backend state
   events?: GameFlowEvents;
+  /**
+   * Whether to trigger onQuestionEnd when the local timer hits zero.
+   * Disable for clients that only want to react to server/host-driven
+   * question end events (e.g., to run a separate answering phase after display).
+   */
+  triggerOnQuestionEndOnTimer?: boolean;
 }
 
 export interface UseGameFlowReturn {
@@ -110,7 +116,13 @@ function calculateRemainingTime(startTime: string | null, durationMs: number): n
 // ============================================================================
 
 export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
-  const { gameId, isHost = false, autoSync = true, events } = options;
+  const {
+    gameId,
+    isHost = false,
+    autoSync = true,
+    events,
+    triggerOnQuestionEndOnTimer = true,
+  } = options;
   const { socket, isConnected, isRegistered, joinRoom, leaveRoom } = useSocket();
 
   // State
@@ -131,11 +143,16 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   const isHostRef = useRef(isHost);
   const revealAnswerRef = useRef<(() => Promise<void>) | undefined>(undefined);
   const hasJoinedRoomRef = useRef(false);
+  const triggerOnQuestionEndOnTimerRef = useRef(triggerOnQuestionEndOnTimer);
 
   // Keep refs in sync
   useEffect(() => {
     eventsRef.current = events;
   }, [events]);
+
+  useEffect(() => {
+    triggerOnQuestionEndOnTimerRef.current = triggerOnQuestionEndOnTimer;
+  }, [triggerOnQuestionEndOnTimer]);
 
   useEffect(() => {
     socketRef.current = socket;
@@ -200,8 +217,10 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
               eventsRef.current?.onQuestionEnd?.(questionId);
             });
           } else {
-            // For non-hosts or if already revealed, just fire the event
-            eventsRef.current?.onQuestionEnd?.(questionId);
+            // For non-hosts or if already revealed, just fire the event (if enabled)
+            if (triggerOnQuestionEndOnTimerRef.current) {
+              eventsRef.current?.onQuestionEnd?.(questionId);
+            }
           }
         } else {
           setTimerState((prev) => (prev ? { ...prev, remainingMs: remaining } : null));
@@ -242,10 +261,16 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
       // Update timer state if question is active
       if (data.gameFlow.current_question_id && data.gameFlow.current_question_start_time) {
+        const durationMs =
+          data.gameFlow.current_question_end_time && data.gameFlow.current_question_start_time
+            ? new Date(data.gameFlow.current_question_end_time).getTime() -
+              new Date(data.gameFlow.current_question_start_time).getTime()
+            : DEFAULT_QUESTION_DURATION_MS;
         updateTimerStateRef.current(
           data.gameFlow.current_question_id,
           data.gameFlow.current_question_index || 0,
           data.gameFlow.current_question_start_time,
+          durationMs,
         );
       }
     } catch (err) {

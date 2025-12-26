@@ -10,6 +10,7 @@ import {
   PlayerExplanationScreen,
   PlayerPodiumScreen,
   PlayerGameEndScreen,
+  PlayerQuestionScreen,
 } from '@/components/game';
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameAnswer } from '@/hooks/useGameAnswer';
@@ -19,6 +20,7 @@ import { useSocket } from '@/components/providers/SocketProvider';
 import { Question, AnswerResult, LeaderboardEntry } from '@/types/game';
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
+import { apiClient } from '@/lib/apiClient';
 import type { QuestionWithAnswers } from '@/types/quiz';
 import { toast } from 'react-hot-toast';
 
@@ -66,9 +68,13 @@ function PlayerGameContent() {
   const { gameFlow, timerState, isConnected } = useGameFlow({
     gameId,
     autoSync: true,
+    triggerOnQuestionEndOnTimer: false,
     events: {
       onQuestionStart: (qId, qIndex) => {
         console.log('Player: Question started', qId, qIndex);
+        setIsDisplayPhaseDone(false);
+        setAnswerDurationMs(null);
+        setAnswerRemainingMs(null);
         setCurrentPhase('question');
         router.replace(
           `/game-player?gameId=${gameId}&phase=question&questionIndex=${qIndex}&playerId=${playerId}`,
@@ -76,6 +82,7 @@ function PlayerGameContent() {
       },
       onQuestionEnd: () => {
         console.log('Player: Question ended, moving to answer reveal');
+        setAnswerRemainingMs(0);
         setCurrentPhase('answer_reveal');
         router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
       },
@@ -93,6 +100,14 @@ function PlayerGameContent() {
     },
   });
 
+  // Reset display/answer timers whenever a new question becomes current
+  useEffect(() => {
+    if (!gameFlow?.current_question_id) return;
+    setIsDisplayPhaseDone(false);
+    setAnswerDurationMs(null);
+    setAnswerRemainingMs(null);
+  }, [gameFlow?.current_question_id]);
+
   // Note: correctAnswerId will be passed after currentQuestion is computed below
   const [correctAnswerIdState, setCorrectAnswerIdState] = useState<string | null>(null);
 
@@ -108,6 +123,9 @@ function PlayerGameContent() {
     points: number;
     timeLimit: number;
   } | null>(null);
+  const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
+  const [answerDurationMs, setAnswerDurationMs] = useState<number | null>(null);
+  const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
 
   // Get current question data for point calculation
   // Prefer API data (has authoritative points and time_limit), fallback to local quiz data
@@ -211,6 +229,10 @@ function PlayerGameContent() {
 
     const loadQuiz = async (resolvedGameId: string) => {
       try {
+        // Player quiz load is best-effort; only attempt when authenticated to avoid noise
+        if (!apiClient.isAuthenticated()) {
+          return;
+        }
         const { data: game } = await gameApi.getGame(resolvedGameId);
         const quizId = game?.quiz_id || game?.quiz_set_id;
         if (quizId) {
@@ -532,25 +554,39 @@ function PlayerGameContent() {
 
   // Use current question from API if available, otherwise fallback to local quiz data
   const currentQuestion: Question = useMemo(() => {
+    const durationFromFlowSeconds =
+      gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
+        ? Math.max(
+            1,
+            Math.round(
+              (new Date(gameFlow.current_question_end_time).getTime() -
+                new Date(gameFlow.current_question_start_time).getTime()) /
+                1000,
+            ),
+          )
+        : null;
+
     // Prefer API data (has full metadata and server timestamps)
     if (currentQuestionData?.question) {
-      return currentQuestionData.question;
+      return {
+        ...currentQuestionData.question,
+        timeLimit: durationFromFlowSeconds ?? currentQuestionData.question.timeLimit,
+      };
     }
 
     // Fallback to local quiz data
     const idx = gameFlow?.current_question_index ?? questionIndexParam;
     const questionData = questions[idx];
     if (questionData) {
+      const showTimeSeconds = questionData.show_question_time || 30;
       return {
         id: questionData.id,
         text: questionData.question_text,
         image: questionData.image_url || undefined,
-        timeLimit: Math.max(
-          5,
-          Math.round(
-            (timerState?.remainingMs || questionData.show_question_time * 1000 || 10000) / 1000,
-          ),
-        ),
+        timeLimit:
+          durationFromFlowSeconds ??
+          showTimeSeconds ??
+          Math.max(5, Math.round((timerState?.remainingMs || 10000) / 1000)),
         choices: questionData.answers
           .sort((a, b) => a.order_index - b.order_index)
           .map((a, i) => ({
@@ -586,6 +622,8 @@ function PlayerGameContent() {
     currentQuestionData,
     gameFlow?.current_question_id,
     gameFlow?.current_question_index,
+    gameFlow?.current_question_start_time,
+    gameFlow?.current_question_end_time,
     questionIdParam,
     questionIndexParam,
     questions,
@@ -599,9 +637,60 @@ function PlayerGameContent() {
     }
   }, [currentQuestion?.correctAnswerId]);
 
+  const derivedRemainingMsFromFlow =
+    gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
+      ? Math.max(0, new Date(gameFlow.current_question_end_time).getTime() - Date.now())
+      : null;
+
+  const displayRemainingMs =
+    timerState?.remainingMs ?? derivedRemainingMsFromFlow ?? currentQuestion.timeLimit * 1000;
+
+  const startAnsweringPhase = useCallback(() => {
+    if (isDisplayPhaseDone) return;
+    const durationMs =
+      (currentQuestionForPoints?.answering_time ?? currentQuestion.timeLimit ?? 30) * 1000;
+    setIsDisplayPhaseDone(true);
+    setAnswerDurationMs(durationMs);
+    setAnswerRemainingMs(durationMs);
+    setCurrentPhase('answering');
+    router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
+  }, [
+    currentQuestionForPoints?.answering_time,
+    currentQuestion.timeLimit,
+    gameId,
+    isDisplayPhaseDone,
+    playerId,
+    router,
+  ]);
+
+  // Move to answering once the question display timer expires
+  useEffect(() => {
+    if (currentPhase !== 'question') return;
+    if (displayRemainingMs <= 0 && !isDisplayPhaseDone) {
+      startAnsweringPhase();
+    }
+  }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
+
+  // Client-side answering countdown (separate from display timer)
+  useEffect(() => {
+    if (currentPhase !== 'answering' || answerRemainingMs === null) return;
+    const interval = setInterval(() => {
+      setAnswerRemainingMs((prev) => {
+        if (prev === null) return prev;
+        const next = Math.max(0, prev - 1000);
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [currentPhase, answerRemainingMs]);
+
+  const answeringRemainingMs =
+    answerRemainingMs ??
+    (currentQuestionForPoints?.answering_time ?? currentQuestion.timeLimit ?? 30) * 1000;
+
   const currentTimeSeconds = Math.max(
     0,
-    Math.round((timerState?.remainingMs || currentQuestion.timeLimit * 1000) / 1000),
+    Math.round((currentPhase === 'question' ? displayRemainingMs : answeringRemainingMs) / 1000),
   );
 
   const handleAnswerSelect = (answerId: string) => {
@@ -611,9 +700,11 @@ function PlayerGameContent() {
   const handleAnswerSubmit = useCallback(async () => {
     if (!selectedAnswer || !gameFlow?.current_question_id) return;
     try {
-      const responseTimeMs = timerState
-        ? currentQuestion.timeLimit * 1000 - timerState.remainingMs
-        : 0;
+      const durationMs =
+        answerDurationMs ??
+        (currentQuestionForPoints?.answering_time ?? currentQuestion.timeLimit ?? 30) * 1000;
+      const remainingMs = answerRemainingMs ?? durationMs;
+      const responseTimeMs = durationMs - remainingMs;
       await submitAnswer(selectedAnswer, responseTimeMs);
     } catch (err) {
       console.error('Failed to submit answer:', err);
@@ -621,7 +712,9 @@ function PlayerGameContent() {
   }, [
     selectedAnswer,
     gameFlow?.current_question_id,
-    timerState,
+    answerDurationMs,
+    answerRemainingMs,
+    currentQuestionForPoints?.answering_time,
     currentQuestion.timeLimit,
     submitAnswer,
   ]);
@@ -758,12 +851,21 @@ function PlayerGameContent() {
         />
       );
     case 'question':
+      return (
+        <PlayerQuestionScreen
+          question={currentQuestion}
+          currentTime={currentTimeSeconds}
+          questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
+          totalQuestions={questions.length || totalQuestions}
+          isMobile={isMobile}
+        />
+      );
     case 'answering':
       return (
         <PlayerAnswerScreen
           question={currentQuestion}
           currentTime={currentTimeSeconds}
-          questionNumber={gameFlow.current_question_index ?? questionIndexParam}
+          questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
           totalQuestions={questions.length || totalQuestions}
           onAnswerSelect={handleAnswerSelect}
           onAnswerSubmit={handleAnswerSubmit}

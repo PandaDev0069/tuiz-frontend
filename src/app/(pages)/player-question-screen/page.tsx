@@ -93,16 +93,15 @@ function PlayerQuestionScreenContent() {
 
     // If we have real question data, use it
     if (questionData) {
+      // Use show_question_time from database (in seconds), convert to seconds for timeLimit
+      const showQuestionTimeSeconds = questionData.show_question_time || 30;
+
       return {
         id: questionData.id,
         text: questionData.question_text,
         image: questionData.image_url || undefined,
-        timeLimit: Math.max(
-          5,
-          Math.round(
-            (timerState?.remainingMs || questionData.show_question_time * 1000 || 10000) / 1000,
-          ),
-        ),
+        // Use show_question_time from database as the time limit
+        timeLimit: showQuestionTimeSeconds,
         choices: questionData.answers
           .sort((a, b) => a.order_index - b.order_index)
           .map((a, i) => ({

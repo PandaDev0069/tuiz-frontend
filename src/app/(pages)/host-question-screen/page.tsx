@@ -48,16 +48,27 @@ function HostQuestionScreenContent() {
 
     // If we have real question data, use it
     if (questionData) {
+      // Use show_question_time from database (in seconds), convert to seconds for timeLimit
+      const showQuestionTimeSeconds = questionData.show_question_time || 30;
+      const serverDurationSeconds =
+        gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
+          ? Math.max(
+              1,
+              Math.round(
+                (new Date(gameFlow.current_question_end_time).getTime() -
+                  new Date(gameFlow.current_question_start_time).getTime()) /
+                  1000,
+              ),
+            )
+          : null;
+      const timeLimitSeconds = serverDurationSeconds ?? showQuestionTimeSeconds;
+
       return {
         id: questionData.id,
         text: questionData.question_text,
         image: questionData.image_url || undefined,
-        timeLimit: Math.max(
-          5,
-          Math.round(
-            (timerState?.remainingMs || questionData.show_question_time * 1000 || 10000) / 1000,
-          ),
-        ),
+        // Use show_question_time from database as the time limit
+        timeLimit: timeLimitSeconds,
         choices: questionData.answers
           .sort((a, b) => a.order_index - b.order_index)
           .map((a, i) => ({
@@ -79,7 +90,17 @@ function HostQuestionScreenContent() {
           ? 'クイズデータを読み込み中...'
           : `問題 ${(idx ?? 0) + 1} を読み込み中...`,
       image: undefined,
-      timeLimit: Math.max(5, Math.round((timerState?.remainingMs || 10000) / 1000)),
+      timeLimit: Math.max(
+        5,
+        Math.round(
+          (timerState?.remainingMs ||
+            (gameFlow?.current_question_end_time &&
+              gameFlow?.current_question_start_time &&
+              new Date(gameFlow.current_question_end_time).getTime() -
+                new Date(gameFlow.current_question_start_time).getTime()) ||
+            30000) / 1000,
+        ),
+      ),
       choices: [
         { id: 'loading-1', text: '読み込み中...', letter: 'A' },
         { id: 'loading-2', text: '読み込み中...', letter: 'B' },
@@ -93,6 +114,8 @@ function HostQuestionScreenContent() {
   }, [
     gameFlow?.current_question_id,
     gameFlow?.current_question_index,
+    gameFlow?.current_question_start_time,
+    gameFlow?.current_question_end_time,
     questionIdParam,
     questionIndexParam,
     questions,
@@ -104,6 +127,27 @@ function HostQuestionScreenContent() {
     Math.round((timerState?.remainingMs || currentQuestion.timeLimit * 1000) / 1000),
   );
 
+  // Get the current question ID from the loaded questions or gameFlow
+  const currentQuestionId = useMemo(() => {
+    if (gameFlow?.current_question_id) {
+      return gameFlow.current_question_id;
+    }
+    const idx = gameFlow?.current_question_index ?? questionIndexParam;
+    const questionData = questions[idx];
+    if (questionData) {
+      return questionData.id;
+    }
+    return questionIdParam;
+  }, [
+    gameFlow?.current_question_id,
+    gameFlow?.current_question_index,
+    questionIndexParam,
+    questions,
+    questionIdParam,
+  ]);
+
+  const currentQuestionIndex = gameFlow?.current_question_index ?? questionIndexParam;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 px-6 pt-4">
@@ -112,12 +156,12 @@ function HostQuestionScreenContent() {
           className="px-4 py-2 rounded bg-indigo-600 text-white disabled:bg-gray-400"
           onClick={async () => {
             try {
-              await startQuestion(questionIdParam, questionIndexParam);
+              await startQuestion(currentQuestionId, currentQuestionIndex);
             } catch (e) {
               console.error('Failed to start question:', e);
             }
           }}
-          disabled={!gameId}
+          disabled={!gameId || !currentQuestionId}
         >
           質問を開始
         </button>
@@ -132,7 +176,7 @@ function HostQuestionScreenContent() {
       <HostQuestionScreen
         question={currentQuestion}
         currentTime={currentTimeSeconds}
-        questionNumber={(gameFlow?.current_question_index ?? questionIndexParam) + 1}
+        questionNumber={currentQuestionIndex + 1}
         totalQuestions={questions.length || 10}
       />
     </div>
