@@ -122,6 +122,7 @@ function PlayerGameContent() {
     isActive: boolean;
     points: number;
     timeLimit: number;
+    answeringTime?: number;
   } | null>(null);
   const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
   const [answerDurationMs, setAnswerDurationMs] = useState<number | null>(null);
@@ -134,7 +135,7 @@ function PlayerGameContent() {
     if (currentQuestionData) {
       return {
         points: currentQuestionData.points ?? 100,
-        answering_time: currentQuestionData.timeLimit ?? 30,
+        answering_time: currentQuestionData.answeringTime ?? currentQuestionData.timeLimit ?? 30,
       };
     }
 
@@ -303,6 +304,7 @@ function PlayerGameContent() {
           isActive: data.is_active,
           points: data.question.points,
           timeLimit: data.question.time_limit,
+          answeringTime: data.question.answering_time,
         });
       } catch (err) {
         console.warn('Error fetching current question (non-blocking)', err);

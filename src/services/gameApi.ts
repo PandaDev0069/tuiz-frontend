@@ -298,6 +298,7 @@ class GameApiClient {
         image_url: string | null;
         type: string;
         time_limit: number;
+        answering_time: number;
         points: number;
         difficulty: string;
         explanation_title: string | null;
