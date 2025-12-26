@@ -69,7 +69,7 @@ export interface UseGameAnswerReturn {
   error: string | null;
 
   // Actions
-  submitAnswer: (selectedOption: string, responseTimeMs: number) => Promise<void>;
+  submitAnswer: (selectedOption: string | null, responseTimeMs: number) => Promise<void>;
   clearAnswer: () => void;
   refreshAnswers: () => Promise<void>;
 
@@ -145,7 +145,7 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
    * Submit answer for current question
    */
   const submitAnswer = useCallback(
-    async (selectedOption: string, responseTimeMs: number) => {
+    async (selectedOption: string | null, responseTimeMs: number) => {
       if (!gameId || !playerId || !questionId) {
         throw new Error('Missing required parameters for answer submission');
       }
@@ -163,7 +163,8 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         setError(null);
 
         // Determine if answer is correct
-        const isCorrect = correctAnswerId ? selectedOption === correctAnswerId : false;
+        const isCorrect =
+          correctAnswerId && selectedOption ? selectedOption === correctAnswerId : false;
 
         // Convert milliseconds to seconds
         const timeTakenSeconds = responseTimeMs / 1000;
@@ -206,7 +207,7 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
           playerId,
           questionId,
           questionNumber,
-          selectedOption, // answer_id
+          selectedOption, // answer_id (nullable)
           isCorrect,
           timeTakenSeconds,
           pointsEarned,
@@ -228,10 +229,12 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
           isProcessing: false,
         });
 
+        const safeSelectedOption = selectedOption ?? '';
+
         // Create answer result from response
         const answerData: AnswerResult = {
           questionId,
-          selectedOption,
+          selectedOption: safeSelectedOption,
           isCorrect: lastAnswer?.is_correct ?? isCorrect,
           pointsEarned: lastAnswer?.points_earned ?? pointsEarned,
           correctAnswer: correctAnswerId || '',
@@ -246,13 +249,13 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
             roomId: gameId,
             playerId,
             questionId,
-            answer: selectedOption,
+            answer: safeSelectedOption,
           });
         }
 
         eventsRef.current?.onAnswerSubmitted?.({
           questionId,
-          selectedOption,
+          selectedOption: safeSelectedOption,
           responseTimeMs,
         });
 
@@ -404,6 +407,7 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
     // Register listeners
     currentSocket.on('game:answer:accepted', handleAnswerAccepted);
     currentSocket.on('game:answer:stats:update', handleAnswerStatsUpdate);
+    currentSocket.on('game:answer:stats', handleAnswerStatsUpdate);
     currentSocket.on('game:question:started', handleQuestionStart);
 
     return () => {
@@ -411,6 +415,7 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
 
       currentSocket.off('game:answer:accepted', handleAnswerAccepted);
       currentSocket.off('game:answer:stats:update', handleAnswerStatsUpdate);
+      currentSocket.off('game:answer:stats', handleAnswerStatsUpdate);
       currentSocket.off('game:question:started', handleQuestionStart);
 
       currentSocket.emit('room:leave', { roomId: gameId });

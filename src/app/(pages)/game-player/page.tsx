@@ -459,7 +459,9 @@ function PlayerGameContent() {
     };
 
     // Set up listeners immediately (even before room join - socket will queue events)
+    // Stats events (support legacy and new naming)
     currentSocket.on('game:answer:stats:update', handleStatsUpdate);
+    currentSocket.on('game:answer:stats', handleStatsUpdate);
     currentSocket.on('game:phase:change', handlePhaseChange);
     currentSocket.on('game:player-kicked', (data) => handlePlayerKickedRef.current?.(data));
     currentSocket.on('game:started', handleGameStarted);
@@ -511,6 +513,7 @@ function PlayerGameContent() {
         clearTimeout(cleanupTimeout);
         currentSocket.off('connect', onConnect);
         currentSocket.off('game:answer:stats:update', handleStatsUpdate);
+        currentSocket.off('game:answer:stats', handleStatsUpdate);
         currentSocket.off('game:phase:change', handlePhaseChange);
         currentSocket.off('game:player-kicked');
         currentSocket.off('game:started', handleGameStarted);
@@ -530,6 +533,7 @@ function PlayerGameContent() {
     // Cleanup for when socket is already connected
     return () => {
       currentSocket.off('game:answer:stats:update', handleStatsUpdate);
+      currentSocket.off('game:answer:stats', handleStatsUpdate);
       currentSocket.off('game:phase:change', handlePhaseChange);
       currentSocket.off('game:player-kicked');
       currentSocket.off('game:started', handleGameStarted);
@@ -716,6 +720,30 @@ function PlayerGameContent() {
     gameFlow?.current_question_id,
     answerDurationMs,
     answerRemainingMs,
+    currentQuestionForPoints?.answering_time,
+    currentQuestion.timeLimit,
+    submitAnswer,
+  ]);
+
+  // Auto-submit timeout (no answer) when answering window expires
+  const autoSubmittingRef = useRef(false);
+  useEffect(() => {
+    if (currentPhase !== 'answering') return;
+    if (autoSubmittingRef.current) return;
+    if (answerStatus.hasAnswered) return;
+    if (answeringRemainingMs > 0) return;
+    const durationMs =
+      answerDurationMs ??
+      (currentQuestionForPoints?.answering_time ?? currentQuestion.timeLimit ?? 30) * 1000;
+    autoSubmittingRef.current = true;
+    submitAnswer(null, durationMs).catch((err) => {
+      console.error('Auto-submit on timeout failed:', err);
+    });
+  }, [
+    currentPhase,
+    answerStatus.hasAnswered,
+    answeringRemainingMs,
+    answerDurationMs,
     currentQuestionForPoints?.answering_time,
     currentQuestion.timeLimit,
     submitAnswer,
