@@ -39,6 +39,8 @@ export const PlayerQuestionScreen: React.FC<PlayerQuestionScreenProps> = ({
           timeLimit={question.timeLimit}
           questionNumber={questionNumber}
           totalQuestions={totalQuestions}
+          isWarning={currentTime <= 3 && currentTime > 0}
+          isExpired={false}
         />
 
         {/* Default Background */}

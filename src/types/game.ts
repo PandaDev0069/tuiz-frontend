@@ -11,6 +11,8 @@ export interface Question {
   text: string;
   image?: string;
   timeLimit: number;
+  show_question_time: number;
+  answering_time: number;
   choices: Choice[];
   correctAnswerId: string;
   explanation?: string;

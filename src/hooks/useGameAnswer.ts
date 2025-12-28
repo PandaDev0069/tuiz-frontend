@@ -136,6 +136,8 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
   const refreshAnswersRef = useRef<(() => Promise<void>) | undefined>(undefined);
   const socketRef = useRef(socket);
   const isConnectedRef = useRef(isConnected);
+  const isSubmittingRef = useRef(false);
+  const hasAnsweredRef = useRef(false);
 
   // ========================================================================
   // REST API OPERATIONS
@@ -150,7 +152,8 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         throw new Error('Missing required parameters for answer submission');
       }
 
-      if (answerStatus.hasAnswered) {
+      // Use ref to check if already answered (prevents race conditions)
+      if (hasAnsweredRef.current || isSubmittingRef.current) {
         throw new Error('Answer already submitted for this question');
       }
 
@@ -159,6 +162,7 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
       }
 
       try {
+        isSubmittingRef.current = true;
         setAnswerStatus((prev) => ({ ...prev, isProcessing: true }));
         setError(null);
 
@@ -169,9 +173,18 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         // Convert milliseconds to seconds
         const timeTakenSeconds = responseTimeMs / 1000;
 
-        // Check if answer was submitted in time
-        // If timeTaken exceeds answeringTime, it's considered late
+        // Time Validation with tolerance (10% as per documentation)
+        const answeringTimeWithTolerance = answeringTime * 1.1;
+        const isValidTime = timeTakenSeconds >= 0 && timeTakenSeconds <= answeringTimeWithTolerance;
+
+        // Check if answer was submitted in time (for points calculation)
         const answeredInTime = timeTakenSeconds <= answeringTime;
+
+        if (!isValidTime) {
+          console.warn(
+            `useGameAnswer: Answer submitted outside of valid time window (${timeTakenSeconds}s / ${answeringTime}s)`,
+          );
+        }
 
         // Get current streak from answer history
         // Streak is the number of consecutive correct answers before this one
@@ -196,7 +209,7 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
           answeredInTime,
           timeBonusEnabled,
           streakBonusEnabled,
-          currentStreak,
+          currentStreak: isCorrect ? currentStreak + 1 : 0,
         });
 
         const pointsEarned = pointCalculationResult.points;
@@ -214,14 +227,25 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         );
 
         if (apiError || !data) {
-          throw new Error(apiError?.message || 'Failed to submit answer');
+          const errorMsg = apiError?.message || apiError?.error || 'Failed to submit answer';
+          console.error('useGameAnswer: API error details', {
+            apiError,
+            gameId,
+            playerId,
+            questionId,
+            questionNumber,
+            selectedOption,
+          });
+          throw new Error(errorMsg);
         }
 
         // Extract answer info from response (GamePlayerData contains answer_report)
         const answerReport = data.answer_report;
         const lastAnswer = answerReport?.questions?.[answerReport.questions.length - 1];
 
-        // Update local state
+        // Update local state and refs
+        hasAnsweredRef.current = true;
+        isSubmittingRef.current = false;
         setAnswerStatus({
           hasAnswered: true,
           submittedAt: new Date(),
@@ -242,6 +266,25 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         };
 
         setAnswerResult(answerData);
+
+        // Update answer history for streak calculation
+        const newAnswer: Answer = {
+          id: `temp-${questionId}-${Date.now()}`,
+          game_id: gameId,
+          player_id: playerId,
+          question_id: questionId,
+          selected_option: safeSelectedOption,
+          is_correct: lastAnswer?.is_correct ?? isCorrect,
+          response_time_ms: responseTimeMs,
+          points_earned: lastAnswer?.points_earned ?? pointsEarned,
+          answered_at: new Date().toISOString(),
+        };
+
+        setAnswersHistory((prev) => {
+          // Prevent duplicates if already in history
+          if (prev.some((a) => a.question_id === questionId)) return prev;
+          return [...prev, newAnswer];
+        });
 
         // Emit WebSocket event
         if (socketRef.current && isConnectedRef.current) {
@@ -265,9 +308,27 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to submit answer';
+        // Only reset submitting state if it's not an "already answered" error
+        // (which means submission succeeded elsewhere)
+        const isAlreadyAnswered =
+          errorMessage.includes('already') || errorMessage.includes('Already');
+        if (!isAlreadyAnswered) {
+          isSubmittingRef.current = false;
+        } else {
+          // If already answered, mark as answered
+          hasAnsweredRef.current = true;
+        }
         setError(errorMessage);
         setAnswerStatus((prev) => ({ ...prev, isProcessing: false }));
-        console.error('useGameAnswer: submitAnswer error', err);
+        console.error('useGameAnswer: submitAnswer error', {
+          error: err,
+          gameId,
+          playerId,
+          questionId,
+          questionNumber,
+          selectedOption,
+          responseTimeMs,
+        });
         eventsRef.current?.onError?.(errorMessage);
         throw err;
       }
@@ -278,7 +339,6 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
       questionId,
       questionNumber,
       correctAnswerId,
-      answerStatus.hasAnswered,
       autoReveal,
       questionPoints,
       answeringTime,
@@ -292,6 +352,8 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
    * Clear answer state (for new question)
    */
   const clearAnswer = useCallback(() => {
+    hasAnsweredRef.current = false;
+    isSubmittingRef.current = false;
     setAnswerStatus({
       hasAnswered: false,
       submittedAt: null,

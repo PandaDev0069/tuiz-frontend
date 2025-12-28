@@ -54,39 +54,39 @@ Stores the main game session information.
 
 **Status Values:**
 
-- `waiting` - Game created, waiting for players
-- `active` - Game is in progress
-- `paused` - Game is paused by host
-- `completed` - Game has ended
+- `waiting` - Game created, waiting for players (default)
+- `active` - Game is in progress (after host starts)
+- `paused` - Game is paused by host (can be resumed)
+- `completed` - Game has ended (all questions completed)
 
 #### 2. `game_flows` Table
 
 Tracks the current question and flow state.
 
 ```sql
-create table public.game_flows (
-  id uuid not null default gen_random_uuid (),
-  game_id uuid not null,
-  quiz_set_id uuid not null,
-  total_questions integer not null default 0,
-  current_question_id uuid null,
-  next_question_id uuid null,
-  current_question_index integer null default 0,
-  current_question_start_time timestamp with time zone null,
-  current_question_end_time timestamp with time zone null,
-  created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now(),
-  constraint game_flows_pkey primary key (id),
-  constraint fk_game_flows_games foreign KEY (game_id) references games (id) on delete CASCADE
-) TABLESPACE pg_default;
+    create table public.game_flows (
+    id uuid not null default gen_random_uuid (),
+    game_id uuid not null,
+    quiz_set_id uuid not null,
+    total_questions integer not null default 0,
+    current_question_id uuid null,
+    next_question_id uuid null,
+    current_question_index integer null default 0,
+    current_question_start_time timestamp with time zone null,
+    current_question_end_time timestamp with time zone null,
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now(),
+    constraint game_flows_pkey primary key (id),
+    constraint fk_game_flows_games foreign KEY (game_id) references games (id) on delete CASCADE
+  ) TABLESPACE pg_default;
 
-create index IF not exists idx_game_flows_game_id on public.game_flows using btree (game_id) TABLESPACE pg_default;
+  create index IF not exists idx_game_flows_game_id on public.game_flows using btree (game_id) TABLESPACE pg_default;
 
-create index IF not exists idx_game_flows_quiz_set_id on public.game_flows using btree (quiz_set_id) TABLESPACE pg_default;
+  create index IF not exists idx_game_flows_quiz_set_id on public.game_flows using btree (quiz_set_id) TABLESPACE pg_default;
 
-create trigger update_game_flows_updated_at BEFORE
-update on game_flows for EACH row
-execute FUNCTION update_updated_at_column ();
+  create trigger update_game_flows_updated_at BEFORE
+  update on game_flows for EACH row
+  execute FUNCTION update_updated_at_column ();
 ```
 
 #### 3. `players` Table
@@ -94,33 +94,33 @@ execute FUNCTION update_updated_at_column ();
 Stores all players who have joined the game.
 
 ```sql
-create table public.players (
-  id uuid not null default gen_random_uuid (),
-  device_id character varying(100) null,
-  game_id uuid not null,
-  player_name character varying(100) not null,
-  is_logged_in boolean not null default false,
-  is_host boolean not null default false,
-  created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now(),
-  constraint players_pkey primary key (id),
-  constraint fk_players_games foreign KEY (game_id) references games (id) on delete CASCADE
-) TABLESPACE pg_default;
+    create table public.players (
+    id uuid not null default gen_random_uuid (),
+    device_id character varying(100) null,
+    game_id uuid not null,
+    player_name character varying(100) not null,
+    is_logged_in boolean not null default false,
+    is_host boolean not null default false,
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now(),
+    constraint players_pkey primary key (id),
+    constraint fk_players_games foreign KEY (game_id) references games (id) on delete CASCADE
+  ) TABLESPACE pg_default;
 
-create index IF not exists idx_players_game_id on public.players using btree (game_id) TABLESPACE pg_default;
+  create index IF not exists idx_players_game_id on public.players using btree (game_id) TABLESPACE pg_default;
 
-create index IF not exists idx_players_device_id on public.players using btree (device_id) TABLESPACE pg_default;
+  create index IF not exists idx_players_device_id on public.players using btree (device_id) TABLESPACE pg_default;
 
-create index IF not exists idx_players_game_device on public.players using btree (game_id, device_id) TABLESPACE pg_default;
+  create index IF not exists idx_players_game_device on public.players using btree (game_id, device_id) TABLESPACE pg_default;
 
-create trigger update_players_updated_at BEFORE
-update on players for EACH row
-execute FUNCTION update_updated_at_column ();
+  create trigger update_players_updated_at BEFORE
+  update on players for EACH row
+  execute FUNCTION update_updated_at_column ();
 
-create trigger update_game_player_count_trigger
-after INSERT
-or DELETE on players for EACH row
-execute FUNCTION update_game_player_count ();
+  create trigger update_game_player_count_trigger
+  after INSERT
+  or DELETE on players for EACH row
+  execute FUNCTION update_game_player_count ();
 ```
 
 #### 4. `game_player_data` Table
@@ -128,29 +128,29 @@ execute FUNCTION update_game_player_count ();
 Stores player scores and answer history.
 
 ```sql
-create table public.game_player_data (
-  id uuid not null default gen_random_uuid (),
-  player_id uuid not null,
-  player_device_id character varying(100) not null,
-  game_id uuid not null,
-  score integer not null default 0,
-  answer_report jsonb null default '{}'::jsonb,
-  created_at timestamp with time zone not null default now(),
-  updated_at timestamp with time zone not null default now(),
-  constraint game_player_data_pkey primary key (id),
-  constraint fk_gpd_games foreign KEY (game_id) references games (id) on delete CASCADE,
-  constraint fk_gpd_players foreign KEY (player_id) references players (id) on delete CASCADE
-) TABLESPACE pg_default;
+    create table public.game_player_data (
+    id uuid not null default gen_random_uuid (),
+    player_id uuid not null,
+    player_device_id character varying(100) not null,
+    game_id uuid not null,
+    score integer not null default 0,
+    answer_report jsonb null default '{}'::jsonb,
+    created_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now(),
+    constraint game_player_data_pkey primary key (id),
+    constraint fk_gpd_games foreign KEY (game_id) references games (id) on delete CASCADE,
+    constraint fk_gpd_players foreign KEY (player_id) references players (id) on delete CASCADE
+  ) TABLESPACE pg_default;
 
-create index IF not exists idx_gpd_game_score on public.game_player_data using btree (game_id, score desc) TABLESPACE pg_default;
+  create index IF not exists idx_gpd_game_score on public.game_player_data using btree (game_id, score desc) TABLESPACE pg_default;
 
-create index IF not exists idx_gpd_player_game on public.game_player_data using btree (player_id, game_id) TABLESPACE pg_default;
+  create index IF not exists idx_gpd_player_game on public.game_player_data using btree (player_id, game_id) TABLESPACE pg_default;
 
-create index IF not exists idx_gpd_device_game on public.game_player_data using btree (player_device_id, game_id) TABLESPACE pg_default;
+  create index IF not exists idx_gpd_device_game on public.game_player_data using btree (player_device_id, game_id) TABLESPACE pg_default;
 
-create trigger update_game_player_data_updated_at BEFORE
-update on game_player_data for EACH row
-execute FUNCTION update_updated_at_column ();
+  create trigger update_game_player_data_updated_at BEFORE
+  update on game_player_data for EACH row
+  execute FUNCTION update_updated_at_column ();
 ```
 
 **answer_report Structure:**
@@ -163,7 +163,7 @@ execute FUNCTION update_updated_at_column ();
   "questions": [
     {
       "question_id": "uuid",
-      "question_index": 1,
+      "question_number": 1,
       "answer_id": "uuid",
       "is_correct": true,
       "time_taken": 5.2,
@@ -174,9 +174,20 @@ execute FUNCTION update_updated_at_column ();
   "streaks": {
     "current_streak": 2,
     "max_streak": 3
+  },
+  "timing": {
+    "average_response_time": 4.5,
+    "fastest_response": 1.2,
+    "slowest_response": 8.9
   }
 }
 ```
+
+**Note on `time_taken`**:
+
+- This is the time (in seconds) from when the answering phase started to when the player clicked their answer choice
+- Calculated as: `(click_timestamp - answering_phase_start_timestamp) / 1000`
+- If no answer was selected, `time_taken` = full `answering_time` duration
 
 ## Complete Game Flow
 
@@ -324,17 +335,22 @@ execute FUNCTION update_updated_at_column ();
 - Duration: 3 seconds
 - Display: Countdown animation (3, 2, 1)
 - Purpose: Prepare players for next question
+- **Synchronization**: All clients receive countdown start timestamp via WebSocket to ensure synchronized countdown
 
 **Host:**
 
 - Page: `/game-host?phase=countdown`
-- Auto-transitions to question phase after countdown
+- After countdown completes (3 seconds), automatically starts the question after 3.5 seconds
+- This auto-start calls `POST /games/{game_id}/questions/start` with the first question
+- Host can also manually start the question by clicking "問題を開始" button
 
 **Player:**
 
 - Page: `/game-player?phase=countdown`
-- Receives countdown start timestamp via WebSocket
-- Syncs countdown timer with server
+- Receives countdown start timestamp via WebSocket (`game:started` or `game:phase:change` with `startedAt`)
+- Stores timestamp in sessionStorage: `countdown_started_{gameId}`
+- Syncs countdown timer with server timestamp
+- After countdown, waits for host to start question (receives `game:question:started` event)
 
 **Public Screen:**
 
@@ -346,8 +362,9 @@ execute FUNCTION update_updated_at_column ();
 **Host:**
 
 - Page: `/game-host?phase=question`
+- **Note**: After countdown completes, host automatically starts the question (3.5 seconds delay)
 - Actions:
-  - Click "問題を開始" button
+  - Can manually click "問題を開始" button to start question immediately (if not auto-started)
   - API Call: `POST /games/{game_id}/questions/start`
     - Request Body:
       ```json
@@ -392,58 +409,48 @@ execute FUNCTION update_updated_at_column ();
 - Receives `game:question:started` event
 - Displays:
   - Question text and image
-  - Answer choices (A, B, C, D)
-  - Timer showing remaining time
+  - Timer showing remaining time for question display
   - Question number (e.g., "Question 1 of 10")
+  - **NO answer choices are shown** - only the question content
 - Timer syncs with server timestamps
-- After question display time expires, transitions to answering phase
+- This is a **display-only phase** - players view the question but **cannot see or select answer choices yet**
+- After question display time (`show_question_time`) expires, automatically transitions to answering phase
 
 #### 4.3 Answering Phase (Player Only)
 
-**Player:**
+**📖 For complete details on the answering phase, see [answering_phase.md](./answering_phase.md)**
+
+**Quick Summary:**
 
 - Page: `/game-player?phase=answering`
 - Duration: `question.answering_time` seconds (separate from display time)
-- Actions:
-  - Select an answer choice
-  - Click submit or auto-submit when time expires
-  - API Call: `POST /games/{game_id}/players/{player_id}/answer`
-    - Request Body:
-      ```json
-      {
-        "question_id": "uuid",
-        "question_number": 1,
-        "answer_id": "uuid",
-        "is_correct": true,
-        "time_taken": 5.2,
-        "points_earned": 85
-      }
-      ```
-  - Backend Actions:
-    - Validates answer (checks if `answer_id` matches correct answer)
-    - Calculates points (if not provided):
-      - Base points: `question.points`
-      - Time bonus/penalty: Based on `time_bonus` setting
-      - Streak bonus: Based on `streak_bonus` setting and current streak
-    - Updates `game_player_data`:
-      - Increments `score` by `points_earned`
-      - Updates `answer_report` JSONB with new answer entry
-    - Emits WebSocket events:
-      - `game:answer:accepted` to player (confirmation)
-      - `game:answer:stats:update` to all (aggregate counts)
-  - Player sees:
-    - Selected answer highlighted
-    - "回答済み" (Answered) status
-    - Cannot change answer after submission
+- **This phase starts automatically** after question display phase expires
+- **Answer choices are now visible and selectable** (layout depends on question type)
+- **Critical Design**: Clicking an answer choice **immediately submits** the answer (no confirmation, cannot change)
+- **Question Types Supported**:
+  - `true_false` - True/False (2 options)
+  - `multiple_choice_2` - 2 options (A, B)
+  - `multiple_choice_3` - 3 options (A, B, C)
+  - `multiple_choice_4` - 4 options (A, B, C, D) - default
+- **Time Tracking**: Timer-based calculation (`time_taken = duration - remaining`)
+- **Auto-Submit**: If no answer selected before timer expires, submits `null` with full duration
+- **API**: `POST /games/{gameId}/players/{playerId}/answer`
+- **Features**:
+  - Client-side point calculation (preview)
+  - Streak calculation from answer history
+  - Validation (client + server)
+  - Error handling and retry logic
+  - WebSocket events for real-time updates
 
-**Point Calculation:**
+**See [answering_phase.md](./answering_phase.md) for:**
 
-- Formula depends on game settings:
-  - **Normal Mode**: `basePoints` if correct, `0` if incorrect
-  - **Time Bonus Mode**: `basePoints - (timeTaken * (basePoints / answeringTime))`
-  - **Streak Bonus Mode**: `basePoints * (1 + min(streak, 5) * 0.1)`
-  - **Combined Mode**: `(basePoints - timePenalty) * streakMultiplier`
-- Points are calculated client-side for preview, but server is authoritative
+- Complete question type layouts and behavior
+- Detailed submission logic and validation
+- Point calculation formulas and examples
+- Streak calculation algorithm
+- UI behavior and visual states
+- Error handling scenarios
+- Edge cases and testing considerations
 
 #### 4.4 Answer Reveal Phase
 
@@ -457,15 +464,25 @@ execute FUNCTION update_updated_at_column ();
 - API Call: `POST /games/{game_id}/questions/reveal`
 - Backend Actions:
   - Updates `game_flows.current_question_end_time` = current timestamp
+  - Locks answer submissions (no more answers accepted)
   - Calculates answer statistics (counts per answer choice)
-  - Emits WebSocket event: `game:question:ended`
-    ```json
-    {
-      "roomId": "game_id",
-      "questionId": "uuid"
-    }
-    ```
-- Host Redirected: `/game-host?phase=answer_reveal`
+  - Emits WebSocket events:
+    - `game:question:ended` - Question ended
+      ```json
+      {
+        "roomId": "game_id",
+        "questionId": "uuid"
+      }
+      ```
+    - `game:answer:locked` - Answers locked (with statistics)
+      ```json
+      {
+        "roomId": "game_id",
+        "questionId": "uuid",
+        "counts": { ... }
+      }
+      ```
+- Host phase changes to 'answer_reveal' (no redirect, same page)
 
 **All Perspectives:**
 
@@ -510,9 +527,10 @@ execute FUNCTION update_updated_at_column ();
 
 **Host Action:**
 
-- Host clicks "次へ" button
-- Phase changes to 'leaderboard'
+- Host clicks "次へ" button after answer reveal
+- Phase changes to 'leaderboard' (client-side)
 - Emits WebSocket event: `game:phase:change` with phase = 'leaderboard'
+- **Note**: Leaderboard is only shown if NOT the final question (to preserve suspense for final results)
 
 **All Perspectives:**
 
@@ -575,12 +593,13 @@ execute FUNCTION update_updated_at_column ();
     - Sets `game_flows.current_question_id` = next question ID
     - Clears `current_question_start_time` and `current_question_end_time`
     - Emits `game:phase:change` with phase = 'countdown'
-    - Returns: `{ isComplete: false, nextQuestion: {...} }`
+    - Returns: `{ isComplete: false, nextQuestion: { id: "...", index: ... } }`
   - If no more questions:
     - Sets `games.status` = 'completed'
     - Sets `games.ended_at` = current timestamp
     - Emits `game:phase:change` with phase = 'podium'
     - Returns: `{ isComplete: true }`
+- **Note**: The `nextQuestion` API endpoint may not be fully implemented. The host may need to manually call `startQuestion` with the next question ID instead.
 
 **Flow Continues:**
 
@@ -784,7 +803,7 @@ execute FUNCTION update_updated_at_column ();
    }
    ```
 
-6. **`game:answer:stats:update`** - Answer statistics updated
+6. **`game:answer:stats:update`** - Answer statistics updated (also available as `game:answer:stats`)
 
    ```json
    {
@@ -799,7 +818,22 @@ execute FUNCTION update_updated_at_column ();
    }
    ```
 
-7. **`game:leaderboard:update`** - Leaderboard updated
+7. **`game:answer:locked`** - Answers are locked (question ended, no more submissions accepted)
+
+   ```json
+   {
+     "roomId": "game_id",
+     "questionId": "uuid",
+     "counts": {
+       "answer_id_1": 10,
+       "answer_id_2": 5,
+       "answer_id_3": 3,
+       "answer_id_4": 2
+     }
+   }
+   ```
+
+8. **`game:leaderboard:update`** - Leaderboard updated
 
    ```json
    {
@@ -807,7 +841,7 @@ execute FUNCTION update_updated_at_column ();
    }
    ```
 
-8. **`game:room-locked`** - Room lock status changed
+9. **`game:room-locked`** - Room lock status changed
 
    ```json
    {
@@ -816,19 +850,19 @@ execute FUNCTION update_updated_at_column ();
    }
    ```
 
-9. **`game:player-kicked`** - Player was kicked
+10. **`game:player-kicked`** - Player was kicked
 
-   ```json
-   {
-     "player_id": "uuid",
-     "player_name": "Player Name",
-     "game_id": "game_id",
-     "kicked_by": "host_id",
-     "timestamp": "2024-01-01T12:00:00Z"
-   }
-   ```
+```json
+{
+  "player_id": "uuid",
+  "player_name": "Player Name",
+  "game_id": "game_id",
+  "kicked_by": "host_id",
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
 
-10. **`room:user-joined`** - User joined room
+11. **`room:user-joined`** - User joined room (also available as `room:user-joined`)
 
     ```json
     {
@@ -837,7 +871,7 @@ execute FUNCTION update_updated_at_column ();
     }
     ```
 
-11. **`room:user-left`** - User left room
+12. **`room:user-left`** - User left room (also available as `room:user-left`)
     ```json
     {
       "socketId": "socket_id",
@@ -916,8 +950,8 @@ execute FUNCTION update_updated_at_column ();
 
 1. **waiting** - Game created, waiting for players
 2. **countdown** - 3-second countdown before question
-3. **question** - Question display phase (host) / Question viewing (player)
-4. **answering** - Answer selection phase (player only)
+3. **question** - Question display phase (host sees question + choices) / Question viewing only (player sees question text/image, NO choices)
+4. **answering** - Answer selection phase (player only, choices are now visible and clickable)
 5. **answer_reveal** - Answers revealed
 6. **leaderboard** - Leaderboard displayed (not on final question)
 7. **explanation** - Explanation shown
@@ -930,9 +964,28 @@ execute FUNCTION update_updated_at_column ();
 waiting → countdown → question → answering → answer_reveal → [leaderboard] → explanation → [next question or podium] → ended
 ```
 
-- `[leaderboard]` - Only shown if NOT final question
-- `explanation` - Only shown if question has explanation
-- After final question: `answer_reveal` → `explanation` → `podium` → `ended`
+**Detailed Flow:**
+
+1. **waiting** → **countdown**: Host starts game
+2. **countdown** → **question**: Auto-transition after 3 seconds (host auto-starts question after 3.5s)
+3. **question** → **answering**: Auto-transition when `show_question_time` expires (player only)
+   - **Question phase**: Shows question text/image only, **NO answer choices visible**
+   - **Answering phase**: Shows answer choices, player can click to answer (clicking immediately submits)
+4. **answering** → **answer_reveal**: Host reveals answers OR timer expires (auto-reveal)
+   - When player clicks an option, answer is immediately submitted with `time_taken` calculated from click timestamp
+5. **answer_reveal** → **leaderboard**: Host clicks "次へ" (only if NOT final question)
+6. **leaderboard** → **explanation**: Host clicks "次へ" (only if explanation exists)
+7. **answer_reveal** → **explanation**: Host clicks "次へ" (if no leaderboard, but explanation exists)
+8. **explanation** → **countdown**: Host clicks "次へ" (if more questions exist)
+9. **explanation** → **podium**: Host clicks "次へ" (if no more questions)
+10. **podium** → **ended**: Auto-transition after animation completes (~5 seconds)
+
+**Notes:**
+
+- `[leaderboard]` - Only shown if NOT final question (to preserve suspense)
+- `explanation` - Only shown if question has `explanation_text`
+- After final question: `answer_reveal` → `explanation` (if exists) → `podium` → `ended`
+- Host must manually advance phases by clicking "次へ" button (except auto-transitions)
 
 ## Scoring System
 
@@ -953,8 +1006,15 @@ Points are calculated based on:
 
 - Server validates all answers (client calculation is for preview only)
 - Answer must be submitted within `question.answering_time` seconds
+- **Time calculation**:
+  - `time_taken` = (timestamp when answer option clicked) - (timestamp when answering phase started)
+  - Measured in seconds (e.g., 5.2 seconds)
+  - This is the actual time the player took to click their choice
 - Late answers receive 0 points (even if correct)
-- No answer = 0 points
+- No answer = 0 points (auto-submitted as `null` when timer expires, `time_taken` = full `answering_time`)
+- Answer can only be submitted once per question
+- Once submitted, answer cannot be changed
+- **Important**: Clicking an answer choice immediately submits it (no separate "Submit" button needed)
 
 ## Reconnection Handling
 
@@ -974,9 +1034,10 @@ Points are calculated based on:
 - On reconnect, fetch current game state: `GET /games/{gameId}/state`
 - Determine current phase from:
   - `game.status` = 'completed' → 'ended'
-  - `gameFlow.current_question_end_time` exists → 'answer_reveal'
-  - `gameFlow.current_question_start_time` exists → 'question'
-  - `game.status` = 'active' → 'countdown'
+  - `gameFlow.current_question_end_time` exists → 'answer_reveal' or 'leaderboard' or 'explanation'
+  - `gameFlow.current_question_start_time` exists → 'question' or 'answering' (check if `show_question_time` expired)
+  - `game.status` = 'active' AND `gameFlow.current_question_id` is null → 'countdown'
+  - `game.status` = 'active' → 'countdown' (game started but no question active yet)
   - Otherwise → 'waiting'
 
 ## Error Handling
@@ -1035,13 +1096,3 @@ Points are calculated based on:
 - Timestamp verification for answer submission
 - Connection monitoring
 - Suspicious activity detection (future)
-
-## Future Enhancements
-
-1. **Analytics Dashboard**: Post-game analytics for host
-2. **Replay System**: Ability to replay game sessions
-3. **Team Mode**: Support for team-based gameplay
-4. **Power-ups**: Special abilities for players
-5. **Custom Themes**: Customizable game appearance
-6. **Multi-language Support**: Support for multiple languages
-7. **Accessibility**: Screen reader support, keyboard navigation

@@ -75,6 +75,7 @@ function PlayerGameContent() {
         setIsDisplayPhaseDone(false);
         setAnswerDurationMs(null);
         setAnswerRemainingMs(null);
+        answeringPhaseStartTimeRef.current = null; // Reset timestamp for new question
         setCurrentPhase('question');
         router.replace(
           `/game-player?gameId=${gameId}&phase=question&questionIndex=${qIndex}&playerId=${playerId}`,
@@ -127,6 +128,7 @@ function PlayerGameContent() {
   const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
   const [answerDurationMs, setAnswerDurationMs] = useState<number | null>(null);
   const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
+  const answeringPhaseStartTimeRef = useRef<number | null>(null);
 
   // Get current question data for point calculation
   // Prefer API data (has authoritative points and time_limit), fallback to local quiz data
@@ -157,7 +159,12 @@ function PlayerGameContent() {
     questions,
   ]);
 
-  const { answerStatus, answerResult, submitAnswer } = useGameAnswer({
+  const {
+    answerStatus,
+    answerResult,
+    submitAnswer,
+    error: answerError,
+  } = useGameAnswer({
     gameId,
     playerId,
     questionId: gameFlow?.current_question_id || null,
@@ -285,7 +292,9 @@ function PlayerGameContent() {
           id: data.question.id,
           text: data.question.text,
           image: data.question.image_url || undefined,
-          timeLimit: data.question.time_limit,
+          timeLimit: data.question.show_question_time + data.question.answering_time,
+          show_question_time: data.question.show_question_time,
+          answering_time: data.question.answering_time,
           choices: data.answers
             .sort((a, b) => a.order_index - b.order_index)
             .map((a, i) => ({
@@ -295,7 +304,7 @@ function PlayerGameContent() {
             })),
           correctAnswerId: data.answers.find((a) => a.is_correct)?.id || '',
           explanation: data.question.explanation_text || undefined,
-          type: 'multiple_choice_4',
+          type: data.question.type as Question['type'],
         };
 
         setCurrentQuestionData({
@@ -303,7 +312,7 @@ function PlayerGameContent() {
           serverTime: data.server_time,
           isActive: data.is_active,
           points: data.question.points,
-          timeLimit: data.question.time_limit,
+          timeLimit: data.question.show_question_time + data.question.answering_time,
           answeringTime: data.question.answering_time,
         });
       } catch (err) {
@@ -601,15 +610,15 @@ function PlayerGameContent() {
     const idx = gameFlow?.current_question_index ?? questionIndexParam;
     const questionData = questions[idx];
     if (questionData) {
-      const showTimeSeconds = questionData.show_question_time || 30;
+      const showTimeSeconds = questionData.show_question_time || 10;
+      const answeringTimeSeconds = questionData.answering_time || 30;
       return {
         id: questionData.id,
         text: questionData.question_text,
         image: questionData.image_url || undefined,
-        timeLimit:
-          durationFromFlowSeconds ??
-          showTimeSeconds ??
-          Math.max(5, Math.round((timerState?.remainingMs || 10000) / 1000)),
+        timeLimit: durationFromFlowSeconds ?? showTimeSeconds + answeringTimeSeconds,
+        show_question_time: showTimeSeconds,
+        answering_time: answeringTimeSeconds,
         choices: questionData.answers
           .sort((a, b) => a.order_index - b.order_index)
           .map((a, i) => ({
@@ -619,7 +628,7 @@ function PlayerGameContent() {
           })),
         correctAnswerId: questionData.answers.find((a) => a.is_correct)?.id || '',
         explanation: questionData.explanation_text || undefined,
-        type: 'multiple_choice_4',
+        type: questionData.question_type as Question['type'],
       };
     }
     // Loading state
@@ -631,6 +640,8 @@ function PlayerGameContent() {
           : `問題 ${(idx ?? 0) + 1} を読み込み中...`,
       image: undefined,
       timeLimit: Math.max(5, Math.round((timerState?.remainingMs || 10000) / 1000)),
+      show_question_time: 10,
+      answering_time: 30,
       choices: [
         { id: 'loading-1', text: '読み込み中...', letter: 'A' },
         { id: 'loading-2', text: '読み込み中...', letter: 'B' },
@@ -665,26 +676,52 @@ function PlayerGameContent() {
       ? Math.max(0, new Date(gameFlow.current_question_end_time).getTime() - Date.now())
       : null;
 
+  // Validate and sanitize time values to prevent NaN
+  const showQuestionTime = Number.isFinite(currentQuestion.show_question_time)
+    ? currentQuestion.show_question_time
+    : 10; // Default fallback
+  const answeringTime = Number.isFinite(currentQuestion.answering_time)
+    ? currentQuestion.answering_time
+    : 30; // Default fallback
+
+  const totalDurationMs = (showQuestionTime + answeringTime) * 1000;
+
+  const totalRemainingMs =
+    timerState?.remainingMs ??
+    derivedRemainingMsFromFlow ??
+    (currentPhase === 'question' ? totalDurationMs : answeringTime * 1000);
+
+  const viewingDurationMs = showQuestionTime * 1000;
+  const elapsedMs = Math.max(
+    0,
+    totalDurationMs - (Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0),
+  );
+
+  const viewingRemainingMs = Math.max(0, viewingDurationMs - elapsedMs);
+  const answeringRemainingMsDerived = Math.max(
+    0,
+    Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0,
+  );
+
   const displayRemainingMs =
-    timerState?.remainingMs ?? derivedRemainingMsFromFlow ?? currentQuestion.timeLimit * 1000;
+    currentPhase === 'question' ? viewingRemainingMs : answeringRemainingMsDerived;
 
   const startAnsweringPhase = useCallback(() => {
     if (isDisplayPhaseDone) return;
-    const durationMs =
-      (currentQuestionForPoints?.answering_time ?? currentQuestion.timeLimit ?? 30) * 1000;
+    // Use validated answering time to prevent NaN
+    const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
+      ? currentQuestion.answering_time
+      : 30; // Default fallback
+    const durationMs = safeAnsweringTime * 1000;
     setIsDisplayPhaseDone(true);
     setAnswerDurationMs(durationMs);
     setAnswerRemainingMs(durationMs);
+    answeringPhaseStartTimeRef.current = Date.now(); // Record exact start time for accurate time calculation
+
+    // Transition immediately to answering phase
     setCurrentPhase('answering');
     router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
-  }, [
-    currentQuestionForPoints?.answering_time,
-    currentQuestion.timeLimit,
-    gameId,
-    isDisplayPhaseDone,
-    playerId,
-    router,
-  ]);
+  }, [currentQuestion.answering_time, gameId, isDisplayPhaseDone, playerId, router]);
 
   // Move to answering once the question display timer expires
   useEffect(() => {
@@ -694,53 +731,96 @@ function PlayerGameContent() {
     }
   }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
 
-  // Client-side answering countdown (separate from display timer)
+  // Client-side answering countdown timer (decrements every second)
+  // Continue counting even after answer is submitted so player knows when phase ends
   useEffect(() => {
-    if (currentPhase !== 'answering' || answerRemainingMs === null) return;
+    if (currentPhase !== 'answering') return;
+    if (answerDurationMs === null || answerRemainingMs === null) return;
+    // Removed check for hasAnswered - timer should continue to show phase end time
+
+    // Set up interval to decrement timer every second
     const interval = setInterval(() => {
       setAnswerRemainingMs((prev) => {
-        if (prev === null) return prev;
-        const next = Math.max(0, prev - 1000);
-        return next;
+        if (prev === null) return null;
+        const newRemaining = Math.max(0, prev - 1000);
+        return newRemaining;
       });
     }, 1000);
+
     return () => clearInterval(interval);
-  }, [currentPhase, answerRemainingMs]);
+  }, [currentPhase, answerDurationMs, answerRemainingMs]);
 
-  const answeringRemainingMs =
-    answerRemainingMs ??
-    (currentQuestionForPoints?.answering_time ?? currentQuestion.timeLimit ?? 30) * 1000;
-
-  const currentTimeSeconds = Math.max(
-    0,
-    Math.round((currentPhase === 'question' ? displayRemainingMs : answeringRemainingMs) / 1000),
-  );
+  // Calculate current time for display based on phase
+  const currentTimeSeconds = useMemo(() => {
+    if (currentPhase === 'question') {
+      const time = Number.isFinite(displayRemainingMs) ? displayRemainingMs : 0;
+      return Math.max(0, Math.round(time / 1000));
+    } else if (currentPhase === 'answering') {
+      // Use answerRemainingMs for answering phase timer
+      const time = Number.isFinite(answerRemainingMs) ? (answerRemainingMs ?? 0) : 0;
+      return Math.max(0, Math.round(time / 1000));
+    }
+    return 0;
+  }, [currentPhase, displayRemainingMs, answerRemainingMs]);
 
   const handleAnswerSelect = (answerId: string) => {
     setSelectedAnswer(answerId);
   };
 
-  const handleAnswerSubmit = useCallback(async () => {
-    if (!selectedAnswer || !gameFlow?.current_question_id) return;
-    try {
-      const durationMs =
-        answerDurationMs ??
-        (currentQuestionForPoints?.answering_time ?? currentQuestion.timeLimit ?? 30) * 1000;
-      const remainingMs = answerRemainingMs ?? durationMs;
-      const responseTimeMs = durationMs - remainingMs;
-      await submitAnswer(selectedAnswer, responseTimeMs);
-    } catch (err) {
-      console.error('Failed to submit answer:', err);
-    }
-  }, [
-    selectedAnswer,
-    gameFlow?.current_question_id,
-    answerDurationMs,
-    answerRemainingMs,
-    currentQuestionForPoints?.answering_time,
-    currentQuestion.timeLimit,
-    submitAnswer,
-  ]);
+  const handleAnswerSubmit = useCallback(
+    async (answerId?: string | null) => {
+      // Allow null for auto-submit (when no answer selected)
+      const targetAnswerId: string | null =
+        answerId !== undefined ? answerId : selectedAnswer || null;
+      if (!gameFlow?.current_question_id) return;
+      // Note: targetAnswerId can be null for auto-submit, so we don't check for it here
+
+      try {
+        // Calculate response time from answering phase start
+        // Use answerDurationMs and answerRemainingMs which are set when answering phase starts
+        const fallbackAnsweringTime = Number.isFinite(
+          currentQuestionForPoints?.answering_time ?? currentQuestion.answering_time,
+        )
+          ? (currentQuestionForPoints?.answering_time ?? currentQuestion.answering_time ?? 30)
+          : 30;
+        const durationMs: number =
+          answerDurationMs !== null && Number.isFinite(answerDurationMs)
+            ? answerDurationMs
+            : fallbackAnsweringTime * 1000;
+        const remainingMs: number =
+          answerRemainingMs !== null && Number.isFinite(answerRemainingMs)
+            ? answerRemainingMs
+            : durationMs;
+        // Calculate time taken using timestamp-based method for accuracy
+        // This is more accurate than relying on interval-decremented values
+        let responseTimeMs: number;
+        if (answerId === null) {
+          // Auto-submit: time_taken = full duration
+          responseTimeMs = durationMs;
+        } else if (answeringPhaseStartTimeRef.current !== null) {
+          // Calculate from actual timestamp for precision
+          const elapsedMs = Date.now() - answeringPhaseStartTimeRef.current;
+          responseTimeMs = Math.max(0, Math.min(durationMs, elapsedMs));
+        } else {
+          // Fallback to timer-based calculation if timestamp not available
+          responseTimeMs = Math.max(0, Math.min(durationMs, durationMs - remainingMs));
+        }
+
+        await submitAnswer(targetAnswerId, responseTimeMs);
+      } catch (err) {
+        console.error('Failed to submit answer:', err);
+      }
+    },
+    [
+      selectedAnswer,
+      gameFlow?.current_question_id,
+      answerDurationMs,
+      answerRemainingMs,
+      currentQuestionForPoints?.answering_time,
+      currentQuestion.answering_time,
+      submitAnswer,
+    ],
+  );
 
   // Auto-submit timeout (no answer) when answering window expires
   const autoSubmittingRef = useRef(false);
@@ -748,21 +828,29 @@ function PlayerGameContent() {
     if (currentPhase !== 'answering') return;
     if (autoSubmittingRef.current) return;
     if (answerStatus.hasAnswered) return;
-    if (answeringRemainingMs > 0) return;
-    const durationMs =
-      answerDurationMs ??
-      (currentQuestionForPoints?.answering_time ?? currentQuestion.timeLimit ?? 30) * 1000;
+    if (answerRemainingMs === null || answerRemainingMs > 0) return;
+
+    // Auto-submit with null answer when timer expires
+    // time_taken = full answering_time duration (as per documentation)
+    const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
+      ? currentQuestion.answering_time
+      : 30; // Default fallback
+    const durationMs = answerDurationMs ?? safeAnsweringTime * 1000;
     autoSubmittingRef.current = true;
     submitAnswer(null, durationMs).catch((err) => {
-      console.error('Auto-submit on timeout failed:', err);
+      // Silently handle "already answered" errors (answer was submitted manually)
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      if (!errorMsg.includes('already') && !errorMsg.includes('Already')) {
+        console.error('Auto-submit on timeout failed:', err);
+        autoSubmittingRef.current = false; // Allow retry on error (except already answered)
+      }
     });
   }, [
     currentPhase,
     answerStatus.hasAnswered,
-    answeringRemainingMs,
+    answerRemainingMs,
     answerDurationMs,
-    currentQuestionForPoints?.answering_time,
-    currentQuestion.timeLimit,
+    currentQuestion.answering_time,
     submitAnswer,
   ]);
 
@@ -899,25 +987,38 @@ function PlayerGameContent() {
       );
     case 'question':
       return (
-        <PlayerQuestionScreen
-          question={currentQuestion}
-          currentTime={currentTimeSeconds}
-          questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
-          totalQuestions={questions.length || totalQuestions}
-          isMobile={isMobile}
-        />
+        <>
+          <PlayerQuestionScreen
+            question={{
+              ...currentQuestion,
+              timeLimit: currentQuestion.show_question_time,
+            }}
+            currentTime={currentTimeSeconds}
+            questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
+            totalQuestions={questions.length || totalQuestions}
+            isMobile={isMobile}
+          />
+        </>
       );
     case 'answering':
       return (
         <PlayerAnswerScreen
-          question={currentQuestion}
+          question={{
+            ...currentQuestion,
+            timeLimit: currentQuestion.answering_time,
+          }}
           currentTime={currentTimeSeconds}
           questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
           totalQuestions={questions.length || totalQuestions}
           onAnswerSelect={handleAnswerSelect}
-          onAnswerSubmit={handleAnswerSubmit}
+          onAnswerSubmit={(answerId) => {
+            // Immediately submit when answer is clicked (as per documentation)
+            handleAnswerSubmit(answerId);
+          }}
           isMobile={isMobile}
           isSubmitted={answerStatus.hasAnswered}
+          isProcessing={answerStatus.isProcessing}
+          error={answerError}
         />
       );
     case 'answer_reveal':

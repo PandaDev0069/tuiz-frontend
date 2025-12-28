@@ -102,6 +102,8 @@ function PlayerQuestionScreenContent() {
         image: questionData.image_url || undefined,
         // Use show_question_time from database as the time limit
         timeLimit: showQuestionTimeSeconds,
+        show_question_time: showQuestionTimeSeconds,
+        answering_time: questionData.answering_time || 30,
         choices: questionData.answers
           .sort((a, b) => a.order_index - b.order_index)
           .map((a, i) => ({
@@ -111,7 +113,7 @@ function PlayerQuestionScreenContent() {
           })),
         correctAnswerId: questionData.answers.find((a) => a.is_correct)?.id || '',
         explanation: questionData.explanation_text || undefined,
-        type: 'multiple_choice_4',
+        type: (questionData.question_type as Question['type']) || 'multiple_choice_4',
       };
     }
 
@@ -124,6 +126,8 @@ function PlayerQuestionScreenContent() {
           : `問題 ${(idx ?? 0) + 1} を読み込み中...`,
       image: undefined,
       timeLimit: Math.max(5, Math.round((timerState?.remainingMs || 10000) / 1000)),
+      show_question_time: 10,
+      answering_time: 30,
       choices: [
         { id: 'loading-1', text: '読み込み中...', letter: 'A' },
         { id: 'loading-2', text: '読み込み中...', letter: 'B' },

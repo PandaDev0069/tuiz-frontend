@@ -78,6 +78,8 @@ function HostQuestionScreenContent() {
         image: questionData.image_url || undefined,
         // Use show_question_time from database as the time limit
         timeLimit: timeLimitSeconds,
+        show_question_time: questionData.show_question_time || 10,
+        answering_time: questionData.answering_time || 30,
         choices: questionData.answers
           .sort((a, b) => a.order_index - b.order_index)
           .map((a, i) => ({
@@ -87,7 +89,7 @@ function HostQuestionScreenContent() {
           })),
         correctAnswerId: questionData.answers.find((a) => a.is_correct)?.id || '',
         explanation: questionData.explanation_text || undefined,
-        type: 'multiple_choice_4',
+        type: (questionData.question_type as Question['type']) || 'multiple_choice_4',
       };
     }
 
@@ -110,6 +112,8 @@ function HostQuestionScreenContent() {
             30000) / 1000,
         ),
       ),
+      show_question_time: 10,
+      answering_time: 30,
       choices: [
         { id: 'loading-1', text: '読み込み中...', letter: 'A' },
         { id: 'loading-2', text: '読み込み中...', letter: 'B' },

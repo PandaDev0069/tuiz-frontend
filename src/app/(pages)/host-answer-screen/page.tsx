@@ -122,6 +122,8 @@ function HostAnswerScreenContent() {
           text: data.question.text,
           image: data.question.image_url || undefined,
           timeLimit: timeLimit,
+          show_question_time: data.question.show_question_time || 10,
+          answering_time: answeringTime,
           choices: data.answers
             .sort((a, b) => a.order_index - b.order_index)
             .map((a, i) => ({
@@ -131,7 +133,7 @@ function HostAnswerScreenContent() {
             })),
           correctAnswerId: data.answers.find((a) => a.is_correct)?.id || '',
           explanation: data.question.explanation_text || undefined,
-          type: 'multiple_choice_4',
+          type: (data.question.type as Question['type']) || 'multiple_choice_4',
         };
         setCurrentQuestionData({
           question,
@@ -252,6 +254,8 @@ function HostAnswerScreenContent() {
         text: q.question_text,
         image: q.image_url || undefined,
         timeLimit: q.show_question_time || 10,
+        show_question_time: q.show_question_time || 10,
+        answering_time: q.answering_time || 30,
         choices: q.answers
           .sort((a, b) => a.order_index - b.order_index)
           .map((a, i) => ({
@@ -261,13 +265,15 @@ function HostAnswerScreenContent() {
           })),
         correctAnswerId: q.answers.find((a) => a.is_correct)?.id || '',
         explanation: q.explanation_text || undefined,
-        type: 'multiple_choice_4',
+        type: (q.question_type as Question['type']) || 'multiple_choice_4',
       };
     }
     return {
       id: 'loading',
       text: '読み込み中...',
       timeLimit: 10,
+      show_question_time: 10,
+      answering_time: 30,
       choices: [],
       correctAnswerId: '',
       type: 'multiple_choice_4',

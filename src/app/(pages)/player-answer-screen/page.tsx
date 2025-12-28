@@ -12,6 +12,8 @@ function PlayerAnswerScreenContent() {
     image:
       'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=600&fit=crop&crop=face',
     timeLimit: 10,
+    show_question_time: 10,
+    answering_time: 10,
     choices: [
       { id: 'a', text: 'プラチャンダ', letter: 'A' },
       { id: 'b', text: 'シェル・バハドゥル・デウバ', letter: 'B' },
