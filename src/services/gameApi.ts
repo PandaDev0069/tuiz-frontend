@@ -17,7 +17,7 @@ export interface Game {
   quiz_id?: string; // Legacy field name
   quiz_set_id?: string; // Backend field name (preferred)
   user_id: string;
-  status: 'waiting' | 'active' | 'paused' | 'completed';
+  status: 'waiting' | 'active' | 'paused' | 'finished';
   current_question_index: number | null;
   locked: boolean;
   started_at: string | null;

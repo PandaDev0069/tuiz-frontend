@@ -1,65 +1,253 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { Suspense, useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { HostAnswerRevealScreen } from '@/components/game';
 import { Question, AnswerResult } from '@/types/game';
+import { useGameFlow } from '@/hooks/useGameFlow';
+import { useGameLeaderboard } from '@/hooks/useGameLeaderboard';
+import { useSocket } from '@/components/providers/SocketProvider';
+import { gameApi } from '@/services/gameApi';
+import { quizService } from '@/lib/quizService';
 
 function HostAnswerRevealScreenContent() {
-  // Mock question data - will be replaced with real data
-  const [currentQuestion] = useState<Question>({
-    id: '1',
-    text: '現在のネパールの首相は誰ですか？',
-    image:
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&h=600&fit=crop&crop=face', // Test image
-    timeLimit: 30,
-    show_question_time: 10,
-    answering_time: 30,
-    choices: [
-      { id: 'a', text: 'プラチャンダ', letter: 'A' },
-      { id: 'b', text: 'シェル・バハドゥル・デウバ', letter: 'B' },
-      { id: 'c', text: 'K・P・シャルマ・オリ', letter: 'C' },
-      { id: 'd', text: 'マーデハブ・クマール・ネパール', letter: 'D' },
-    ],
-    correctAnswerId: 'c',
-    explanation: 'K・P・シャルマ・オリが現在のネパールの首相です。',
-    type: 'multiple_choice_4',
+  const searchParams = useSearchParams();
+  const gameIdParam = searchParams.get('gameId') || '';
+  const roomCode = searchParams.get('code') || '';
+  const [gameId, setGameId] = useState<string>(gameIdParam);
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
+  const [totalQuestions, setTotalQuestions] = useState<number>(10);
+  const hasJoinedRoomRef = useRef(false);
+
+  // Get gameId from room code if not provided
+  useEffect(() => {
+    if (gameId || !roomCode) return;
+
+    const getGameIdFromCode = async () => {
+      try {
+        const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
+        if (storedGameId) {
+          setGameId(storedGameId);
+          return;
+        }
+
+        const { data: game, error } = await gameApi.getGameByCode(roomCode);
+        if (error || !game) {
+          console.error('Failed to get game by code:', error);
+          return;
+        }
+        setGameId(game.id);
+        sessionStorage.setItem(`game_${roomCode}`, game.id);
+      } catch (err) {
+        console.error('Failed to get game ID:', err);
+      }
+    };
+
+    getGameIdFromCode();
+  }, [roomCode, gameId]);
+
+  // Load quiz data once (for fallback)
+  useEffect(() => {
+    if (!gameId) return;
+    const loadQuiz = async () => {
+      try {
+        const { data: game, error } = await gameApi.getGame(gameId);
+        if (error || !game) {
+          console.error('Failed to get game:', error);
+          return;
+        }
+        const quizSetId = game?.quiz_id || game?.quiz_set_id;
+        if (quizSetId) {
+          const quiz = await quizService.getQuizComplete(quizSetId);
+          const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
+          setTotalQuestions(sorted.length);
+        }
+      } catch (err) {
+        console.error('Failed to load quiz for game', err);
+      }
+    };
+    loadQuiz();
+  }, [gameId]);
+
+  // Use game flow for timer and question state
+  const { gameFlow } = useGameFlow({
+    gameId: gameId || '',
+    isHost: false,
+    autoSync: true,
+    events: {
+      onQuestionStart: () => {},
+      onQuestionEnd: () => {},
+      onAnswerReveal: () => {},
+      onGameEnd: () => {},
+      onError: (err) => console.error('HostScreen GameFlow Error:', err),
+    },
   });
 
-  // Mock game state
-  const [questionNumber] = useState(2);
-  const [totalQuestions] = useState(30);
+  const { leaderboard } = useGameLeaderboard({
+    gameId: gameId || '',
+    autoRefresh: true,
+  });
 
-  // Mock player statistics
-  const [totalPlayers] = useState(200);
-  const [answeredCount] = useState(195);
+  const { socket, isConnected, joinRoom, leaveRoom } = useSocket();
 
-  /**
-   * Implementation pending: Navigation logic when timer expires
-   * Component currently manages its own timer internally
-   * Future: Navigate to next question or leaderboard screen based on game state
-   */
+  // Fetch current question from API when question changes
+  useEffect(() => {
+    if (!gameId || !gameFlow?.current_question_id) {
+      setCurrentQuestion(null);
+      return;
+    }
 
-  // Mock answer result for reveal phase
-  const mockAnswerResult: AnswerResult = {
-    question: currentQuestion,
-    correctAnswer: currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId)!,
-    playerAnswer: undefined, // Host doesn't answer
-    isCorrect: false, // Not applicable for host
-    statistics: [
-      { choiceId: 'a', count: 25, percentage: 12.8 },
-      { choiceId: 'b', count: 60, percentage: 30.8 },
-      { choiceId: 'c', count: 85, percentage: 43.6 },
-      { choiceId: 'd', count: 25, percentage: 12.8 },
-    ],
-    totalPlayers: totalPlayers,
-    totalAnswered: answeredCount,
-  };
+    const fetchCurrentQuestion = async () => {
+      try {
+        const { data, error } = await gameApi.getCurrentQuestion(gameId);
+        if (error || !data) {
+          console.error('Failed to fetch current question:', error);
+          return;
+        }
+
+        // Transform API response to Question format
+        const answeringTime = data.question.answering_time || 30;
+        const timeLimit = data.question.time_limit || 40;
+
+        const question: Question = {
+          id: data.question.id,
+          text: data.question.text,
+          image: data.question.image_url || undefined,
+          timeLimit: timeLimit,
+          show_question_time: data.question.show_question_time || 10,
+          answering_time: answeringTime,
+          choices: data.answers
+            .sort((a, b) => a.order_index - b.order_index)
+            .map((a, i) => ({
+              id: a.id,
+              text: a.text,
+              letter: ['A', 'B', 'C', 'D'][i] || String.fromCharCode(65 + i),
+            })),
+          correctAnswerId: data.answers.find((a) => a.is_correct)?.id || '',
+          explanation: data.question.explanation_text || undefined,
+          type: (data.question.type as Question['type']) || 'multiple_choice_4',
+        };
+
+        setCurrentQuestion(question);
+      } catch (err) {
+        console.error('Error fetching current question:', err);
+      }
+    };
+
+    fetchCurrentQuestion();
+  }, [gameId, gameFlow?.current_question_id]);
+
+  // Listen for WebSocket events
+  useEffect(() => {
+    if (!socket || !isConnected || !gameId) return;
+
+    // Join the game room
+    const doJoinRoom = () => {
+      if (hasJoinedRoomRef.current) {
+        return;
+      }
+      console.log('[HostAnswerRevealScreen] Joining room:', gameId);
+      joinRoom(gameId);
+      hasJoinedRoomRef.current = true;
+    };
+
+    doJoinRoom();
+
+    // Listen for answer stats updates
+    const handleStatsUpdate = (data: {
+      roomId: string;
+      questionId: string;
+      counts: Record<string, number>;
+    }) => {
+      if (data.roomId === gameId && data.questionId === gameFlow?.current_question_id) {
+        setAnswerStats(data.counts);
+      }
+    };
+
+    socket.on('game:answer:stats:update', handleStatsUpdate);
+    socket.on('game:answer:stats', handleStatsUpdate);
+
+    return () => {
+      socket.off('game:answer:stats:update', handleStatsUpdate);
+      socket.off('game:answer:stats', handleStatsUpdate);
+
+      // Leave room on unmount
+      if (gameId && hasJoinedRoomRef.current) {
+        console.log('[HostAnswerRevealScreen] Leaving room on unmount');
+        leaveRoom(gameId);
+        hasJoinedRoomRef.current = false;
+      }
+    };
+  }, [socket, isConnected, gameId, gameFlow?.current_question_id, joinRoom, leaveRoom]);
+
+  // Construct answer result from real data
+  const answerResult: AnswerResult | null = useMemo(() => {
+    if (!currentQuestion || !currentQuestion.choices || currentQuestion.choices.length === 0) {
+      return null;
+    }
+
+    const totalAnswered = Object.values(answerStats).reduce((sum, count) => sum + count, 0);
+    const statistics = currentQuestion.choices.map((choice) => {
+      const count = answerStats[choice.id] || 0;
+      return {
+        choiceId: choice.id,
+        count,
+        percentage: totalAnswered > 0 ? (count / totalAnswered) * 100 : 0,
+      };
+    });
+
+    const correctAnswerChoice =
+      currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId) ||
+      currentQuestion.choices[0];
+
+    return {
+      question: currentQuestion,
+      correctAnswer: correctAnswerChoice,
+      playerAnswer: undefined, // Host doesn't answer
+      isCorrect: false, // Not applicable for host
+      statistics,
+      totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
+      totalAnswered,
+    };
+  }, [currentQuestion, answerStats, leaderboard]);
+
+  const questionIndex = gameFlow?.current_question_index ?? 0;
+
+  if (!gameId) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="p-6 text-red-600 text-xl">gameId が指定されていません。</div>
+      </div>
+    );
+  }
+
+  if (!currentQuestion || !answerResult) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-cyan-900 via-blue-900 to-purple-900">
+        <div className="text-center">
+          <div className="p-6 text-white text-xl mb-4">問題データを読み込み中...</div>
+          <div className="flex justify-center space-x-2">
+            <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
+            <div
+              className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
+              style={{ animationDelay: '0.2s' }}
+            ></div>
+            <div
+              className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+              style={{ animationDelay: '0.4s' }}
+            ></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <HostAnswerRevealScreen
-      answerResult={mockAnswerResult}
+      answerResult={answerResult}
       timeLimit={5}
-      questionNumber={questionNumber}
+      questionNumber={questionIndex + 1}
       totalQuestions={totalQuestions}
     />
   );

@@ -101,7 +101,7 @@ function WaitingRoomContent() {
       const { game, gameFlow } = data;
       let nextPhase: string = 'waiting';
 
-      if (game.status === 'completed') {
+      if (game.status === 'finished') {
         nextPhase = 'ended';
       } else if (gameFlow.current_question_id) {
         if (gameFlow.current_question_end_time) {

@@ -213,12 +213,14 @@ function HostGameContent() {
 
   // Host control handlers
   const handleStartQuestion = useCallback(async () => {
-    if (!gameId || !currentQuestion?.id) {
+    // Use gameFlow.current_question_id as fallback if currentQuestion not loaded yet
+    const questionId = currentQuestion?.id || gameFlow?.current_question_id;
+    if (!gameId || !questionId) {
       toast.error('問題データが読み込まれていません');
       return;
     }
     try {
-      await startQuestion(currentQuestion.id, currentQuestionIndex);
+      await startQuestion(questionId, currentQuestionIndex);
       setCurrentPhase('question');
       emitPhaseChange('question');
       toast.success('問題を開始しました');
@@ -226,7 +228,14 @@ function HostGameContent() {
       console.error('Failed to start question:', e);
       toast.error('問題の開始に失敗しました');
     }
-  }, [gameId, currentQuestion?.id, currentQuestionIndex, startQuestion, emitPhaseChange]);
+  }, [
+    gameId,
+    currentQuestion?.id,
+    gameFlow?.current_question_id,
+    currentQuestionIndex,
+    startQuestion,
+    emitPhaseChange,
+  ]);
 
   const handleRevealAnswer = useCallback(async () => {
     if (!gameId) return;
@@ -350,13 +359,15 @@ function HostGameContent() {
 
   // Auto-transition from countdown to question after countdown completes
   useEffect(() => {
-    if (currentPhase === 'countdown' && currentQuestion?.id && !flowLoading) {
+    // Use gameFlow.current_question_id instead of currentQuestion?.id
+    // because currentQuestion might not be loaded yet when transitioning from previous question
+    if (currentPhase === 'countdown' && gameFlow?.current_question_id && !flowLoading) {
       // Set a timer to auto-start question after countdown completes
       // Use 3.5 seconds to ensure countdown component (3 seconds) completes first
       // This prevents race condition where question starts while countdown is still showing
       const countdownDuration = 3500; // 3.5 seconds to allow countdown to complete
       const timer = setTimeout(() => {
-        // Auto-start the question
+        // Auto-start the question (will use gameFlow.current_question_id)
         handleStartQuestion().catch((err) => {
           console.error('Auto-start question failed:', err);
         });
@@ -364,7 +375,7 @@ function HostGameContent() {
 
       return () => clearTimeout(timer);
     }
-  }, [currentPhase, currentQuestion?.id, handleStartQuestion, flowLoading]);
+  }, [currentPhase, gameFlow?.current_question_id, handleStartQuestion, flowLoading]);
 
   // Show podium or end screen if in those phases
   if (currentPhase === 'podium') {
