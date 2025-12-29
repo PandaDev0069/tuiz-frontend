@@ -248,6 +248,29 @@ function HostScreenContent() {
       }
     };
 
+    // Listen for question ended (answer reveal triggered)
+    const handleQuestionEnd = (data: { roomId: string; questionId?: string }) => {
+      if (data.roomId === gameId) {
+        console.log('Public Screen: Question ended, moving to answer reveal');
+        setCurrentPhase('answer_reveal');
+      }
+    };
+
+    // Listen for answer locked (alternative event for answer reveal)
+    const handleAnswerLocked = (data: {
+      roomId: string;
+      questionId: string;
+      counts?: Record<string, number>;
+    }) => {
+      if (data.roomId === gameId) {
+        if (data.counts && data.questionId === gameFlow?.current_question_id) {
+          setAnswerStats(data.counts);
+        }
+        console.log('Public Screen: Answer locked, moving to answer reveal');
+        setCurrentPhase('answer_reveal');
+      }
+    };
+
     // Listen for game started event
     const handleGameStarted = (data: { roomId?: string; gameId?: string; roomCode?: string }) => {
       const targetGameId = data.gameId || data.roomId;
@@ -286,6 +309,8 @@ function HostScreenContent() {
 
     socket.on('game:phase:change', handlePhaseChange);
     socket.on('game:answer:stats:update', handleStatsUpdate);
+    socket.on('game:question:ended', handleQuestionEnd);
+    socket.on('game:answer:locked', handleAnswerLocked);
     socket.on('game:started', handleGameStarted);
     socket.on('game:pause', handleGamePause);
     socket.on('game:resume', handleGameResume);
@@ -294,6 +319,8 @@ function HostScreenContent() {
     return () => {
       socket.off('game:phase:change', handlePhaseChange);
       socket.off('game:answer:stats:update', handleStatsUpdate);
+      socket.off('game:question:ended', handleQuestionEnd);
+      socket.off('game:answer:locked', handleAnswerLocked);
       socket.off('game:started', handleGameStarted);
       socket.off('game:pause', handleGamePause);
       socket.off('game:resume', handleGameResume);
@@ -554,19 +581,22 @@ function HostScreenContent() {
         currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId) ||
         currentQuestion.choices[0]; // Fallback to first choice if not found
 
+      const answerResult = {
+        question: currentQuestion,
+        correctAnswer: correctAnswerChoice,
+        playerAnswer: undefined,
+        isCorrect: false,
+        statistics,
+        totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
+        totalAnswered,
+      };
+
       return (
         <HostAnswerRevealScreen
-          answerResult={{
-            question: currentQuestion,
-            correctAnswer: correctAnswerChoice,
-            playerAnswer: undefined,
-            isCorrect: false,
-            statistics,
-            totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
-            totalAnswered,
-          }}
+          answerResult={answerResult}
           questionNumber={questionIndex + 1}
           totalQuestions={questions.length}
+          timeLimit={5}
           // No controls on public screen - read-only display
         />
       );

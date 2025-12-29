@@ -386,13 +386,9 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         timerIntervalRef.current = null;
       }
 
-      // Emit WebSocket event (align with listener: game:question:ended)
-      if (socketRef.current && isConnectedRef.current) {
-        socketRef.current.emit('game:question:ended', {
-          roomId: gameId,
-          questionId: gameFlowRef.current?.current_question_id,
-        });
-      }
+      // Backend already emits game:question:ended, game:answer:locked, and game:answer:stats:update
+      // No need to emit from frontend - just refresh flow to get updated state
+      refreshFlowRef.current?.();
 
       eventsRef.current?.onAnswerReveal?.(gameFlowRef.current?.current_question_id || '', '');
     } catch (err) {

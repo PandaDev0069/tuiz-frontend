@@ -1022,7 +1022,14 @@ function PlayerGameContent() {
         />
       );
     case 'answer_reveal':
-      return <PlayerAnswerRevealScreen answerResult={revealPayload} />;
+      return (
+        <PlayerAnswerRevealScreen
+          answerResult={revealPayload}
+          questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
+          totalQuestions={questions.length || totalQuestions}
+          timeLimit={5}
+        />
+      );
     case 'leaderboard':
       return (
         <PlayerLeaderboardScreen

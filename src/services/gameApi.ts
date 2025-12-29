@@ -400,14 +400,16 @@ class GameApiClient {
   /**
    * POST /games/:gameId/questions/reveal
    * Trigger answer reveal for current question
+   * Backend returns: message, gameFlow, answerStats (optional)
    */
   async revealAnswer(gameId: string) {
-    return this.request<{ message: string; gameFlow: GameFlow }>(
-      `/games/${gameId}/questions/reveal`,
-      {
-        method: 'POST',
-      },
-    );
+    return this.request<{
+      message: string;
+      gameFlow: GameFlow;
+      answerStats?: Record<string, number>;
+    }>(`/games/${gameId}/questions/reveal`, {
+      method: 'POST',
+    });
   }
 
   /**

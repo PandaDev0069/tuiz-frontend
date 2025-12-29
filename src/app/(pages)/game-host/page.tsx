@@ -656,7 +656,7 @@ function HostGameContent() {
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
                   <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
                     <Users className="w-5 h-5 mr-2" />
-                    回答分布
+                    {currentPhase === 'answer_reveal' ? '回答結果' : '回答分布'}
                   </h3>
 
                   <div className="space-y-2">
@@ -666,34 +666,70 @@ function HostGameContent() {
                         const letter = ['A', 'B', 'C', 'D'][idx] || String.fromCharCode(65 + idx);
                         const count = answerStats[answer.id] || 0;
                         const percentage = totalAnswered > 0 ? (count / totalAnswered) * 100 : 0;
+                        const isCorrect = answer.is_correct;
 
                         return (
                           <div key={answer.id} className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-white">
+                            <div className="flex justify-between text-sm items-center">
+                              <span className="text-white flex items-center">
                                 選択肢 {letter}
-                                {answer.is_correct && (
-                                  <span className="ml-1 text-green-400">✓</span>
+                                {isCorrect && (
+                                  <span className="ml-1 text-green-400 font-bold">✓ 正解</span>
+                                )}
+                                {currentPhase === 'answer_reveal' && !isCorrect && (
+                                  <span className="ml-1 text-gray-400 text-xs">(不正解)</span>
                                 )}
                               </span>
-                              <span className="text-blue-400">
+                              <span
+                                className={`font-semibold ${
+                                  currentPhase === 'answer_reveal' && isCorrect
+                                    ? 'text-green-400'
+                                    : 'text-blue-400'
+                                }`}
+                              >
                                 {count}人 ({Math.round(percentage)}%)
                               </span>
                             </div>
-                            <div className="w-full bg-gray-700 h-2 rounded">
+                            <div className="w-full bg-gray-700 h-2 rounded relative overflow-hidden">
                               <div
-                                className={`h-2 transition-all duration-300 rounded ${
-                                  answer.is_correct
+                                className={`h-2 transition-all duration-500 rounded ${
+                                  isCorrect
                                     ? 'bg-gradient-to-r from-green-400 to-emerald-400'
                                     : 'bg-gradient-to-r from-cyan-400 to-blue-400'
                                 }`}
-                                style={{ width: `${percentage}%` }}
+                                style={{ width: `${Math.max(percentage, 2)}%` }}
                               />
+                              {currentPhase === 'answer_reveal' && isCorrect && (
+                                <div className="absolute inset-0 bg-green-400/20 animate-pulse"></div>
+                              )}
                             </div>
+                            {currentPhase === 'answer_reveal' && (
+                              <div className="text-xs text-gray-400 mt-1">{answer.answer_text}</div>
+                            )}
                           </div>
                         );
                       })}
                   </div>
+
+                  {currentPhase === 'answer_reveal' && (
+                    <div className="mt-4 pt-4 border-t border-white/10">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-400">正解率</span>
+                        <span className="text-green-400 font-bold">
+                          {totalAnswered > 0
+                            ? Math.round(
+                                ((answerStats[
+                                  currentQuestion.answers.find((a) => a.is_correct)?.id || ''
+                                ] || 0) /
+                                  totalAnswered) *
+                                  100,
+                              )
+                            : 0}
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
