@@ -42,6 +42,7 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
   useEffect(() => {
     timeoutTriggered.current = false;
     setCurrentTime(timeLimit);
+    setIsAnimationStarted(false); // Reset animation when question changes
   }, [timeLimit, questionNumber]);
 
   useEffect(() => {
@@ -84,14 +85,31 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
 
     const [animatedCount, setAnimatedCount] = useState(0);
     const [animatedHeight, setAnimatedHeight] = useState(0);
+    const hasAnimatedRef = useRef(false);
+    const lastCountRef = useRef(count);
+    const lastPercentageRef = useRef(percentage);
 
     useEffect(() => {
       if (!shouldAnimate) {
         // Reset to initial state when animation hasn't started
         setAnimatedCount(0);
         setAnimatedHeight(0);
+        hasAnimatedRef.current = false;
         return;
       }
+
+      // If values haven't changed and animation already completed, don't restart
+      if (
+        hasAnimatedRef.current &&
+        lastCountRef.current === count &&
+        lastPercentageRef.current === percentage
+      ) {
+        return;
+      }
+
+      // Update refs with current values
+      lastCountRef.current = count;
+      lastPercentageRef.current = percentage;
 
       // Simplified single RAF animation with staggered delay
       const delay = 300 + index * 150; // Reduced stagger delay
@@ -115,6 +133,9 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
 
           if (progress < 1) {
             animationFrame = requestAnimationFrame(animate);
+          } else {
+            // Mark animation as completed
+            hasAnimatedRef.current = true;
           }
         };
 

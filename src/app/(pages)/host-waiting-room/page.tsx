@@ -91,15 +91,31 @@ function HostWaitingRoomContent() {
       // Map backend Player format to frontend format
       // Backend returns player_name, created_at (not display_name, joined_at)
       // Filter out hosts from the player list (they shouldn't be displayed)
-      const mappedPlayers = playersArray
+      // Deduplicate by device_id - if multiple players have the same device_id, keep only the first one (by created_at)
+      const deviceIdMap = new Map<string, (typeof playersArray)[0]>();
+
+      playersArray
         .filter((player) => !player.is_host) // Exclude hosts from player list
-        .map((player) => ({
-          id: player.id,
-          name: player.player_name, // Backend uses player_name
-          joinedAt: new Date(player.created_at), // Backend uses created_at
-          isBanned: false, // is_kicked not implemented in backend
-          isHost: player.is_host,
-        }));
+        .forEach((player) => {
+          if (player.device_id) {
+            const existing = deviceIdMap.get(player.device_id);
+            // Keep the first player (earliest created_at) for each device_id
+            if (!existing || new Date(player.created_at) < new Date(existing.created_at)) {
+              deviceIdMap.set(player.device_id, player);
+            }
+          } else {
+            // If no device_id, include the player (shouldn't happen, but handle it)
+            deviceIdMap.set(player.id, player);
+          }
+        });
+
+      const mappedPlayers = Array.from(deviceIdMap.values()).map((player) => ({
+        id: player.id,
+        name: player.player_name, // Backend uses player_name
+        joinedAt: new Date(player.created_at), // Backend uses created_at
+        isBanned: false, // is_kicked not implemented in backend
+        isHost: player.is_host,
+      }));
 
       setPlayers(mappedPlayers);
     } catch (err) {

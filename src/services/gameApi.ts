@@ -455,7 +455,6 @@ class GameApiClient {
         error: result.error,
       };
     }
-
     return {
       data: null,
       error: result.error || { error: 'invalid_response', message: 'Player not found in response' },
@@ -507,17 +506,37 @@ class GameApiClient {
   /**
    * POST /games/:gameId/players/:playerId/data
    * Initialize player data for a game (creates game_player_data record)
+   * Note: Returns success even if data already exists (409 Conflict) - this is expected
    */
   async initializePlayerData(gameId: string, playerId: string, deviceId: string) {
-    return this.request<{ id: string; player_id: string; game_id: string; score: number }>(
-      `/games/${gameId}/players/${playerId}/data`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          player_device_id: deviceId,
-        }),
-      },
-    );
+    const result = await this.request<{
+      id: string;
+      player_id: string;
+      game_id: string;
+      score: number;
+    }>(`/games/${gameId}/players/${playerId}/data`, {
+      method: 'POST',
+      body: JSON.stringify({
+        player_device_id: deviceId,
+      }),
+    });
+
+    // If we get a 409 Conflict or "already exists" message, it means the data already exists
+    // This is expected (backend creates it automatically) and not an error - return success
+    if (
+      result.error &&
+      (result.error.error === 'data_creation_failed' ||
+        result.error.message?.includes('already exists') ||
+        result.error.message?.includes('Player data already exists'))
+    ) {
+      // Data already exists - this is expected and fine
+      return {
+        data: null, // Data exists but we don't need the ID
+        error: null, // Treat as success
+      };
+    }
+
+    return result;
   }
 
   // ==========================================================================

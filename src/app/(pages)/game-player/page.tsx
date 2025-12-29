@@ -124,6 +124,7 @@ function PlayerGameContent() {
     points: number;
     timeLimit: number;
     answeringTime?: number;
+    totalQuestions?: number;
   } | null>(null);
   const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
   const [answerDurationMs, setAnswerDurationMs] = useState<number | null>(null);
@@ -204,6 +205,7 @@ function PlayerGameContent() {
   const socketRef = useRef(socket);
   const isConnectedRef = useRef(isConnected);
   const handlePlayerKickedRef = useRef<typeof handlePlayerKicked | undefined>(undefined);
+  const currentPhaseRef = useRef<PlayerPhase>(phaseParam);
 
   // Keep refs in sync
   useEffect(() => {
@@ -217,6 +219,10 @@ function PlayerGameContent() {
   useEffect(() => {
     isConnectedRef.current = isConnected;
   }, [isConnected]);
+
+  useEffect(() => {
+    currentPhaseRef.current = currentPhase;
+  }, [currentPhase]);
 
   // Resolve gameId from room code (fallback) and load quiz data (best-effort)
   useEffect(() => {
@@ -314,6 +320,7 @@ function PlayerGameContent() {
           points: data.question.points,
           timeLimit: data.question.show_question_time + data.question.answering_time,
           answeringTime: data.question.answering_time,
+          totalQuestions: data.total_questions,
         });
       } catch (err) {
         console.warn('Error fetching current question (non-blocking)', err);
@@ -409,7 +416,18 @@ function PlayerGameContent() {
       counts: Record<string, number>;
     }) => {
       if (data.roomId === gameId && data.questionId === gameFlowRef.current?.current_question_id) {
-        setAnswerStats(data.counts);
+        // Only update stats if we're in answer_reveal phase or answering phase
+        // This prevents constant re-renders during other phases
+        const currentPhaseValue = currentPhaseRef.current;
+        if (currentPhaseValue === 'answer_reveal' || currentPhaseValue === 'answering') {
+          setAnswerStats((prev) => {
+            // Only update if values actually changed to prevent unnecessary re-renders
+            const hasChanged =
+              Object.keys(data.counts).some((key) => prev[key] !== data.counts[key]) ||
+              Object.keys(prev).some((key) => !(key in data.counts));
+            return hasChanged ? data.counts : prev;
+          });
+        }
       }
     };
 
@@ -420,6 +438,7 @@ function PlayerGameContent() {
     }) => {
       if (data.roomId !== gameId) return;
       if (data.counts && data.questionId === gameFlowRef.current?.current_question_id) {
+        // Always update stats when answer is locked (transitioning to reveal)
         setAnswerStats(data.counts);
       }
       console.log('Player: Answer locked, moving to reveal');
@@ -854,6 +873,41 @@ function PlayerGameContent() {
     submitAnswer,
   ]);
 
+  // Transition to answer_reveal when answering timer expires
+  const hasTransitionedToRevealRef = useRef(false);
+  useEffect(() => {
+    if (currentPhase !== 'answering') {
+      // Reset transition flag when leaving answering phase
+      hasTransitionedToRevealRef.current = false;
+      return;
+    }
+    if (hasTransitionedToRevealRef.current) return;
+    if (answerRemainingMs === null || answerRemainingMs > 0) return;
+
+    // Timer has expired, transition to answer_reveal
+    console.log('Player: Answering timer expired, transitioning to answer_reveal');
+    hasTransitionedToRevealRef.current = true;
+    setAnswerRemainingMs(0);
+    setCurrentPhase('answer_reveal');
+    router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+  }, [currentPhase, answerRemainingMs, gameId, playerId, router]);
+
+  // Memoize statistics separately to prevent unnecessary recalculations
+  const statisticsMemo = useMemo(() => {
+    if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
+      return [];
+    }
+    const totalAnswered = Object.values(answerStats).reduce((sum, count) => sum + count, 0);
+    return currentQuestion.choices.map((choice) => {
+      const count = answerStats[choice.id] || 0;
+      return {
+        choiceId: choice.id,
+        count,
+        percentage: totalAnswered > 0 ? (count / totalAnswered) * 100 : 0,
+      };
+    });
+  }, [currentQuestion.choices, answerStats]);
+
   // Use answerResult from hook if available, otherwise construct from local state
   const revealPayload: AnswerResult = useMemo(() => {
     // Safety check for empty choices
@@ -877,16 +931,6 @@ function PlayerGameContent() {
         ? currentQuestion.choices.find((c) => c.id === selectedAnswer)
         : undefined;
 
-    const totalAnswered = Object.values(answerStats).reduce((sum, count) => sum + count, 0);
-    const statistics = currentQuestion.choices.map((choice) => {
-      const count = answerStats[choice.id] || 0;
-      return {
-        choiceId: choice.id,
-        count,
-        percentage: totalAnswered > 0 ? (count / totalAnswered) * 100 : 0,
-      };
-    });
-
     // Determine if answer is correct
     const isCorrect =
       answerResult?.isCorrect ??
@@ -896,16 +940,18 @@ function PlayerGameContent() {
       currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId) ||
       currentQuestion.choices[0]; // Fallback to first choice if not found
 
+    const totalAnswered = statisticsMemo.reduce((sum, stat) => sum + stat.count, 0);
+
     return {
       question: currentQuestion,
       correctAnswer: correctAnswerChoice,
       playerAnswer: playerChoice,
       isCorrect,
-      statistics,
+      statistics: statisticsMemo,
       totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
       totalAnswered,
     };
-  }, [answerResult, currentQuestion, selectedAnswer, answerStats, leaderboard]);
+  }, [answerResult, currentQuestion, selectedAnswer, statisticsMemo, leaderboard]);
 
   // Update phase when URL changes
   useEffect(() => {
@@ -975,8 +1021,14 @@ function PlayerGameContent() {
       return (
         <PlayerCountdownScreen
           countdownTime={3}
-          questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
-          totalQuestions={questions.length || totalQuestions}
+          questionNumber={
+            gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+              ? gameFlow.current_question_index + 1
+              : questionIndexParam + 1
+          }
+          totalQuestions={
+            currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
+          }
           isMobile={isMobile}
           startedAt={countdownStartedAt}
           onCountdownComplete={() => {
@@ -994,8 +1046,14 @@ function PlayerGameContent() {
               timeLimit: currentQuestion.show_question_time,
             }}
             currentTime={currentTimeSeconds}
-            questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
-            totalQuestions={questions.length || totalQuestions}
+            questionNumber={
+              gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+                ? gameFlow.current_question_index + 1
+                : questionIndexParam + 1
+            }
+            totalQuestions={
+              currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
+            }
             isMobile={isMobile}
           />
         </>
@@ -1008,8 +1066,14 @@ function PlayerGameContent() {
             timeLimit: currentQuestion.answering_time,
           }}
           currentTime={currentTimeSeconds}
-          questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
-          totalQuestions={questions.length || totalQuestions}
+          questionNumber={
+            gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+              ? gameFlow.current_question_index + 1
+              : questionIndexParam + 1
+          }
+          totalQuestions={
+            currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
+          }
           onAnswerSelect={handleAnswerSelect}
           onAnswerSubmit={(answerId) => {
             // Immediately submit when answer is clicked (as per documentation)
@@ -1025,8 +1089,14 @@ function PlayerGameContent() {
       return (
         <PlayerAnswerRevealScreen
           answerResult={revealPayload}
-          questionNumber={(gameFlow.current_question_index ?? questionIndexParam) + 1}
-          totalQuestions={questions.length || totalQuestions}
+          questionNumber={
+            gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+              ? gameFlow.current_question_index + 1
+              : questionIndexParam + 1
+          }
+          totalQuestions={
+            currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
+          }
           timeLimit={5}
         />
       );
@@ -1044,8 +1114,12 @@ function PlayerGameContent() {
                   rankChange: 'same' as const,
                 }))
               : [],
-            questionNumber: (gameFlow.current_question_index ?? questionIndexParam) + 1,
-            totalQuestions: questions.length || totalQuestions,
+            questionNumber:
+              gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+                ? gameFlow.current_question_index + 1
+                : questionIndexParam + 1,
+            totalQuestions:
+              currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions),
             timeRemaining: Math.max(0, Math.round((timerState?.remainingMs || 5000) / 1000)),
             timeLimit: 5,
           }}
@@ -1056,8 +1130,12 @@ function PlayerGameContent() {
       return (
         <PlayerExplanationScreen
           explanation={{
-            questionNumber: (gameFlow.current_question_index ?? questionIndexParam) + 1,
-            totalQuestions: questions.length || totalQuestions,
+            questionNumber:
+              gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+                ? gameFlow.current_question_index + 1
+                : questionIndexParam + 1,
+            totalQuestions:
+              currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions),
             timeLimit: 5,
             title: '解説',
             body: currentQuestion.explanation || '解説は近日追加されます。',
