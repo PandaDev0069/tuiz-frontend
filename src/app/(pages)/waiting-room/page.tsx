@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
@@ -16,7 +17,7 @@ function WaitingRoomContent() {
   const playerName = searchParams.get('name') || '';
   const roomCode = searchParams.get('code') || '';
   const gameIdParam = searchParams.get('gameId') || '';
-  const { socket, isConnected, joinRoom, leaveRoom } = useSocket();
+  const { socket, isConnected, isRegistered, joinRoom, leaveRoom } = useSocket();
   const { deviceId, isLoading: isDeviceIdLoading } = useDeviceId();
 
   // State management
@@ -28,6 +29,11 @@ function WaitingRoomContent() {
   const [isInitialized, setIsInitialized] = useState(false);
   const isNavigatingRef = useRef(false);
   const hasJoinedRoomRef = useRef(false);
+  const isJoiningRef = useRef(false); // Prevent multiple concurrent join attempts
+  const hasInitializedRef = useRef(false); // Track if we've completed initialization
+
+  // Computed: Check if we should show the waiting message
+  const shouldShowWaitingMessage = !isJoining && !joinError && isInitialized && !!playerId;
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(true);
@@ -71,19 +77,28 @@ function WaitingRoomContent() {
   const checkExistingPlayer = useCallback(
     async (targetGameId?: string) => {
       const gameIdToCheck = targetGameId || gameId;
-      if (!gameIdToCheck || !deviceId) return null;
+      if (!gameIdToCheck || !deviceId) {
+        return null;
+      }
 
       try {
         // Get all players for this game
-        const { data: playersResponse } = await gameApi.getPlayers(gameIdToCheck);
-        if (!playersResponse) return null;
+        const { data: playersResponse, error: playersError } =
+          await gameApi.getPlayers(gameIdToCheck);
+        if (playersError) {
+          console.warn('[WaitingRoom] Error fetching players:', playersError);
+          return null;
+        }
+        if (!playersResponse) {
+          return null;
+        }
 
         const playersArray = playersResponse.players || [];
         // Find player with matching device_id
         const existingPlayer = playersArray.find((p) => p.device_id === deviceId);
         return existingPlayer || null;
       } catch (err) {
-        console.warn('Failed to check existing player:', err);
+        console.error('[WaitingRoom] Failed to check existing player:', err);
         return null;
       }
     },
@@ -115,6 +130,7 @@ function WaitingRoomContent() {
         nextPhase = 'countdown';
       }
 
+      // Only navigate if game has actually started (not in waiting state)
       if (nextPhase !== 'waiting') {
         isNavigatingRef.current = true;
         router.replace(
@@ -137,12 +153,20 @@ function WaitingRoomContent() {
       return;
     }
 
-    // Skip if already initialized
-    if (isInitialized) return;
+    // Skip if already initialized or if a join is already in progress
+    if (hasInitializedRef.current || isJoiningRef.current) {
+      return;
+    }
 
     let isMounted = true;
 
     const initializeAndJoin = async () => {
+      // Prevent multiple concurrent join attempts
+      if (isJoiningRef.current) {
+        return;
+      }
+      isJoiningRef.current = true;
+
       try {
         setIsJoining(true);
         setJoinError(null);
@@ -152,57 +176,119 @@ function WaitingRoomContent() {
         if (!currentGameId) {
           currentGameId = await getGameIdFromCode(roomCode);
           if (!currentGameId) {
-            if (!isMounted) return;
+            if (!isMounted) {
+              setIsJoining(false);
+              isJoiningRef.current = false;
+              return;
+            }
             setJoinError('ゲームが見つかりません。ルームコードを確認してください。');
+            setIsJoining(false);
+            isJoiningRef.current = false;
             return;
           }
         }
 
-        if (!isMounted || !currentGameId) return;
-        setGameId(currentGameId);
-
-        // Step 1.25: Check local cache for playerId to avoid duplicate creation
-        const cachedPlayerId =
-          (typeof window !== 'undefined' &&
-            sessionStorage.getItem(`player_${currentGameId}_${deviceId || 'unknown'}`)) ||
-          null;
-        if (cachedPlayerId) {
-          setPlayerId(cachedPlayerId);
-          setIsInitialized(true);
-          toast.success('再接続しました');
+        if (!isMounted || !currentGameId) {
+          setIsJoining(false);
+          isJoiningRef.current = false;
           return;
         }
+        setGameId(currentGameId);
 
         // Step 1.5: Check if player already exists (reconnection scenario)
         // This handles the case where player refreshes page or reconnects
+        // Always verify player exists in DB, even if we have a cached playerId
         const existingPlayer = await checkExistingPlayer(currentGameId);
         if (existingPlayer) {
-          // Player already exists, use existing player
-          if (!isMounted) return;
-          setPlayerId(existingPlayer.id);
+          // Player already exists in DB, use existing player
+          if (!isMounted) {
+            setIsJoining(false);
+            isJoiningRef.current = false;
+            return;
+          }
+
+          // Prevent duplicate initialization
+          if (hasInitializedRef.current) {
+            return;
+          }
+
+          // Store playerId in sessionStorage immediately
           if (typeof window !== 'undefined') {
             sessionStorage.setItem(
               `player_${currentGameId}_${deviceId || 'unknown'}`,
               existingPlayer.id,
             );
           }
-          setIsInitialized(true);
+          // Update all state together - use flushSync to force immediate re-render
+          isJoiningRef.current = false;
+          // Set all state in a single flushSync to ensure they update together
+          flushSync(() => {
+            setIsJoining(false);
+            setJoinError(null);
+            setPlayerId(existingPlayer.id);
+            setIsInitialized(true);
+          });
+          // Mark as initialized AFTER state is set
+          hasInitializedRef.current = true;
           toast.success('再接続しました');
           return;
         }
 
+        // If we had a cached playerId but player doesn't exist in DB, clear the cache
+        const cachedPlayerId =
+          (typeof window !== 'undefined' &&
+            sessionStorage.getItem(`player_${currentGameId}_${deviceId || 'unknown'}`)) ||
+          null;
+        if (cachedPlayerId) {
+          if (typeof window !== 'undefined') {
+            sessionStorage.removeItem(`player_${currentGameId}_${deviceId || 'unknown'}`);
+          }
+        }
+
         // Step 2: Join the game (creates players table record)
+        // Validate required parameters before joining
+        if (!deviceId) {
+          if (!isMounted) {
+            setIsJoining(false);
+            isJoiningRef.current = false;
+            return;
+          }
+          setJoinError('デバイスIDが見つかりません。ページを再読み込みしてください。');
+          setIsJoining(false);
+          isJoiningRef.current = false;
+          return;
+        }
+
+        if (!playerName || playerName.trim() === '') {
+          if (!isMounted) {
+            setIsJoining(false);
+            isJoiningRef.current = false;
+            return;
+          }
+          setJoinError('プレイヤー名が必要です');
+          setIsJoining(false);
+          isJoiningRef.current = false;
+          return;
+        }
         const { data: player, error: joinError } = await gameApi.joinGame(
           currentGameId,
-          playerName,
+          playerName.trim(),
           deviceId,
         );
 
-        if (!isMounted) return;
+        // Note: We continue even if unmounted to ensure state is set
+        // React will handle cleanup if component is actually unmounted
 
         if (joinError || !player) {
           const errorMessage = joinError?.message || 'ゲームへの参加に失敗しました';
+          console.error('[WaitingRoom] Join game failed:', {
+            error: joinError,
+            player,
+            errorMessage,
+          });
           setJoinError(errorMessage);
+          setIsJoining(false);
+          isJoiningRef.current = false;
           toast.error(errorMessage);
 
           // Handle specific error cases
@@ -214,43 +300,81 @@ function WaitingRoomContent() {
           return;
         }
 
-        setPlayerId(player.id);
+        // Double-check player has required fields
+        if (!player.id) {
+          setJoinError('プレイヤー情報が不正です');
+          setIsJoining(false);
+          isJoiningRef.current = false;
+          return;
+        }
+
+        // Store playerId in sessionStorage immediately
         if (typeof window !== 'undefined') {
           sessionStorage.setItem(`player_${currentGameId}_${deviceId || 'unknown'}`, player.id);
         }
 
         // Step 3: Initialize game_player_data (if not already created)
-        // Note: Backend might create this automatically, but we'll try to create it
-        // The API will return 409 if it already exists, which is fine
+        // Note: Backend creates this automatically when player joins, so this will likely return 409
+        // We try to create it anyway as a safety measure, but 409 is expected and harmless
         try {
-          await gameApi.initializePlayerData(currentGameId, player.id, deviceId);
+          const { error: dataError } = await gameApi.initializePlayerData(
+            currentGameId,
+            player.id,
+            deviceId,
+          );
+          if (dataError) {
+            // 409 Conflict means it already exists, which is expected and fine
+            if (dataError.error !== 'conflict' && !dataError.message?.includes('already exists')) {
+              console.warn('[WaitingRoom] Game player data initialization error:', dataError);
+            }
+            // Silently ignore 409 conflicts - this is expected behavior
+          }
         } catch (dataError) {
-          // Ignore if already exists (409) or other non-critical errors
-          console.warn('Game player data initialization:', dataError);
+          // Network errors or other unexpected errors - log but don't fail
+          const errorMessage = dataError instanceof Error ? dataError.message : String(dataError);
+          // Only log if it's not a 409 conflict
+          if (!errorMessage.includes('409') && !errorMessage.includes('Conflict')) {
+            console.warn('[WaitingRoom] Game player data initialization error:', dataError);
+          }
         }
-
-        if (!isMounted) return;
 
         // Step 4: Fetch game data to check lock status
         const { data: game } = await gameApi.getGame(currentGameId);
-        if (game && !isMounted) return;
 
         if (game) {
           setIsRoomLocked(game.locked);
         }
 
-        setIsInitialized(true);
+        // Update all state together - use flushSync to force immediate re-render
+        isJoiningRef.current = false;
+        // Set all state in a single flushSync to ensure they update together
+        flushSync(() => {
+          setIsJoining(false);
+          setJoinError(null);
+          setPlayerId(player.id);
+          setIsInitialized(true);
+        });
+        // Mark as initialized AFTER state is set
+        hasInitializedRef.current = true;
         toast.success('ゲームに参加しました！');
       } catch (err) {
-        if (!isMounted) return;
+        if (!isMounted) {
+          setIsJoining(false);
+          isJoiningRef.current = false;
+          return;
+        }
         const errorMessage =
           err instanceof Error ? err.message : 'ゲームへの参加中にエラーが発生しました';
         setJoinError(errorMessage);
+        setIsJoining(false);
+        isJoiningRef.current = false;
         toast.error(errorMessage);
         console.error('Failed to join game:', err);
       } finally {
+        // Ensure isJoining is always reset, even if something unexpected happens
         if (isMounted) {
           setIsJoining(false);
+          isJoiningRef.current = false;
         }
       }
     };
@@ -266,7 +390,6 @@ function WaitingRoomContent() {
     deviceId,
     gameIdParam,
     isDeviceIdLoading,
-    isInitialized,
     getGameIdFromCode,
     checkExistingPlayer,
   ]);
@@ -280,7 +403,10 @@ function WaitingRoomContent() {
 
   // WebSocket room joining and event listeners
   useEffect(() => {
-    if (!socket || !isConnected || !gameId || !isInitialized || !playerId) return;
+    // Wait for socket to be connected AND registered before joining room
+    if (!socket || !isConnected || !isRegistered || !gameId || !isInitialized || !playerId) {
+      return;
+    }
 
     let reconnectAttempted = false;
 
@@ -288,10 +414,8 @@ function WaitingRoomContent() {
     // Backend will create room_participants and websocket_connections records
     const joinRoomSafe = () => {
       if (hasJoinedRoomRef.current) {
-        console.log('[WaitingRoom] Already joined room, skipping duplicate join');
         return;
       }
-      console.log('[WaitingRoom] Joining room:', gameId);
       joinRoom(gameId);
       hasJoinedRoomRef.current = true;
     };
@@ -350,7 +474,8 @@ function WaitingRoomContent() {
       if (reconnectAttempted) return;
       reconnectAttempted = true;
 
-      console.log('[WaitingRoom] WebSocket reconnected, verifying player status...');
+      // Wait a bit for socket to be registered
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Check if player still exists
       const existingPlayer = await checkExistingPlayer();
@@ -361,7 +486,7 @@ function WaitingRoomContent() {
         if (typeof window !== 'undefined' && gameId) {
           sessionStorage.setItem(`player_${gameId}_${deviceId || 'unknown'}`, existingPlayer.id);
         }
-        if (gameId) {
+        if (gameId && isRegistered) {
           joinRoom(gameId);
         }
         // Re-sync current phase in case we missed events while disconnected
@@ -369,20 +494,17 @@ function WaitingRoomContent() {
         toast.success('再接続しました');
       } else {
         // Player doesn't exist, need to rejoin game
-        console.warn('[WaitingRoom] Player not found after reconnection, may need to rejoin');
         toast.error('接続が切断されました。ページを再読み込みしてください。');
       }
     };
 
     // Listen for player join/leave events (for future use - showing player count)
-    const handlePlayerJoined = (data: { gameId?: string; roomId?: string; playerId: string }) => {
+    const handlePlayerJoined = () => {
       // Could update player list here if needed
-      console.log('Player joined:', data);
     };
 
-    const handlePlayerLeft = (data: { gameId?: string; roomId?: string; playerId: string }) => {
+    const handlePlayerLeft = () => {
       // Could update player list here if needed
-      console.log('Player left:', data);
     };
 
     // Handle player kicked event - redirect to join page
@@ -395,8 +517,6 @@ function WaitingRoomContent() {
     }) => {
       // Check if the kicked player is the current player
       if (data.player_id === playerId || data.game_id === gameId) {
-        console.log('Player was kicked:', data);
-
         // Show notification
         toast.error('ホストによってBANされました', {
           icon: '🚫',
@@ -439,7 +559,6 @@ function WaitingRoomContent() {
 
       // Leave room on unmount unless we are navigating to the game
       if (gameId && hasJoinedRoomRef.current && !isNavigatingRef.current) {
-        console.log('[WaitingRoom] Leaving room on unmount');
         leaveRoom(gameId);
         hasJoinedRoomRef.current = false;
       }
@@ -449,6 +568,7 @@ function WaitingRoomContent() {
     // Keep deps minimal to avoid repeated join/leave churn during navigation
     socket?.id,
     isConnected,
+    isRegistered, // Important: wait for registration, not just connection
     gameId,
     isInitialized,
     playerId,
@@ -604,7 +724,7 @@ function WaitingRoomContent() {
           )}
 
           {/* Waiting Message */}
-          {!isJoining && !joinError && isInitialized && (
+          {shouldShowWaitingMessage && (
             <div className="text-center max-w-md">
               <div className="relative inline-block">
                 {/* Background glow */}
