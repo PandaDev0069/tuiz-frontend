@@ -53,7 +53,6 @@ function HostScreenContent() {
   const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
   const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
   const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
-  const [currentTime, setCurrentTime] = useState(Date.now());
   const hasJoinedRoomRef = useRef(false);
 
   useEffect(() => {
@@ -162,15 +161,15 @@ function HostScreenContent() {
 
         // Transform API response to Question format
         const answeringTime = data.question.answering_time || 30;
-        const timeLimit = data.question.time_limit || 40;
-        const showQuestionTime = Math.max(0, timeLimit - answeringTime);
+        const showQuestionTime = data.question.show_question_time || 10;
+        const timeLimit = showQuestionTime + answeringTime;
 
         const question: Question = {
           id: data.question.id,
           text: data.question.text,
           image: data.question.image_url || undefined,
           timeLimit: timeLimit,
-          show_question_time: data.question.show_question_time || 10,
+          show_question_time: showQuestionTime,
           answering_time: answeringTime,
           choices: data.answers
             .sort((a, b) => a.order_index - b.order_index)
@@ -344,14 +343,6 @@ function HostScreenContent() {
     setAnswerRemainingMs(null);
   }, [gameFlow?.current_question_id]);
 
-  // Update current time every second to force timer re-renders
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   // Sync phase with game flow state - but don't interrupt countdown
   useEffect(() => {
     if (!gameFlow) return;
@@ -416,13 +407,15 @@ function HostScreenContent() {
     const questionIndex = gameFlow?.current_question_index ?? 0;
     const questionData = questions[questionIndex];
     if (questionData) {
+      const showTimeSeconds = questionData.show_question_time || 10;
+      const answeringTimeSeconds = questionData.answering_time || 30;
       return {
         id: questionData.id,
         text: questionData.question_text,
         image: questionData.image_url || undefined,
-        timeLimit: Math.max(5, questionData.show_question_time || 10),
-        show_question_time: questionData.show_question_time || 10,
-        answering_time: questionData.answering_time || 30,
+        timeLimit: showTimeSeconds + answeringTimeSeconds,
+        show_question_time: showTimeSeconds,
+        answering_time: answeringTimeSeconds,
         choices: questionData.answers
           .sort((a, b) => a.order_index - b.order_index)
           .map((a, i) => ({
@@ -450,19 +443,51 @@ function HostScreenContent() {
   // Calculate display remaining time (exactly like player screen)
   const derivedRemainingMsFromFlow =
     gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
-      ? Math.max(0, new Date(gameFlow.current_question_end_time).getTime() - currentTime)
+      ? Math.max(0, new Date(gameFlow.current_question_end_time).getTime() - Date.now())
       : null;
 
+  // Validate and sanitize time values to prevent NaN (exactly like player screen)
+  const showQuestionTime = Number.isFinite(currentQuestion.show_question_time)
+    ? currentQuestion.show_question_time
+    : (questionTimings.showQuestionTime ?? 10); // Default fallback
+  const answeringTime = Number.isFinite(currentQuestion.answering_time)
+    ? currentQuestion.answering_time
+    : (questionTimings.answeringTime ?? 30); // Default fallback
+
+  const totalDurationMs = (showQuestionTime + answeringTime) * 1000;
+
+  const totalRemainingMs =
+    timerState?.remainingMs ??
+    derivedRemainingMsFromFlow ??
+    (currentPhase === 'question' ? totalDurationMs : answeringTime * 1000);
+
+  const viewingDurationMs = showQuestionTime * 1000;
+  const elapsedMs = Math.max(
+    0,
+    totalDurationMs - (Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0),
+  );
+
+  const viewingRemainingMs = Math.max(0, viewingDurationMs - elapsedMs);
+  const answeringRemainingMsDerived = Math.max(
+    0,
+    Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0,
+  );
+
   const displayRemainingMs =
-    timerState?.remainingMs ?? derivedRemainingMsFromFlow ?? currentQuestion.timeLimit * 1000;
+    currentPhase === 'question' ? viewingRemainingMs : answeringRemainingMsDerived;
 
   const startAnsweringPhase = useCallback(() => {
+    if (isDisplayPhaseDone) return;
     console.log('Public Screen: Display phase complete, moving to answering');
+    // Use validated answering time to prevent NaN
+    const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
+      ? currentQuestion.answering_time
+      : (questionTimings.answeringTime ?? 30); // Default fallback
+    const durationMs = safeAnsweringTime * 1000;
+    setIsDisplayPhaseDone(true);
+    setAnswerRemainingMs(durationMs);
     setCurrentPhase('answering');
-    const answeringDurationMs =
-      (questionTimings.answeringTime ?? currentQuestion.timeLimit ?? 30) * 1000;
-    setAnswerRemainingMs(answeringDurationMs);
-  }, [questionTimings.answeringTime, currentQuestion.timeLimit]);
+  }, [currentQuestion.answering_time, questionTimings.answeringTime, isDisplayPhaseDone]);
 
   // Move to answering once the question display timer expires (player-style)
   useEffect(() => {
@@ -474,23 +499,39 @@ function HostScreenContent() {
 
   // Client-side answering countdown (separate from display timer) - exactly like player screen
   useEffect(() => {
-    if (currentPhase !== 'answering' || answerRemainingMs === null || answerRemainingMs <= 0)
-      return;
+    if (currentPhase !== 'answering') return;
+    if (answerRemainingMs === null || answerRemainingMs <= 0) return;
+
+    // Set up interval to decrement timer every second
     const interval = setInterval(() => {
-      setAnswerRemainingMs((prev) => (prev !== null && prev > 1000 ? prev - 1000 : 0));
+      setAnswerRemainingMs((prev) => {
+        if (prev === null) return null;
+        const newRemaining = Math.max(0, prev - 1000);
+        return newRemaining;
+      });
     }, 1000);
+
     return () => clearInterval(interval);
   }, [currentPhase, answerRemainingMs]);
 
   // Calculate answering remaining time (exactly like player screen)
   const answeringRemainingMs =
-    answerRemainingMs ?? (questionTimings.answeringTime ?? currentQuestion.timeLimit ?? 30) * 1000;
+    answerRemainingMs !== null && Number.isFinite(answerRemainingMs)
+      ? answerRemainingMs
+      : (Number.isFinite(answeringTime) ? answeringTime : 30) * 1000;
 
   // Current time in seconds (exactly like player screen)
-  const currentTimeSeconds = Math.max(
-    0,
-    Math.round((currentPhase === 'question' ? displayRemainingMs : answeringRemainingMs) / 1000),
-  );
+  const currentTimeSeconds = useMemo(() => {
+    if (currentPhase === 'question') {
+      const time = Number.isFinite(displayRemainingMs) ? displayRemainingMs : 0;
+      return Math.max(0, Math.round(time / 1000));
+    } else if (currentPhase === 'answering') {
+      // Use answerRemainingMs for answering phase timer
+      const time = Number.isFinite(answeringRemainingMs) ? answeringRemainingMs : 0;
+      return Math.max(0, Math.round(time / 1000));
+    }
+    return 0;
+  }, [currentPhase, displayRemainingMs, answeringRemainingMs]);
 
   const questionIndex = gameFlow?.current_question_index ?? 0;
 
@@ -536,7 +577,10 @@ function HostScreenContent() {
     case 'question':
       return (
         <HostQuestionScreen
-          question={currentQuestion}
+          question={{
+            ...currentQuestion,
+            timeLimit: currentQuestion.show_question_time,
+          }}
           currentTime={currentTimeSeconds}
           questionNumber={questionIndex + 1}
           totalQuestions={questions.length}
@@ -549,7 +593,7 @@ function HostScreenContent() {
         <HostAnswerScreen
           question={{
             ...currentQuestion,
-            timeLimit: Math.max(1, questionTimings.answeringTime),
+            timeLimit: currentQuestion.answering_time,
           }}
           currentTime={currentTimeSeconds}
           questionNumber={questionIndex + 1}
