@@ -130,6 +130,7 @@ function PlayerGameContent() {
   const [answerDurationMs, setAnswerDurationMs] = useState<number | null>(null);
   const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
   const answeringPhaseStartTimeRef = useRef<number | null>(null);
+  const [questionRemainingMs, setQuestionRemainingMs] = useState<number | null>(null);
 
   // Get current question data for point calculation
   // Prefer API data (has authoritative points and time_limit), fallback to local quiz data
@@ -703,27 +704,60 @@ function PlayerGameContent() {
     ? currentQuestion.answering_time
     : 30; // Default fallback
 
-  const totalDurationMs = (showQuestionTime + answeringTime) * 1000;
+  const viewingDurationMs = showQuestionTime * 1000;
+
+  // Calculate elapsed time for question phase based on actual start time
+  // Use timerState if available (more accurate), otherwise calculate from gameFlow
+  let questionElapsedMs = 0;
+  if (timerState?.startTime && currentPhase === 'question') {
+    // Use timerState for accurate elapsed time
+    questionElapsedMs = Math.max(0, Date.now() - timerState.startTime.getTime());
+  } else if (gameFlow?.current_question_start_time) {
+    // Fallback to gameFlow start time
+    questionElapsedMs = Math.max(
+      0,
+      Date.now() - new Date(gameFlow.current_question_start_time).getTime(),
+    );
+  }
+
+  // For question phase: calculate remaining time based only on show_question_time
+  // For answering phase: use total remaining time
+  const viewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+
+  // Initialize questionRemainingMs when question phase starts (only once per phase)
+  useEffect(() => {
+    if (currentPhase === 'question' && questionRemainingMs === null) {
+      // Initialize with the calculated remaining time when entering question phase
+      // Use viewingRemainingMs if available, otherwise use viewingDurationMs (full time)
+      const initialTime = viewingRemainingMs > 0 ? viewingRemainingMs : viewingDurationMs;
+      if (initialTime > 0) {
+        setQuestionRemainingMs(initialTime);
+      }
+    } else if (currentPhase !== 'question') {
+      // Reset when leaving question phase
+      setQuestionRemainingMs(null);
+    }
+    // Only depend on currentPhase to avoid constant resets
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPhase]);
 
   const totalRemainingMs =
     timerState?.remainingMs ??
     derivedRemainingMsFromFlow ??
-    (currentPhase === 'question' ? totalDurationMs : answeringTime * 1000);
+    (currentPhase === 'question' ? viewingRemainingMs : answeringTime * 1000);
 
-  const viewingDurationMs = showQuestionTime * 1000;
-  const elapsedMs = Math.max(
-    0,
-    totalDurationMs - (Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0),
-  );
-
-  const viewingRemainingMs = Math.max(0, viewingDurationMs - elapsedMs);
   const answeringRemainingMsDerived = Math.max(
     0,
     Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0,
   );
 
+  // Use questionRemainingMs state for question phase (for smooth countdown), otherwise use calculated value
   const displayRemainingMs =
-    currentPhase === 'question' ? viewingRemainingMs : answeringRemainingMsDerived;
+    currentPhase === 'question'
+      ? questionRemainingMs !== null
+        ? questionRemainingMs
+        : viewingRemainingMs
+      : answeringRemainingMsDerived;
 
   const startAnsweringPhase = useCallback(() => {
     if (isDisplayPhaseDone) return;
@@ -749,6 +783,35 @@ function PlayerGameContent() {
       startAnsweringPhase();
     }
   }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
+
+  // Client-side question phase countdown timer (decrements every second)
+  useEffect(() => {
+    if (currentPhase !== 'question') return;
+    if (questionRemainingMs === null || questionRemainingMs <= 0) return;
+
+    // Set up interval to decrement timer every second
+    const interval = setInterval(() => {
+      setQuestionRemainingMs((prev) => {
+        if (prev === null || prev <= 0) return 0;
+        const newRemaining = Math.max(0, prev - 1000);
+        return newRemaining;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentPhase, questionRemainingMs]);
+
+  // Sync questionRemainingMs with viewingRemainingMs when it changes significantly
+  // (e.g., when gameFlow updates from server, but only if difference is large to avoid jitter)
+  useEffect(() => {
+    if (currentPhase === 'question' && questionRemainingMs !== null && viewingRemainingMs > 0) {
+      const difference = Math.abs(questionRemainingMs - viewingRemainingMs);
+      // Only sync if difference is more than 2 seconds (to avoid constant micro-adjustments)
+      if (difference > 2000) {
+        setQuestionRemainingMs(viewingRemainingMs);
+      }
+    }
+  }, [currentPhase, viewingRemainingMs, questionRemainingMs]);
 
   // Client-side answering countdown timer (decrements every second)
   // Continue counting even after answer is submitted so player knows when phase ends
@@ -1043,9 +1106,9 @@ function PlayerGameContent() {
           <PlayerQuestionScreen
             question={{
               ...currentQuestion,
-              timeLimit: currentQuestion.show_question_time,
+              timeLimit: currentQuestion.show_question_time || 10, // Ensure we have a valid timeLimit
             }}
-            currentTime={currentTimeSeconds}
+            currentTime={Math.max(0, currentTimeSeconds)} // Ensure non-negative
             questionNumber={
               gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
                 ? gameFlow.current_question_index + 1
