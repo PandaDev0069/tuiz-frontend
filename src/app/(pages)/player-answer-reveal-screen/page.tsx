@@ -1,7 +1,7 @@
 'use client';
 
 import React, { Suspense, useState, useEffect, useMemo, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { PlayerAnswerRevealScreen } from '@/components/game';
 import { Question, AnswerResult } from '@/types/game';
 import { useGameFlow } from '@/hooks/useGameFlow';
@@ -13,6 +13,7 @@ import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
 
 function PlayerAnswerRevealScreenContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const gameIdParam = searchParams.get('gameId') || '';
   const roomCode = searchParams.get('code') || '';
@@ -275,6 +276,10 @@ function PlayerAnswerRevealScreenContent() {
       timeLimit={5}
       questionNumber={questionIndex + 1}
       totalQuestions={totalQuestionsState || totalQuestions}
+      onTimeExpired={() => {
+        // Navigate to leaderboard with gameId and playerId
+        router.push(`/player-leaderboard-screen?gameId=${gameId}&playerId=${playerId}`);
+      }}
     />
   );
 }

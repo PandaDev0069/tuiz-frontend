@@ -189,11 +189,66 @@ function PlayerGameContent() {
     },
   });
 
-  const { leaderboard } = useGameLeaderboard({
+  const {
+    leaderboard,
+    loading: leaderboardLoading,
+    refreshLeaderboard,
+  } = useGameLeaderboard({
     gameId,
     playerId,
     autoRefresh: true,
   });
+
+  // Debug: Log leaderboard data
+  useEffect(() => {
+    if (currentPhase === 'leaderboard') {
+      console.log('Leaderboard data:', {
+        leaderboard,
+        length: Array.isArray(leaderboard) ? leaderboard.length : 0,
+        loading: leaderboardLoading,
+        gameId,
+      });
+    }
+  }, [leaderboard, leaderboardLoading, currentPhase, gameId]);
+
+  // Refresh leaderboard when entering leaderboard phase
+  useEffect(() => {
+    if (currentPhase === 'leaderboard' && gameId && refreshLeaderboard) {
+      console.log('[Leaderboard] Refreshing leaderboard on phase entry');
+      refreshLeaderboard();
+    }
+  }, [currentPhase, gameId, refreshLeaderboard]);
+
+  // Redirect from leaderboard if it's the last question
+  useEffect(() => {
+    if (currentPhase === 'leaderboard' && gameFlow) {
+      const currentQuestionNum =
+        gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+          ? gameFlow.current_question_index + 1
+          : questionIndexParam + 1;
+      const totalQuestionsCount =
+        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
+
+      if (isLastQuestion) {
+        console.log(
+          'Player: Last question detected in leaderboard phase, redirecting to explanation',
+        );
+        setCurrentPhase('explanation');
+        router.replace(`/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`);
+      }
+    }
+  }, [
+    currentPhase,
+    gameFlow,
+    questionIndexParam,
+    currentQuestionData?.totalQuestions,
+    questions.length,
+    totalQuestions,
+    gameId,
+    playerId,
+    router,
+  ]);
 
   const { socket, joinRoom, leaveRoom } = useSocket();
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
@@ -1161,34 +1216,87 @@ function PlayerGameContent() {
             currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
           }
           timeLimit={5}
+          onTimeExpired={() => {
+            // Check if this is the last question
+            const currentQuestionNum =
+              gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+                ? gameFlow.current_question_index + 1
+                : questionIndexParam + 1;
+            const totalQuestionsCount =
+              currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+            const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
+
+            if (isLastQuestion) {
+              console.log('Player: Last question - skipping leaderboard, moving to explanation');
+              setCurrentPhase('explanation');
+              router.replace(
+                `/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`,
+              );
+            } else {
+              console.log('Player: Answer reveal time expired, moving to leaderboard');
+              setCurrentPhase('leaderboard');
+              router.replace(
+                `/game-player?gameId=${gameId}&phase=leaderboard&playerId=${playerId}`,
+              );
+            }
+          }}
         />
       );
-    case 'leaderboard':
+    case 'leaderboard': {
+      // Check if this is the last question - if so, show loading while redirecting
+      const currentQuestionNum =
+        gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+          ? gameFlow.current_question_index + 1
+          : questionIndexParam + 1;
+      const totalQuestionsCount =
+        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
+
+      // Show loading if redirecting (useEffect will handle the redirect)
+      if (isLastQuestion) {
+        return (
+          <div className="flex items-center justify-center h-screen">
+            <div className="text-center">
+              <div className="p-6 text-white text-xl">リダイレクト中...</div>
+            </div>
+          </div>
+        );
+      }
+
+      // Transform leaderboard data
+      const leaderboardEntries = Array.isArray(leaderboard)
+        ? leaderboard.map((entry) => ({
+            playerId: entry.player_id,
+            playerName: entry.player_name,
+            score: entry.score,
+            rank: entry.rank,
+            previousRank: entry.previous_rank ?? entry.rank,
+            rankChange: (entry.rank_change || 'same') as 'up' | 'down' | 'same',
+            scoreChange: entry.score_change ?? 0,
+          }))
+        : [];
+
+      // Debug log
+      console.log('[Leaderboard Phase]', {
+        rawLeaderboard: leaderboard,
+        transformedEntries: leaderboardEntries,
+        loading: leaderboardLoading,
+        gameId,
+      });
+
       return (
         <PlayerLeaderboardScreen
           leaderboardData={{
-            entries: Array.isArray(leaderboard)
-              ? leaderboard.map((entry) => ({
-                  playerId: entry.player_id,
-                  playerName: entry.player_name,
-                  score: entry.score,
-                  rank: entry.rank,
-                  previousRank: entry.rank,
-                  rankChange: 'same' as const,
-                }))
-              : [],
-            questionNumber:
-              gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-                ? gameFlow.current_question_index + 1
-                : questionIndexParam + 1,
-            totalQuestions:
-              currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions),
+            entries: leaderboardEntries,
+            questionNumber: currentQuestionNum,
+            totalQuestions: totalQuestionsCount,
             timeRemaining: Math.max(0, Math.round((timerState?.remainingMs || 5000) / 1000)),
             timeLimit: 5,
           }}
           onTimeExpired={() => {}}
         />
       );
+    }
     case 'explanation':
       return (
         <PlayerExplanationScreen

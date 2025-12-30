@@ -76,6 +76,7 @@ export interface LeaderboardEntry {
   rank: number;
   previousRank?: number;
   rankChange: RankChange;
+  scoreChange?: number; // Points added in last question
 }
 
 export interface LeaderboardData {

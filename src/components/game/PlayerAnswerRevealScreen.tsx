@@ -188,6 +188,7 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
   // Animation state
   const [isAnimationStarted, setIsAnimationStarted] = useState(false);
   const [currentTime, setCurrentTime] = useState(timeLimit);
+  const [isTimeExpired, setIsTimeExpired] = useState(false);
   const timeoutTriggered = useRef(false);
   const questionIdRef = useRef(question.id);
 
@@ -198,6 +199,7 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
       setIsAnimationStarted(false);
       timeoutTriggered.current = false;
       setCurrentTime(timeLimit);
+      setIsTimeExpired(false);
     }
   }, [question.id, timeLimit]);
 
@@ -210,6 +212,14 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
     return () => clearTimeout(timer);
   }, [question.id]); // Only restart animation when question changes
 
+  // Reset timer when timeLimit changes
+  useEffect(() => {
+    setCurrentTime(timeLimit);
+    setIsTimeExpired(false);
+    timeoutTriggered.current = false;
+  }, [timeLimit]);
+
+  // Internal timer countdown
   useEffect(() => {
     if (!timeLimit || timeLimit <= 0) {
       return;
@@ -220,11 +230,7 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
         if (prev <= 1) {
           if (!timeoutTriggered.current) {
             timeoutTriggered.current = true;
-            if (onTimeExpired) {
-              onTimeExpired();
-            } else {
-              router.push('/player-leaderboard-screen');
-            }
+            setIsTimeExpired(true);
           }
           return 0;
         }
@@ -233,7 +239,24 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [onTimeExpired, router, timeLimit]);
+  }, [timeLimit]);
+
+  // Handle timeout navigation in separate effect
+  useEffect(() => {
+    if (isTimeExpired) {
+      // Use setTimeout to ensure navigation happens after current render cycle
+      const timeoutId = setTimeout(() => {
+        if (onTimeExpired) {
+          onTimeExpired();
+        } else {
+          // Default navigation to leaderboard screen
+          router.push('/player-leaderboard-screen');
+        }
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isTimeExpired, onTimeExpired, router]);
 
   // Get color classes for each choice - matching HostAnswerScreen exactly
   const getChoiceColors = () => {

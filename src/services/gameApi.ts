@@ -83,6 +83,9 @@ export interface LeaderboardEntry {
   device_id?: string;
   score: number;
   rank: number;
+  previous_rank?: number; // Rank before last update
+  rank_change?: 'up' | 'down' | 'same'; // Rank change direction
+  score_change?: number; // Points added in last question
   total_answers: number;
   correct_answers: number;
   accuracy: number;
