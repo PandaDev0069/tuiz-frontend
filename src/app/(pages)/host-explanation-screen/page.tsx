@@ -95,18 +95,65 @@ function HostExplanationScreenContent() {
   const totalQuestions = questions.length || 10;
   const questionNumber = currentQuestionIndex + 1;
 
+  // Fetch explanation data from API
+  const [explanationData, setExplanationData] = useState<{
+    title: string | null;
+    text: string | null;
+    image_url: string | null;
+    show_time: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (gameId && gameFlow?.current_question_id) {
+      const fetchExplanation = async () => {
+        try {
+          const questionId = gameFlow.current_question_id;
+          if (!questionId) return;
+
+          const { data, error } = await gameApi.getExplanation(gameId, questionId);
+          if (error) {
+            console.error('Failed to fetch explanation:', error);
+            // Fallback to question data
+            setExplanationData({
+              title: currentQuestion?.explanation_title || null,
+              text: currentQuestion?.explanation_text || null,
+              image_url: currentQuestion?.explanation_image_url || null,
+              show_time: currentQuestion?.show_explanation_time || 10,
+            });
+          } else if (data) {
+            setExplanationData({
+              title: data.explanation_title,
+              text: data.explanation_text,
+              image_url: data.explanation_image_url,
+              show_time: data.show_explanation_time || 10,
+            });
+          }
+        } catch (err) {
+          console.error('Error fetching explanation:', err);
+          // Fallback to question data
+          setExplanationData({
+            title: currentQuestion?.explanation_title || null,
+            text: currentQuestion?.explanation_text || null,
+            image_url: currentQuestion?.explanation_image_url || null,
+            show_time: currentQuestion?.show_explanation_time || 10,
+          });
+        }
+      };
+      fetchExplanation();
+    }
+  }, [gameId, gameFlow?.current_question_id, currentQuestion]);
+
   const explanation: ExplanationData = useMemo(
     () => ({
       questionNumber,
       totalQuestions,
-      timeLimit: 10,
-      title: '解説',
-      body: currentQuestion?.explanation_text || '解説は近日追加されます。',
-      image:
-        currentQuestion?.explanation_image_url ||
-        (currentQuestion?.image_url ? currentQuestion.image_url : undefined),
+      timeLimit: explanationData?.show_time || currentQuestion?.show_explanation_time || 10,
+      title: explanationData?.title || '解説',
+      body:
+        explanationData?.text || currentQuestion?.explanation_text || '解説は近日追加されます。',
+      image: explanationData?.image_url || currentQuestion?.explanation_image_url || undefined,
     }),
-    [questionNumber, totalQuestions, currentQuestion],
+    [questionNumber, totalQuestions, explanationData, currentQuestion],
   );
 
   const handleTimeExpired = () => {
