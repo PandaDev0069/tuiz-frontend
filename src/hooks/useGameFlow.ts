@@ -71,7 +71,12 @@ export interface UseGameFlowReturn {
   // Host Actions (only available if isHost=true)
   startQuestion: (questionId: string, questionIndex?: number) => Promise<GameFlow | void>;
   revealAnswer: () => Promise<void>;
-  nextQuestion: () => Promise<void>;
+  nextQuestion: () => Promise<{
+    message: string;
+    gameFlow: GameFlow;
+    nextQuestion?: { id: string; index: number };
+    isComplete: boolean;
+  }>;
   pauseGame: () => Promise<void>;
   resumeGame: () => Promise<void>;
   endGame: () => Promise<void>;
