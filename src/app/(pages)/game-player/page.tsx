@@ -65,7 +65,15 @@ function PlayerGameContent() {
     }
   }, [phaseParam, gameId, countdownStartedAt]);
 
-  const { gameFlow, timerState, isConnected } = useGameFlow({
+  // State for explanation data
+  const [explanationData, setExplanationData] = useState<{
+    title: string | null;
+    text: string | null;
+    image_url: string | null;
+    show_time: number;
+  } | null>(null);
+
+  const { gameFlow, timerState, isConnected, refreshFlow } = useGameFlow({
     gameId,
     autoSync: true,
     triggerOnQuestionEndOnTimer: false,
@@ -92,6 +100,33 @@ function PlayerGameContent() {
         setCurrentPhase('answer_reveal');
         router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
       },
+      onExplanationShow: (questionId, explanation) => {
+        console.log('Player: Explanation shown', questionId, explanation);
+        // Only transition to explanation if there's actual content
+        const hasContent =
+          (explanation.text && explanation.text.trim() !== '') ||
+          (explanation.title && explanation.title.trim() !== '');
+
+        if (hasContent) {
+          setExplanationData({
+            title: explanation.title,
+            text: explanation.text,
+            image_url: explanation.image_url,
+            show_time: explanation.show_time || 10,
+          });
+          setCurrentPhase('explanation');
+          router.replace(`/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`);
+        } else {
+          // No explanation content, skip explanation phase
+          console.log('Player: Explanation event received but no content, skipping explanation');
+          // Wait for host to advance to next question or podium
+        }
+      },
+      onExplanationHide: (questionId) => {
+        console.log('Player: Explanation hidden', questionId);
+        // Explanation phase ended, move to next phase
+        // This will be handled by the explanation screen's onTimeExpired
+      },
       onGameEnd: () => {
         console.log('Player: Game ended, moving to podium');
         setCurrentPhase('podium');
@@ -101,12 +136,13 @@ function PlayerGameContent() {
     },
   });
 
-  // Reset display/answer timers whenever a new question becomes current
+  // Reset display/answer timers and explanation data whenever a new question becomes current
   useEffect(() => {
     if (!gameFlow?.current_question_id) return;
     setIsDisplayPhaseDone(false);
     setAnswerDurationMs(null);
     setAnswerRemainingMs(null);
+    setExplanationData(null); // Reset explanation data for new question
   }, [gameFlow?.current_question_id]);
 
   // Note: correctAnswerId will be passed after currentQuestion is computed below
@@ -219,7 +255,7 @@ function PlayerGameContent() {
     }
   }, [currentPhase, gameId, refreshLeaderboard]);
 
-  // Redirect from leaderboard if it's the last question
+  // Redirect from leaderboard if it's the last question (go directly to podium)
   useEffect(() => {
     if (currentPhase === 'leaderboard' && gameFlow) {
       const currentQuestionNum =
@@ -231,11 +267,9 @@ function PlayerGameContent() {
       const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
 
       if (isLastQuestion) {
-        console.log(
-          'Player: Last question detected in leaderboard phase, redirecting to explanation',
-        );
-        setCurrentPhase('explanation');
-        router.replace(`/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`);
+        console.log('Player: Last question detected in leaderboard phase, redirecting to podium');
+        setCurrentPhase('podium');
+        router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
       }
     }
   }, [
@@ -249,6 +283,52 @@ function PlayerGameContent() {
     playerId,
     router,
   ]);
+
+  // Fetch explanation data when entering explanation phase (fallback if WebSocket event didn't provide data)
+  useEffect(() => {
+    if (
+      currentPhase === 'explanation' &&
+      gameId &&
+      gameFlow?.current_question_id &&
+      !explanationData
+    ) {
+      const fetchExplanation = async () => {
+        try {
+          const questionId = gameFlow.current_question_id;
+          if (!questionId) return;
+
+          const { data, error } = await gameApi.getExplanation(gameId, questionId);
+          if (error) {
+            console.error('Failed to fetch explanation:', error);
+            // Set default explanation data if fetch fails
+            setExplanationData({
+              title: null,
+              text: null,
+              image_url: null,
+              show_time: 10,
+            });
+          } else if (data) {
+            setExplanationData({
+              title: data.explanation_title,
+              text: data.explanation_text,
+              image_url: data.explanation_image_url,
+              show_time: data.show_explanation_time || 10,
+            });
+          }
+        } catch (err) {
+          console.error('Error fetching explanation:', err);
+          // Set default explanation data on error
+          setExplanationData({
+            title: null,
+            text: null,
+            image_url: null,
+            show_time: 10,
+          });
+        }
+      };
+      fetchExplanation();
+    }
+  }, [currentPhase, gameId, gameFlow?.current_question_id, explanationData]);
 
   const { socket, joinRoom, leaveRoom } = useSocket();
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
@@ -514,6 +594,21 @@ function PlayerGameContent() {
         // Store countdown start timestamp for synchronization
         if (data.phase === 'countdown' && data.startedAt) {
           setCountdownStartedAt(data.startedAt);
+          // Refresh game flow to get updated current_question_id when transitioning to countdown
+          // This ensures we have the correct question data for the next question
+          refreshFlow().catch((err) => {
+            console.error('Failed to refresh game flow after countdown phase change:', err);
+          });
+        }
+        // If phase is 'waiting', redirect to join page to rejoin
+        if (data.phase === 'waiting') {
+          const roomCode = searchParams.get('code') || '';
+          if (roomCode) {
+            router.push(`/join?code=${roomCode}`);
+          } else if (gameId) {
+            router.push(`/join?gameId=${gameId}`);
+          }
+          return;
         }
         router.replace(`/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId}`);
       }
@@ -650,7 +745,7 @@ function PlayerGameContent() {
         hasJoinedRoomRef.current = false;
       }
     };
-  }, [gameId, playerId, router, deviceId, joinRoom, leaveRoom]);
+  }, [gameId, playerId, router, deviceId, joinRoom, leaveRoom, searchParams, refreshFlow]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -1297,22 +1392,43 @@ function PlayerGameContent() {
         />
       );
     }
-    case 'explanation':
+    case 'explanation': {
+      const currentQuestionNum =
+        gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+          ? gameFlow.current_question_index + 1
+          : questionIndexParam + 1;
+      const totalQuestionsCount =
+        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
+
+      const handleExplanationTimeExpired = () => {
+        if (isLastQuestion) {
+          // Last question - go to podium
+          console.log('Player: Explanation time expired, moving to podium');
+          setCurrentPhase('podium');
+          router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
+        } else {
+          // Not last question - wait for next question (will be triggered by host)
+          console.log('Player: Explanation time expired, waiting for next question');
+          // The host will trigger the next question, so we just wait
+        }
+      };
+
       return (
         <PlayerExplanationScreen
           explanation={{
-            questionNumber:
-              gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-                ? gameFlow.current_question_index + 1
-                : questionIndexParam + 1,
-            totalQuestions:
-              currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions),
-            timeLimit: 5,
-            title: '解説',
-            body: currentQuestion.explanation || '解説は近日追加されます。',
+            questionNumber: currentQuestionNum,
+            totalQuestions: totalQuestionsCount,
+            timeLimit: explanationData?.show_time || 10,
+            title: explanationData?.title || '解説',
+            body:
+              explanationData?.text || currentQuestion.explanation || '解説は近日追加されます。',
+            image: explanationData?.image_url || undefined,
           }}
+          onTimeExpired={handleExplanationTimeExpired}
         />
       );
+    }
     case 'podium':
       return (
         <PlayerPodiumScreen

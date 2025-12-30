@@ -3,7 +3,7 @@
 import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
-import { HostPodiumScreen, HostGameEndScreen } from '@/components/game';
+import { HostPodiumScreen, HostGameEndScreen, HostExplanationScreen } from '@/components/game';
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameLeaderboard } from '@/hooks/useGameLeaderboard';
 import { useSocket } from '@/components/providers/SocketProvider';
@@ -48,6 +48,7 @@ function HostGameContent() {
     timerState,
     startQuestion,
     revealAnswer,
+    nextQuestion: nextQuestionFlow,
     pauseGame,
     resumeGame,
     loading: flowLoading,
@@ -77,6 +78,12 @@ function HostGameContent() {
   const [players, setPlayers] = useState<PlayersResponse['players']>([]);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionWithAnswers | null>(null);
+  const [explanationData, setExplanationData] = useState<{
+    title: string | null;
+    text: string | null;
+    image_url: string | null;
+    show_time: number;
+  } | null>(null);
   const hasJoinedRoomRef = useRef(false);
   const socketIdRef = useRef<string | null>(null);
 
@@ -123,8 +130,43 @@ function HostGameContent() {
     if (questions.length > 0 && gameFlow && gameFlow.current_question_index !== null) {
       const idx = gameFlow.current_question_index;
       setCurrentQuestion(questions[idx] || null);
+      // Reset explanation data when question changes
+      setExplanationData(null);
     }
   }, [questions, gameFlow]);
+
+  // Fetch explanation data when entering explanation phase (fallback if API didn't provide it)
+  useEffect(() => {
+    if (
+      currentPhase === 'explanation' &&
+      gameId &&
+      gameFlow?.current_question_id &&
+      !explanationData
+    ) {
+      const fetchExplanation = async () => {
+        try {
+          const questionId = gameFlow.current_question_id;
+          if (!questionId) return;
+
+          const { data, error } = await gameApi.getExplanation(gameId, questionId);
+          if (error) {
+            console.error('Failed to fetch explanation:', error);
+            return;
+          } else if (data) {
+            setExplanationData({
+              title: data.explanation_title,
+              text: data.explanation_text,
+              image_url: data.explanation_image_url,
+              show_time: data.show_explanation_time || 10,
+            });
+          }
+        } catch (err) {
+          console.error('Error fetching explanation:', err);
+        }
+      };
+      fetchExplanation();
+    }
+  }, [currentPhase, gameId, gameFlow?.current_question_id, explanationData]);
 
   // Fetch players periodically
   useEffect(() => {
@@ -211,6 +253,25 @@ function HostGameContent() {
   const gameCode = searchParams.get('code') || '';
   const quizId = searchParams.get('quizId') || '';
 
+  // Function to reset game and return to waiting room (re-loop)
+  const handleReturnToWaitingRoom = useCallback(async () => {
+    if (!gameId) return;
+
+    try {
+      // Navigate to waiting room - the waiting room will handle resetting the game state
+      // when the host starts a new game from there
+      router.push(
+        `/host-waiting-room?gameId=${gameId}${gameCode ? `&code=${gameCode}` : ''}${quizId ? `&quizId=${quizId}` : ''}`,
+      );
+
+      // Emit phase change to notify players
+      emitPhaseChange('waiting');
+    } catch (err) {
+      console.error('Error returning to waiting room:', err);
+      toast.error('待機ルームへの戻りに失敗しました');
+    }
+  }, [gameId, router, gameCode, quizId, emitPhaseChange]);
+
   // Host control handlers
   const handleStartQuestion = useCallback(async () => {
     // Use gameFlow.current_question_id as fallback if currentQuestion not loaded yet
@@ -250,43 +311,92 @@ function HostGameContent() {
     }
   }, [gameId, revealAnswer, emitPhaseChange]);
 
+  // Check if current question has explanation
+  const hasExplanation = useCallback(() => {
+    if (!currentQuestion) return false;
+    return !!(
+      (currentQuestion.explanation_text && currentQuestion.explanation_text.trim() !== '') ||
+      (currentQuestion.explanation_title && currentQuestion.explanation_title.trim() !== '')
+    );
+  }, [currentQuestion]);
+
+  // Show explanation for current question
+  const handleShowExplanation = useCallback(async () => {
+    if (!gameId || !gameFlow?.current_question_id) return;
+
+    try {
+      // Call API to show explanation (emits WebSocket event)
+      const { data, error } = await gameApi.showExplanation(gameId);
+
+      if (error || !data) {
+        console.error('Failed to show explanation:', error);
+        toast.error('解説の表示に失敗しました');
+        return;
+      }
+
+      // Set explanation data
+      setExplanationData({
+        title: data.explanation.title,
+        text: data.explanation.text,
+        image_url: data.explanation.image_url,
+        show_time: data.explanation.show_time || 10,
+      });
+
+      // Transition to explanation phase
+      setCurrentPhase('explanation');
+      emitPhaseChange('explanation');
+      toast.success('解説を表示しました');
+    } catch (e) {
+      console.error('Error showing explanation:', e);
+      toast.error('解説の表示に失敗しました');
+    }
+  }, [gameId, gameFlow?.current_question_id, emitPhaseChange]);
+
   const handleNextPhase = useCallback(async () => {
     const isLastQuestion = currentQuestionIndex >= totalQuestions - 1;
 
     if (currentPhase === 'answer_reveal') {
-      // Skip leaderboard on last question, go to explanation or podium
+      // Check if question has explanation
+      if (hasExplanation()) {
+        // Show explanation before leaderboard
+        await handleShowExplanation();
+      } else if (isLastQuestion) {
+        // No explanation and last question: go directly to podium
+        setCurrentPhase('podium');
+        emitPhaseChange('podium');
+      } else {
+        // No explanation: go to leaderboard
+        setCurrentPhase('leaderboard');
+        emitPhaseChange('leaderboard');
+      }
+    } else if (currentPhase === 'explanation') {
+      // After explanation, go to leaderboard (or podium if last question)
       if (isLastQuestion) {
-        if (currentQuestion?.explanation_text) {
-          setCurrentPhase('explanation');
-          emitPhaseChange('explanation');
-        } else {
-          setCurrentPhase('podium');
-          emitPhaseChange('podium');
-        }
+        setCurrentPhase('podium');
+        emitPhaseChange('podium');
       } else {
         setCurrentPhase('leaderboard');
         emitPhaseChange('leaderboard');
       }
     } else if (currentPhase === 'leaderboard') {
-      if (currentQuestion?.explanation_text) {
-        setCurrentPhase('explanation');
-        emitPhaseChange('explanation');
+      // Move to next question or podium based on whether it's the last question
+      if (isLastQuestion) {
+        // Last question: go to podium
+        setCurrentPhase('podium');
+        emitPhaseChange('podium');
       } else {
-        // Move to next question
+        // Not last question: proceed to next question
         const nextIdx = currentQuestionIndex + 1;
         if (nextIdx < totalQuestions) {
           try {
-            const { data, error } = await gameApi.nextQuestion(gameId);
-            if (error || !data) {
-              console.error('Failed to advance to next question:', error);
-              toast.error('次の問題への移動に失敗しました');
-              // Don't change phase on error - stay in current phase
-              return;
-            }
+            // Use the hook's nextQuestion function which properly updates game flow
+            const data = await nextQuestionFlow();
             if (data.isComplete) {
               setCurrentPhase('podium');
               emitPhaseChange('podium');
             } else {
+              // Game flow has been updated, transition to countdown
+              // The phase change event is already emitted by the backend
               setCurrentPhase('countdown');
               emitPhaseChange('countdown');
             }
@@ -301,43 +411,15 @@ function HostGameContent() {
           emitPhaseChange('podium');
         }
       }
-    } else if (currentPhase === 'explanation') {
-      // Move to next question or end game
-      const nextIdx = currentQuestionIndex + 1;
-      if (nextIdx < totalQuestions) {
-        try {
-          const { data, error } = await gameApi.nextQuestion(gameId);
-          if (error || !data) {
-            console.error('Failed to advance to next question:', error);
-            toast.error('次の問題への移動に失敗しました');
-            // Don't change phase on error - stay in current phase
-            return;
-          }
-          if (data.isComplete) {
-            setCurrentPhase('podium');
-            emitPhaseChange('podium');
-          } else {
-            setCurrentPhase('countdown');
-            emitPhaseChange('countdown');
-          }
-        } catch (e) {
-          console.error('Error advancing to next question:', e);
-          toast.error('次の問題への移動に失敗しました');
-          // Don't change phase on error - stay in current phase
-          return;
-        }
-      } else {
-        setCurrentPhase('podium');
-        emitPhaseChange('podium');
-      }
     }
   }, [
     currentPhase,
     currentQuestionIndex,
     totalQuestions,
-    currentQuestion?.explanation_text,
-    gameId,
     emitPhaseChange,
+    hasExplanation,
+    handleShowExplanation,
+    nextQuestionFlow,
   ]);
 
   const handleTogglePublicScreen = () => {
@@ -376,6 +458,45 @@ function HostGameContent() {
       return () => clearTimeout(timer);
     }
   }, [currentPhase, gameFlow?.current_question_id, handleStartQuestion, flowLoading]);
+
+  // Show explanation screen if in explanation phase
+  if (currentPhase === 'explanation' && explanationData) {
+    const currentQuestionNum = currentQuestionIndex + 1;
+    return (
+      <HostExplanationScreen
+        explanation={{
+          questionNumber: currentQuestionNum,
+          totalQuestions,
+          timeLimit: explanationData.show_time,
+          title: explanationData.title || '解説',
+          body: explanationData.text || '解説は近日追加されます。',
+          image: explanationData.image_url || undefined,
+        }}
+        onTimeExpired={() => {
+          // After explanation time expires, move to leaderboard (or podium if last question)
+          const isLastQuestion = currentQuestionIndex >= totalQuestions - 1;
+          if (isLastQuestion) {
+            setCurrentPhase('podium');
+            emitPhaseChange('podium');
+          } else {
+            setCurrentPhase('leaderboard');
+            emitPhaseChange('leaderboard');
+          }
+        }}
+        onNext={() => {
+          // Manual next button - same logic as time expired
+          const isLastQuestion = currentQuestionIndex >= totalQuestions - 1;
+          if (isLastQuestion) {
+            setCurrentPhase('podium');
+            emitPhaseChange('podium');
+          } else {
+            setCurrentPhase('leaderboard');
+            emitPhaseChange('leaderboard');
+          }
+        }}
+      />
+    );
+  }
 
   // Show podium or end screen if in those phases
   if (currentPhase === 'podium') {
@@ -433,9 +554,7 @@ function HostGameContent() {
         onDismissRoom={() => {
           router.push('/dashboard');
         }}
-        onStartNewGame={() => {
-          router.push('/dashboard');
-        }}
+        onStartNewGame={handleReturnToWaitingRoom}
       />
     );
   }
