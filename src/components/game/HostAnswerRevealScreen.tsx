@@ -46,6 +46,7 @@ const AnimatedBar: React.FC<{
   colorClass: string;
   shouldAnimate: boolean;
   correctAnswer: Choice;
+  questionId: string; // Add questionId to track question changes
   questionType: string;
 }> = ({
   choice,
@@ -55,6 +56,7 @@ const AnimatedBar: React.FC<{
   colorClass,
   shouldAnimate,
   correctAnswer,
+  questionId,
   questionType,
 }) => {
   const percentage = stat?.percentage || 0;
@@ -62,26 +64,52 @@ const AnimatedBar: React.FC<{
 
   const [animatedCount, setAnimatedCount] = useState(0);
   const [animatedHeight, setAnimatedHeight] = useState(0);
+  const hasAnimatedRef = useRef(false);
+  const lastCountRef = useRef(count);
+  const lastPercentageRef = useRef(percentage);
+  const lastQuestionIdRef = useRef(questionId);
+  const animationFrameRef = useRef<number | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!shouldAnimate) {
-      // Reset to initial state when animation hasn't started
+    // Reset animation state only when question actually changes
+    if (lastQuestionIdRef.current !== questionId) {
+      hasAnimatedRef.current = false;
       setAnimatedCount(0);
       setAnimatedHeight(0);
+      lastQuestionIdRef.current = questionId;
+      lastCountRef.current = count;
+      lastPercentageRef.current = percentage;
+    }
+
+    if (!shouldAnimate) {
+      // Reset to initial state when animation hasn't started
+      if (!hasAnimatedRef.current) {
+        setAnimatedCount(0);
+        setAnimatedHeight(0);
+      }
       return;
     }
 
-    // Capture values to avoid dependency issues
-    const targetCount = count;
-    const targetPercentage = percentage;
-    const animationIndex = index;
+    // If values haven't changed and animation already completed, don't restart
+    if (
+      hasAnimatedRef.current &&
+      lastCountRef.current === count &&
+      lastPercentageRef.current === percentage &&
+      lastQuestionIdRef.current === questionId
+    ) {
+      return;
+    }
+
+    // Update refs with current values
+    lastCountRef.current = count;
+    lastPercentageRef.current = percentage;
 
     // Simplified single RAF animation with staggered delay
-    const delay = 300 + animationIndex * 150; // Reduced stagger delay
+    const delay = 300 + index * 150; // Reduced stagger delay
 
-    const timer = setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       let startTime: number;
-      let animationFrame: number;
       const totalDuration = 2000; // Reduced total duration
 
       const animate = (timestamp: number) => {
@@ -93,25 +121,32 @@ const AnimatedBar: React.FC<{
         const easeOut = 1 - Math.pow(1 - progress, 4);
 
         // Update both values in single RAF call
-        setAnimatedCount(Math.round(targetCount * easeOut));
-        setAnimatedHeight(targetPercentage * easeOut);
+        setAnimatedCount(Math.round(count * easeOut));
+        setAnimatedHeight(percentage * easeOut);
 
         if (progress < 1) {
-          animationFrame = requestAnimationFrame(animate);
+          animationFrameRef.current = requestAnimationFrame(animate);
+        } else {
+          // Mark animation as completed
+          hasAnimatedRef.current = true;
+          animationFrameRef.current = null;
         }
       };
 
-      animationFrame = requestAnimationFrame(animate);
-
-      return () => {
-        if (animationFrame) {
-          cancelAnimationFrame(animationFrame);
-        }
-      };
+      animationFrameRef.current = requestAnimationFrame(animate);
     }, delay);
 
-    return () => clearTimeout(timer);
-  }, [shouldAnimate, count, percentage, index]);
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [shouldAnimate, count, percentage, index, questionId]);
 
   // Calculate bar height - memoized to avoid re-calculation
   const barHeightPercent = React.useMemo(() => {
@@ -187,15 +222,27 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({
   const [currentTime, setCurrentTime] = useState(timeLimit);
   const [isTimeExpired, setIsTimeExpired] = useState(false);
   const timeoutTriggered = useRef(false);
+  const questionIdRef = useRef(question.id);
 
-  // Start animation after component mounts
+  // Reset animation when question actually changes
+  useEffect(() => {
+    if (questionIdRef.current !== question.id) {
+      questionIdRef.current = question.id;
+      setIsAnimationStarted(false);
+      timeoutTriggered.current = false;
+      setCurrentTime(timeLimit);
+      setIsTimeExpired(false);
+    }
+  }, [question.id, timeLimit]);
+
+  // Start animation after component mounts or question changes
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsAnimationStarted(true);
     }, 200);
 
     return () => clearTimeout(timer);
-  }, []); // Empty dependency array
+  }, [question.id]); // Only restart animation when question changes
 
   // Reset timer when timeLimit changes
   useEffect(() => {
@@ -305,6 +352,7 @@ export const HostAnswerRevealScreen: React.FC<HostAnswerRevealScreenProps> = ({
                         colorClass={colorClasses[index]}
                         shouldAnimate={isAnimationStarted}
                         correctAnswer={correctAnswer}
+                        questionId={question.id}
                         questionType={question.type}
                       />
                     );
