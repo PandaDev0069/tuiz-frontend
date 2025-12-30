@@ -635,9 +635,12 @@ class GameApiClient {
   /**
    * GET /games/:gameId/leaderboard
    * Get game leaderboard with rankings
+   * Backend returns: { entries: LeaderboardEntry[], total: number, ... }
    */
   async getLeaderboard(gameId: string) {
-    return this.request<LeaderboardEntry[]>(`/games/${gameId}/leaderboard`, {
+    return this.request<
+      LeaderboardEntry[] | { entries: LeaderboardEntry[]; total: number; game_id: string }
+    >(`/games/${gameId}/leaderboard`, {
       method: 'GET',
     });
   }

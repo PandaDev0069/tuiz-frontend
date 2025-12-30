@@ -155,11 +155,22 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
       const { data, error: apiError } = await gameApi.getLeaderboard(gameId);
 
       if (apiError || !data) {
+        console.error('[useGameLeaderboard] API error:', apiError);
         throw new Error(apiError?.message || 'Failed to fetch leaderboard');
       }
 
-      // Ensure data is an array
-      const leaderboardArray = Array.isArray(data) ? data : [];
+      // Backend returns { entries: LeaderboardEntry[], ... } or LeaderboardEntry[] directly
+      // Handle both cases for compatibility
+      const leaderboardArray = Array.isArray(data)
+        ? data
+        : (data as { entries?: LeaderboardEntry[] })?.entries || [];
+
+      console.log('[useGameLeaderboard] Fetched leaderboard:', {
+        rawData: data,
+        isArray: Array.isArray(data),
+        entriesCount: leaderboardArray.length,
+        gameId,
+      });
 
       // Store previous leaderboard for rank change detection (use ref to avoid dependency)
       const oldLeaderboard = [...previousLeaderboardRef.current];
