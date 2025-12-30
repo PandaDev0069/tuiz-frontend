@@ -427,6 +427,50 @@ class GameApiClient {
     });
   }
 
+  /**
+   * POST /games/:gameId/questions/explanation/show
+   * Show explanation for current question
+   */
+  async showExplanation(gameId: string) {
+    return this.request<{
+      message: string;
+      explanation: {
+        title: string | null;
+        text: string | null;
+        image_url: string | null;
+        show_time: number | null;
+      };
+    }>(`/games/${gameId}/questions/explanation/show`, {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * POST /games/:gameId/questions/explanation/hide
+   * Hide explanation for current question
+   */
+  async hideExplanation(gameId: string) {
+    return this.request<{ message: string }>(`/games/${gameId}/questions/explanation/hide`, {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * GET /games/:gameId/questions/:questionId/explanation
+   * Get explanation data for a question
+   */
+  async getExplanation(gameId: string, questionId: string) {
+    return this.request<{
+      question_id: string;
+      explanation_title: string | null;
+      explanation_text: string | null;
+      explanation_image_url: string | null;
+      show_explanation_time: number;
+    }>(`/games/${gameId}/questions/${questionId}/explanation`, {
+      method: 'GET',
+    });
+  }
+
   // ==========================================================================
   // PLAYER MANAGEMENT
   // ==========================================================================

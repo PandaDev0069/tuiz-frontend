@@ -29,6 +29,16 @@ export interface GameFlowEvents {
   onQuestionStart?: (questionId: string, questionIndex: number) => void;
   onQuestionEnd?: (questionId: string) => void;
   onAnswerReveal?: (questionId: string, correctAnswer: string) => void;
+  onExplanationShow?: (
+    questionId: string,
+    explanation: {
+      title: string | null;
+      text: string | null;
+      image_url: string | null;
+      show_time: number | null;
+    },
+  ) => void;
+  onExplanationHide?: (questionId: string) => void;
   onGamePause?: () => void;
   onGameResume?: () => void;
   onGameEnd?: () => void;
@@ -97,6 +107,22 @@ interface GamePauseEvent {
 interface GameResumeEvent {
   gameId: string;
   resumedAt?: string;
+}
+
+interface ExplanationShowEvent {
+  roomId: string;
+  questionId: string;
+  explanation: {
+    title: string | null;
+    text: string | null;
+    image_url: string | null;
+    show_time: number | null;
+  };
+}
+
+interface ExplanationHideEvent {
+  roomId: string;
+  questionId: string;
 }
 
 // ============================================================================
@@ -404,10 +430,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
   /**
    * Advance to next question (Host only)
-   *
-   * NOTE: This function requires the next question ID to be provided.
-   * To advance to the next question, use startQuestion() with the next question's ID instead.
-   * This function is kept for API compatibility but throws an error to indicate it's not implemented.
+   * Updates game flow to point to the next question and emits phase change event
    */
   const nextQuestion = useCallback(async () => {
     if (!isHost) {
@@ -417,16 +440,52 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       throw new Error('No game ID provided');
     }
 
-    const errorMessage =
-      'nextQuestion is not implemented. Use startQuestion(questionId, questionIndex) with the next question ID instead.';
-    setError(errorMessage);
-    console.error('useGameFlow: nextQuestion called but not implemented', {
-      gameId,
-      currentQuestionId: gameFlowRef.current?.current_question_id,
-      currentQuestionIndex: gameFlowRef.current?.current_question_index,
-    });
-    eventsRef.current?.onError?.(errorMessage);
-    throw new Error(errorMessage);
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data, error: apiError } = await gameApi.nextQuestion(gameId);
+
+      if (apiError || !data) {
+        throw new Error(apiError?.message || 'Failed to advance to next question');
+      }
+
+      // Update game flow state
+      setGameFlow(data.gameFlow);
+
+      // If game is complete, trigger game end event
+      if (data.isComplete) {
+        // Stop timer
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+        setTimerState(null);
+        eventsRef.current?.onGameEnd?.();
+      } else if (data.nextQuestion) {
+        // Game flow has been updated to point to next question
+        // The host will need to call startQuestion() to actually start it
+        // Reset timer state since we're moving to a new question
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+        setTimerState(null);
+        // Refresh flow to get latest state
+        refreshFlowRef.current?.();
+      }
+
+      return data;
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to advance to next question';
+      setError(errorMessage);
+      console.error('useGameFlow: nextQuestion error', err);
+      eventsRef.current?.onError?.(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   }, [isHost, gameId]);
 
   /**
@@ -742,12 +801,32 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       eventsRef.current?.onGameResume?.();
     };
 
+    // Explanation show event
+    const handleExplanationShow = (data: ExplanationShowEvent) => {
+      if (data.roomId !== gameId) return;
+      console.log('useGameFlow: Explanation shown', data);
+
+      eventsRef.current?.onExplanationShow?.(data.questionId, data.explanation);
+      refreshFlowRef.current?.();
+    };
+
+    // Explanation hide event
+    const handleExplanationHide = (data: ExplanationHideEvent) => {
+      if (data.roomId !== gameId) return;
+      console.log('useGameFlow: Explanation hidden', data);
+
+      eventsRef.current?.onExplanationHide?.(data.questionId);
+      refreshFlowRef.current?.();
+    };
+
     // Register listeners
     currentSocket.on('game:question:started', handleQuestionStarted);
     currentSocket.on('game:question:changed', handleQuestionChanged);
     currentSocket.on('game:question:ended', handleQuestionEnd);
     currentSocket.on('game:pause', handleGamePause);
     currentSocket.on('game:resume', handleGameResume);
+    currentSocket.on('game:explanation:show', handleExplanationShow);
+    currentSocket.on('game:explanation:hide', handleExplanationHide);
 
     return () => {
       console.log(`useGameFlow: Cleaning up listeners for game ${gameId}`);
@@ -757,6 +836,8 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       currentSocket.off('game:question:ended', handleQuestionEnd);
       currentSocket.off('game:pause', handleGamePause);
       currentSocket.off('game:resume', handleGameResume);
+      currentSocket.off('game:explanation:show', handleExplanationShow);
+      currentSocket.off('game:explanation:hide', handleExplanationHide);
 
       if (hasJoinedRoomRef.current) {
         safeLeave(gameId);
