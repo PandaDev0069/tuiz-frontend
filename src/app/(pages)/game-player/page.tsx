@@ -99,14 +99,22 @@ function PlayerGameContent() {
       onQuestionStart: (qId, qIndex) => {
         console.log('Player: Question started', qId, qIndex);
 
-        // Only transition to question phase if we're not already in a later phase
-        // This prevents flashing from answering/answer_reveal back to question
+        // Track last question start we processed to distinguish:
+        // - duplicate "question started" events for the same question (ignore if already in later phases)
+        // - a genuinely new question start while we're on leaderboard/explanation (must transition)
+        const isNewQuestionStart = qId && qId !== lastQuestionStartIdRef.current;
+        lastQuestionStartIdRef.current = qId;
+
+        // Only ignore duplicate question-start events (same qId) if we're already in later phases.
+        // Important: for a NEW question, we always allow transition even if we're currently
+        // in leaderboard/explanation, otherwise the player gets stuck.
         const currentPhaseValue = currentPhaseRef.current;
         if (
-          currentPhaseValue === 'answering' ||
-          currentPhaseValue === 'answer_reveal' ||
-          currentPhaseValue === 'leaderboard' ||
-          currentPhaseValue === 'explanation'
+          !isNewQuestionStart &&
+          (currentPhaseValue === 'answering' ||
+            currentPhaseValue === 'answer_reveal' ||
+            currentPhaseValue === 'leaderboard' ||
+            currentPhaseValue === 'explanation')
         ) {
           console.log(
             'Player: Question start event received but already in',
@@ -387,6 +395,7 @@ function PlayerGameContent() {
   const isConnectedRef = useRef(isConnected);
   const handlePlayerKickedRef = useRef<typeof handlePlayerKicked | undefined>(undefined);
   const currentPhaseRef = useRef<PlayerPhase>(phaseParam);
+  const lastQuestionStartIdRef = useRef<string | null>(null);
 
   // Keep refs in sync
   useEffect(() => {
