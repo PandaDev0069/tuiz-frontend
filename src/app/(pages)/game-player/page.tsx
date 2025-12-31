@@ -352,15 +352,26 @@ function PlayerGameContent() {
 
           const { data, error } = await gameApi.getExplanation(gameId, questionId);
           if (error) {
-            console.error('Failed to fetch explanation:', error);
-            // Set default explanation data if fetch fails
-            setExplanationData({
-              title: null,
-              text: null,
-              image_url: null,
-              show_time: 10,
+            // Missing explanation is an expected case for many questions.
+            // Avoid console.error noise (Next devtools will surface it as a red error).
+            console.debug('[Explanation] No explanation available (or fetch failed)', {
+              gameId,
+              questionId,
+              error,
             });
+            return;
           } else if (data) {
+            const hasContent =
+              (data.explanation_text && data.explanation_text.trim() !== '') ||
+              (data.explanation_title && data.explanation_title.trim() !== '');
+
+            if (!hasContent) {
+              console.debug('[Explanation] Explanation endpoint returned empty content', {
+                gameId,
+                questionId,
+              });
+              return;
+            }
             setExplanationData({
               title: data.explanation_title,
               text: data.explanation_text,
@@ -369,14 +380,7 @@ function PlayerGameContent() {
             });
           }
         } catch (err) {
-          console.error('Error fetching explanation:', err);
-          // Set default explanation data on error
-          setExplanationData({
-            title: null,
-            text: null,
-            image_url: null,
-            show_time: 10,
-          });
+          console.debug('[Explanation] Error fetching explanation (non-blocking)', err);
         }
       };
       fetchExplanation();
@@ -1490,11 +1494,22 @@ function PlayerGameContent() {
             const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
 
             if (isLastQuestion) {
-              console.log('Player: Last question - skipping leaderboard, moving to explanation');
-              setCurrentPhase('explanation');
-              router.replace(
-                `/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`,
-              );
+              const hasExplanationContent =
+                (explanationData?.text && explanationData.text.trim() !== '') ||
+                (explanationData?.title && explanationData.title.trim() !== '') ||
+                (currentQuestion.explanation && currentQuestion.explanation.trim() !== '');
+
+              if (hasExplanationContent) {
+                console.log('Player: Last question - skipping leaderboard, moving to explanation');
+                setCurrentPhase('explanation');
+                router.replace(
+                  `/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`,
+                );
+              } else {
+                console.log('Player: Last question - no explanation content, skipping to podium');
+                setCurrentPhase('podium');
+                router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
+              }
             } else {
               console.log('Player: Answer reveal time expired, moving to leaderboard');
               setCurrentPhase('leaderboard');
