@@ -52,6 +52,24 @@ function PlayerGameContent() {
   const [currentPhase, setCurrentPhase] = useState<PlayerPhase>(phaseParam);
   const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
 
+  // Player-side phase ordering used to prevent "downgrade" transitions from host events.
+  // Example: the player locally transitions `question -> answering` based on the per-question timer,
+  // while the host may still broadcast `phase=question`. We must ignore that downgrade to avoid flicker.
+  const phasePriority: Record<PlayerPhase, number> = useMemo(
+    () => ({
+      waiting: 0,
+      countdown: 1,
+      question: 2,
+      answering: 3,
+      answer_reveal: 4,
+      leaderboard: 5,
+      explanation: 6,
+      podium: 7,
+      ended: 8,
+    }),
+    [],
+  );
+
   // If we're already in countdown phase from URL, try to restore timestamp immediately
   useEffect(() => {
     if (phaseParam === 'countdown' && !countdownStartedAt) {
@@ -80,9 +98,34 @@ function PlayerGameContent() {
     events: {
       onQuestionStart: (qId, qIndex) => {
         console.log('Player: Question started', qId, qIndex);
+
+        // Only transition to question phase if we're not already in a later phase
+        // This prevents flashing from answering/answer_reveal back to question
+        const currentPhaseValue = currentPhaseRef.current;
+        if (
+          currentPhaseValue === 'answering' ||
+          currentPhaseValue === 'answer_reveal' ||
+          currentPhaseValue === 'leaderboard' ||
+          currentPhaseValue === 'explanation'
+        ) {
+          console.log(
+            'Player: Question start event received but already in',
+            currentPhaseValue,
+            'phase - ignoring to prevent flash',
+          );
+          // Still reset the display/answer state for the new question
+          setIsDisplayPhaseDone(false);
+          setAnswerDurationMs(null);
+          setAnswerRemainingMs(null);
+          setQuestionRemainingMs(null); // Reset question timer for new question
+          answeringPhaseStartTimeRef.current = null;
+          return;
+        }
+
         setIsDisplayPhaseDone(false);
         setAnswerDurationMs(null);
         setAnswerRemainingMs(null);
+        setQuestionRemainingMs(null); // Reset question timer for new question
         answeringPhaseStartTimeRef.current = null; // Reset timestamp for new question
         setCurrentPhase('question');
         router.replace(
@@ -167,6 +210,8 @@ function PlayerGameContent() {
   const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
   const answeringPhaseStartTimeRef = useRef<number | null>(null);
   const [questionRemainingMs, setQuestionRemainingMs] = useState<number | null>(null);
+  const questionTimerInitializedRef = useRef<string | null>(null);
+  const previousPhaseRef = useRef<PlayerPhase | null>(null);
 
   // Get current question data for point calculation
   // Prefer API data (has authoritative points and time_limit), fallback to local quiz data
@@ -490,7 +535,6 @@ function PlayerGameContent() {
         });
 
         // Clear stored game data (try to get from URL or use gameId)
-        const roomCode = searchParams.get('code') || '';
         if (roomCode) {
           sessionStorage.removeItem(`game_${roomCode}`);
         }
@@ -501,7 +545,7 @@ function PlayerGameContent() {
         }, 2000);
       }
     },
-    [playerId, gameId, router, searchParams],
+    [playerId, gameId, router, roomCode],
   );
 
   // Keep handlePlayerKicked ref in sync
@@ -588,30 +632,65 @@ function PlayerGameContent() {
       phase: PlayerPhase;
       startedAt?: number;
     }) => {
-      if (data.roomId === gameId) {
-        console.log('Player: Phase changed to', data.phase, 'startedAt:', data.startedAt);
-        setCurrentPhase(data.phase);
-        // Store countdown start timestamp for synchronization
-        if (data.phase === 'countdown' && data.startedAt) {
-          setCountdownStartedAt(data.startedAt);
-          // Refresh game flow to get updated current_question_id when transitioning to countdown
-          // This ensures we have the correct question data for the next question
-          refreshFlow().catch((err) => {
-            console.error('Failed to refresh game flow after countdown phase change:', err);
-          });
-        }
-        // If phase is 'waiting', redirect to join page to rejoin
-        if (data.phase === 'waiting') {
-          const roomCode = searchParams.get('code') || '';
-          if (roomCode) {
-            router.push(`/join?code=${roomCode}`);
-          } else if (gameId) {
-            router.push(`/join?gameId=${gameId}`);
-          }
+      if (data.roomId !== gameId) return;
+
+      console.log('Player: Phase changed to', data.phase, 'startedAt:', data.startedAt);
+
+      // Prevent host events from forcing the player "backwards" in the flow.
+      // The most common case is `answering -> question` while the host still broadcasts `question`.
+      const current = currentPhaseRef.current;
+      if (data.phase !== 'waiting') {
+        const currentRank = phasePriority[current];
+        const nextRank = phasePriority[data.phase];
+        if (Number.isFinite(currentRank) && Number.isFinite(nextRank) && nextRank < currentRank) {
+          console.log(
+            '[Phase] Ignoring host phase downgrade:',
+            current,
+            '->',
+            data.phase,
+            '(keeping',
+            current,
+            ')',
+          );
           return;
         }
-        router.replace(`/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId}`);
       }
+
+      // Countdown should only be shown for the first question (index 0)
+      // For subsequent questions, skip countdown and wait for question start
+      if (data.phase === 'countdown') {
+        const currentQuestionIndex = gameFlowRef.current?.current_question_index ?? 0;
+        // Only show countdown for first question (index 0)
+        if (currentQuestionIndex > 0) {
+          console.log(
+            'Player: Skipping countdown for question',
+            currentQuestionIndex + 1,
+            '- waiting for question start',
+          );
+          // Don't transition to countdown, just wait for question start event
+          return;
+        }
+        // First question - proceed with countdown
+        setCountdownStartedAt(data.startedAt);
+        // Refresh game flow to get updated current_question_id when transitioning to countdown
+        // This ensures we have the correct question data for the next question
+        refreshFlow().catch((err) => {
+          console.error('Failed to refresh game flow after countdown phase change:', err);
+        });
+      }
+
+      setCurrentPhase(data.phase);
+
+      // If phase is 'waiting', redirect to join page to rejoin
+      if (data.phase === 'waiting') {
+        if (roomCode) {
+          router.push(`/join?code=${roomCode}`);
+        } else if (gameId) {
+          router.push(`/join?gameId=${gameId}`);
+        }
+        return;
+      }
+      router.replace(`/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId}`);
     };
 
     // Listen for game start (in case player joins after game has started)
@@ -745,7 +824,7 @@ function PlayerGameContent() {
         hasJoinedRoomRef.current = false;
       }
     };
-  }, [gameId, playerId, router, deviceId, joinRoom, leaveRoom, searchParams, refreshFlow]);
+  }, [gameId, playerId, router, joinRoom, leaveRoom, refreshFlow, roomCode, phasePriority]);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -874,22 +953,92 @@ function PlayerGameContent() {
   // For answering phase: use total remaining time
   const viewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
 
-  // Initialize questionRemainingMs when question phase starts (only once per phase)
+  // Initialize questionRemainingMs when question phase starts (only once per question)
   useEffect(() => {
-    if (currentPhase === 'question' && questionRemainingMs === null) {
-      // Initialize with the calculated remaining time when entering question phase
-      // Use viewingRemainingMs if available, otherwise use viewingDurationMs (full time)
-      const initialTime = viewingRemainingMs > 0 ? viewingRemainingMs : viewingDurationMs;
+    const currentQuestionId = gameFlow?.current_question_id;
+    const previousPhase = previousPhaseRef.current;
+
+    // Only reset timer when actually leaving question phase (not just when effect runs)
+    if (previousPhase === 'question' && currentPhase !== 'question') {
+      console.log('[Question Timer] Leaving question phase, resetting timer');
+      setQuestionRemainingMs(null);
+      questionTimerInitializedRef.current = null;
+    }
+
+    // Update previous phase ref
+    previousPhaseRef.current = currentPhase;
+
+    if (currentPhase === 'question' && currentQuestionId) {
+      // Check if we've already initialized for this question
+      if (questionTimerInitializedRef.current === currentQuestionId) {
+        // Already initialized - but check if timer was lost due to re-render
+        // If questionRemainingMs is null but we've initialized, restore it
+        if (questionRemainingMs === null) {
+          console.log('[Question Timer] Timer lost, restoring for question', currentQuestionId);
+          const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+
+          if (currentViewingRemainingMs > 0) {
+            setQuestionRemainingMs(currentViewingRemainingMs);
+          } else {
+            // Timer expired, transition to answering
+            console.log(
+              '[Question Timer] Timer expired during restore, transitioning to answering',
+            );
+            setIsDisplayPhaseDone(true);
+            setAnswerDurationMs((answeringTime || 30) * 1000);
+            setAnswerRemainingMs((answeringTime || 30) * 1000);
+            answeringPhaseStartTimeRef.current = Date.now();
+            setCurrentPhase('answering');
+            router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
+          }
+        }
+        return; // Already initialized for this question
+      }
+
+      // Mark as initialized for this question
+      questionTimerInitializedRef.current = currentQuestionId;
+
+      // Calculate initial time
+      const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+      const initialTime =
+        currentViewingRemainingMs > 0 ? currentViewingRemainingMs : viewingDurationMs;
+
+      console.log('[Question Timer] Initializing timer', {
+        questionId: currentQuestionId,
+        viewingRemainingMs: currentViewingRemainingMs,
+        viewingDurationMs,
+        initialTime,
+        questionElapsedMs,
+        showQuestionTime,
+      });
+
       if (initialTime > 0) {
         setQuestionRemainingMs(initialTime);
+      } else {
+        // If initial time is 0 or negative, immediately transition to answering
+        console.log('[Question Timer] Initial time is 0 or negative, transitioning to answering');
+        setIsDisplayPhaseDone(true);
+        setAnswerDurationMs((answeringTime || 30) * 1000);
+        setAnswerRemainingMs((answeringTime || 30) * 1000);
+        answeringPhaseStartTimeRef.current = Date.now();
+        setCurrentPhase('answering');
+        router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
       }
-    } else if (currentPhase !== 'question') {
-      // Reset when leaving question phase
-      setQuestionRemainingMs(null);
     }
-    // Only depend on currentPhase to avoid constant resets
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPhase]);
+    // Note: viewingRemainingMs and questionRemainingMs are calculated inside the effect
+    // and don't need to be in dependencies. We use currentQuestionId to track initialization.
+  }, [
+    currentPhase,
+    gameFlow?.current_question_id,
+    viewingDurationMs,
+    questionElapsedMs,
+    showQuestionTime,
+    answeringTime,
+    gameId,
+    playerId,
+    router,
+    questionRemainingMs, // Add to detect when timer is lost
+  ]);
 
   const totalRemainingMs =
     timerState?.remainingMs ??
@@ -930,8 +1079,17 @@ function PlayerGameContent() {
   useEffect(() => {
     if (currentPhase !== 'question') return;
     if (displayRemainingMs <= 0 && !isDisplayPhaseDone) {
+      console.log('[Question Timer] Display time expired, transitioning to answering', {
+        displayRemainingMs,
+        isDisplayPhaseDone,
+        questionRemainingMs,
+        viewingRemainingMs,
+      });
       startAnsweringPhase();
     }
+    // displayRemainingMs is computed from questionRemainingMs and viewingRemainingMs,
+    // so when those change, displayRemainingMs will change and trigger this effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
 
   // Client-side question phase countdown timer (decrements every second)
@@ -961,6 +1119,7 @@ function PlayerGameContent() {
         setQuestionRemainingMs(viewingRemainingMs);
       }
     }
+    // questionRemainingMs is intentionally in dependencies to sync when it changes
   }, [currentPhase, viewingRemainingMs, questionRemainingMs]);
 
   // Client-side answering countdown timer (decrements every second)
