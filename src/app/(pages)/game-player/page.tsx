@@ -1484,39 +1484,10 @@ function PlayerGameContent() {
           }
           timeLimit={5}
           onTimeExpired={() => {
-            // Check if this is the last question
-            const currentQuestionNum =
-              gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-                ? gameFlow.current_question_index + 1
-                : questionIndexParam + 1;
-            const totalQuestionsCount =
-              currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
-            const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
-
-            if (isLastQuestion) {
-              const hasExplanationContent =
-                (explanationData?.text && explanationData.text.trim() !== '') ||
-                (explanationData?.title && explanationData.title.trim() !== '') ||
-                (currentQuestion.explanation && currentQuestion.explanation.trim() !== '');
-
-              if (hasExplanationContent) {
-                console.log('Player: Last question - skipping leaderboard, moving to explanation');
-                setCurrentPhase('explanation');
-                router.replace(
-                  `/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`,
-                );
-              } else {
-                console.log('Player: Last question - no explanation content, skipping to podium');
-                setCurrentPhase('podium');
-                router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
-              }
-            } else {
-              console.log('Player: Answer reveal time expired, moving to leaderboard');
-              setCurrentPhase('leaderboard');
-              router.replace(
-                `/game-player?gameId=${gameId}&phase=leaderboard&playerId=${playerId}`,
-              );
-            }
+            // IMPORTANT:
+            // Answer reveal must NOT auto-advance. We wait for the host to press "Next",
+            // which will broadcast `game:phase:change` to move everyone forward.
+            console.log('Player: Answer reveal time expired, waiting for host to advance');
           }}
         />
       );
