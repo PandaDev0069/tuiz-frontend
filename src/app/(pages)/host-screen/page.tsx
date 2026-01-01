@@ -49,15 +49,51 @@ function HostScreenContent() {
     isActive: boolean;
     answeringTime?: number;
     showQuestionTime?: number;
+    totalQuestions?: number;
   } | null>(null);
   const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
   const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
   const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
+  // State for explanation data
+  const [explanationData, setExplanationData] = useState<{
+    title: string | null;
+    text: string | null;
+    image_url: string | null;
+    show_time: number;
+  } | null>(null);
   const hasJoinedRoomRef = useRef(false);
+  const currentPhaseRef = useRef<PublicPhase>('waiting');
+  const currentQuestionIdRef = useRef<string | null>(null);
+  const socketIdRef = useRef<string | null>(null);
+
+  // Public screen phase ordering used to prevent "downgrade" transitions from host/gameflow events.
+  // Example: the screen may locally transition `question -> answering` based on timer,
+  // while host may still broadcast `phase=question`. Ignore that downgrade to avoid flicker.
+  const phasePriority: Record<PublicPhase, number> = useMemo(
+    () => ({
+      waiting: 0,
+      countdown: 1,
+      question: 2,
+      answering: 3,
+      answer_reveal: 4,
+      leaderboard: 5,
+      explanation: 6,
+      podium: 7,
+      ended: 8,
+    }),
+    [],
+  );
 
   useEffect(() => {
-    setJoinUrl(`https://tuiz-info-king.vercel.app/join`);
+    // Use current origin so QR works in dev/prod, and prefill code if present.
+    const origin = window.location.origin;
+    const url = `${origin}/join${roomCode ? `?code=${encodeURIComponent(roomCode)}` : ''}`;
+    setJoinUrl(url);
   }, [roomCode]);
+
+  useEffect(() => {
+    currentPhaseRef.current = currentPhase;
+  }, [currentPhase]);
 
   // Get gameId from room code if not provided
   useEffect(() => {
@@ -119,7 +155,7 @@ function HostScreenContent() {
         console.log('Public Screen: Question started', questionId, questionIndex);
         setIsDisplayPhaseDone(false);
         // Don't transition if we're in countdown - let countdown complete first
-        if (currentPhase !== 'countdown') {
+        if (currentPhaseRef.current !== 'countdown') {
           setCurrentPhase('question');
         }
       },
@@ -129,7 +165,39 @@ function HostScreenContent() {
       },
       onAnswerReveal: () => {
         console.log('Public Screen: Answer revealed');
-        setCurrentPhase('answer_reveal');
+        // Don't override if we're already in a later phase (e.g., leaderboard)
+        const current = currentPhaseRef.current;
+        if (phasePriority[current] < phasePriority['answer_reveal']) {
+          setCurrentPhase('answer_reveal');
+        }
+      },
+      onExplanationShow: (questionId, explanation) => {
+        console.log('Public Screen: Explanation shown', questionId, explanation);
+        // Only transition to explanation if there's actual content
+        const hasContent =
+          (explanation.text && explanation.text.trim() !== '') ||
+          (explanation.title && explanation.title.trim() !== '');
+
+        if (hasContent) {
+          setExplanationData({
+            title: explanation.title,
+            text: explanation.text,
+            image_url: explanation.image_url,
+            show_time: explanation.show_time || 10,
+          });
+          setCurrentPhase('explanation');
+        } else {
+          // No explanation content, skip explanation phase
+          console.log(
+            'Public Screen: Explanation event received but no content, skipping explanation',
+          );
+          // Wait for host to advance to next question or podium
+        }
+      },
+      onExplanationHide: (questionId) => {
+        console.log('Public Screen: Explanation hidden', questionId);
+        // Explanation phase ended, move to next phase
+        // This will be handled by the explanation screen's onTimeExpired
       },
       onGameEnd: () => {
         console.log('Public Screen: Game ended');
@@ -139,7 +207,16 @@ function HostScreenContent() {
     },
   });
 
-  const { leaderboard } = useGameLeaderboard({
+  // Keep a ref for the current questionId so socket handlers never go stale.
+  useEffect(() => {
+    currentQuestionIdRef.current = gameFlow?.current_question_id ?? null;
+  }, [gameFlow?.current_question_id]);
+
+  const {
+    leaderboard,
+    loading: leaderboardLoading,
+    refreshLeaderboard,
+  } = useGameLeaderboard({
     gameId: gameId || '',
     autoRefresh: true,
   });
@@ -189,6 +266,7 @@ function HostScreenContent() {
           isActive: data.is_active,
           answeringTime,
           showQuestionTime,
+          totalQuestions: data.total_questions,
         });
       } catch (err) {
         console.error('Error fetching current question:', err);
@@ -205,6 +283,16 @@ function HostScreenContent() {
   // Listen for WebSocket events to sync with host control panel
   useEffect(() => {
     if (!socket || !isConnected || !gameId) return;
+
+    // If the socket reconnects (new socket.id), ensure we re-join the room.
+    const currentSocketId = socket.id || null;
+    if (socketIdRef.current !== currentSocketId) {
+      if (socketIdRef.current) {
+        console.log('[HostScreen] Socket ID changed, resetting room join guard');
+        hasJoinedRoomRef.current = false;
+      }
+      socketIdRef.current = currentSocketId;
+    }
 
     // Join the game room using provider helper (dedup + registration guard)
     const doJoinRoom = () => {
@@ -227,6 +315,17 @@ function HostScreenContent() {
     }) => {
       if (data.roomId === gameId) {
         console.log('Public Screen: Phase changed to', data.phase, 'startedAt:', data.startedAt);
+        // Prevent phase "downgrades" that cause flicker (e.g. answering -> question)
+        const current = currentPhaseRef.current;
+        if (data.phase !== 'waiting') {
+          const currentRank = phasePriority[current];
+          const nextRank = phasePriority[data.phase];
+          if (Number.isFinite(currentRank) && Number.isFinite(nextRank) && nextRank < currentRank) {
+            console.log('[HostScreen] Ignoring phase downgrade:', current, '->', data.phase);
+            return;
+          }
+        }
+
         setCurrentPhase(data.phase);
         // Store countdown start timestamp for synchronization
         if (data.phase === 'countdown' && data.startedAt) {
@@ -242,7 +341,7 @@ function HostScreenContent() {
       questionId: string;
       counts: Record<string, number>;
     }) => {
-      if (data.roomId === gameId && data.questionId === gameFlow?.current_question_id) {
+      if (data.roomId === gameId && data.questionId === currentQuestionIdRef.current) {
         setAnswerStats(data.counts);
       }
     };
@@ -262,7 +361,7 @@ function HostScreenContent() {
       counts?: Record<string, number>;
     }) => {
       if (data.roomId === gameId) {
-        if (data.counts && data.questionId === gameFlow?.current_question_id) {
+        if (data.counts && data.questionId === currentQuestionIdRef.current) {
           setAnswerStats(data.counts);
         }
         console.log('Public Screen: Answer locked, moving to answer reveal');
@@ -308,6 +407,8 @@ function HostScreenContent() {
 
     socket.on('game:phase:change', handlePhaseChange);
     socket.on('game:answer:stats:update', handleStatsUpdate);
+    // Legacy compatibility (some clients/servers emit this name)
+    socket.on('game:answer:stats', handleStatsUpdate);
     socket.on('game:question:ended', handleQuestionEnd);
     socket.on('game:answer:locked', handleAnswerLocked);
     socket.on('game:started', handleGameStarted);
@@ -318,6 +419,7 @@ function HostScreenContent() {
     return () => {
       socket.off('game:phase:change', handlePhaseChange);
       socket.off('game:answer:stats:update', handleStatsUpdate);
+      socket.off('game:answer:stats', handleStatsUpdate);
       socket.off('game:question:ended', handleQuestionEnd);
       socket.off('game:answer:locked', handleAnswerLocked);
       socket.off('game:started', handleGameStarted);
@@ -341,6 +443,10 @@ function HostScreenContent() {
     if (!gameFlow?.current_question_id) return;
     setIsDisplayPhaseDone(false);
     setAnswerRemainingMs(null);
+    // Clear stats between questions so we never display cumulative totals.
+    setAnswerStats({});
+    // Reset explanation data for new question
+    setExplanationData(null);
   }, [gameFlow?.current_question_id]);
 
   // Sync phase with game flow state - but don't interrupt countdown
@@ -534,25 +640,113 @@ function HostScreenContent() {
   }, [currentPhase, displayRemainingMs, answeringRemainingMs]);
 
   const questionIndex = gameFlow?.current_question_index ?? 0;
+  const totalQuestionsCount = useMemo(() => {
+    // Prefer API data if available
+    if (currentQuestionData?.totalQuestions) {
+      return currentQuestionData.totalQuestions;
+    }
+    // Fallback to questions array length
+    return questions.length || 0;
+  }, [currentQuestionData?.totalQuestions, questions.length]);
+
+  // Shape leaderboard entries exactly like player side expects.
+  const leaderboardEntries = useMemo(() => {
+    if (!Array.isArray(leaderboard)) return [];
+    return leaderboard
+      .map((entry) => ({
+        playerId: entry.player_id,
+        playerName: entry.player_name,
+        score: entry.score,
+        rank: entry.rank,
+        previousRank: entry.previous_rank ?? entry.rank,
+        rankChange: (entry.rank_change || 'same') as 'up' | 'down' | 'same',
+        scoreChange: entry.score_change ?? 0,
+      }))
+      .sort((a, b) => (a.rank || 0) - (b.rank || 0));
+  }, [leaderboard]);
+
+  // Refresh leaderboard when entering leaderboard phase (like player screen)
+  useEffect(() => {
+    if (currentPhase === 'leaderboard' && gameId && refreshLeaderboard) {
+      console.log('[HostScreen Leaderboard] Refreshing leaderboard on phase entry');
+      refreshLeaderboard();
+    }
+  }, [currentPhase, gameId, refreshLeaderboard]);
+
+  // Redirect from leaderboard if it's the last question (go directly to podium) - like player screen
+  useEffect(() => {
+    if (currentPhase === 'leaderboard' && gameFlow) {
+      const currentQuestionNum = questionIndex + 1;
+      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
+
+      if (isLastQuestion) {
+        console.log(
+          'HostScreen: Last question detected in leaderboard phase, redirecting to podium',
+        );
+        setCurrentPhase('podium');
+      }
+    }
+  }, [currentPhase, gameFlow, questionIndex, totalQuestionsCount]);
+
+  // Fetch explanation data when entering explanation phase (fallback if WebSocket event didn't provide data)
+  useEffect(() => {
+    if (
+      currentPhase === 'explanation' &&
+      gameId &&
+      gameFlow?.current_question_id &&
+      !explanationData
+    ) {
+      const fetchExplanation = async () => {
+        try {
+          const questionId = gameFlow.current_question_id;
+          if (!questionId) return;
+
+          const { data, error } = await gameApi.getExplanation(gameId, questionId);
+          if (error) {
+            // Missing explanation is an expected case for many questions.
+            // Avoid console.error noise (Next devtools will surface it as a red error).
+            console.debug('[Explanation] No explanation available (or fetch failed)', {
+              gameId,
+              questionId,
+              error,
+            });
+            return;
+          } else if (data) {
+            const hasContent =
+              (data.explanation_text && data.explanation_text.trim() !== '') ||
+              (data.explanation_title && data.explanation_title.trim() !== '');
+
+            if (!hasContent) {
+              console.debug('[Explanation] Explanation endpoint returned empty content', {
+                gameId,
+                questionId,
+              });
+              return;
+            }
+            setExplanationData({
+              title: data.explanation_title,
+              text: data.explanation_text,
+              image_url: data.explanation_image_url,
+              show_time: data.show_explanation_time || 10,
+            });
+          }
+        } catch (err) {
+          console.debug('[Explanation] Error fetching explanation (non-blocking)', err);
+        }
+      };
+      fetchExplanation();
+    }
+  }, [currentPhase, gameId, gameFlow?.current_question_id, explanationData]);
 
   const leaderboardData: LeaderboardData = useMemo(
     () => ({
-      entries: Array.isArray(leaderboard)
-        ? leaderboard.map((entry) => ({
-            playerId: entry.player_id,
-            playerName: entry.player_name,
-            score: entry.score,
-            rank: entry.rank,
-            previousRank: entry.rank,
-            rankChange: 'same' as const,
-          }))
-        : [],
+      entries: leaderboardEntries,
       questionNumber: questionIndex + 1,
-      totalQuestions: questions.length,
-      timeRemaining: currentTimeSeconds,
+      totalQuestions: totalQuestionsCount,
+      timeRemaining: Math.max(0, Math.round((timerState?.remainingMs || 5000) / 1000)),
       timeLimit: 5,
     }),
-    [leaderboard, questionIndex, questions.length, currentTimeSeconds],
+    [leaderboardEntries, questionIndex, totalQuestionsCount, timerState?.remainingMs],
   );
 
   // Render different phases based on game state
@@ -562,7 +756,7 @@ function HostScreenContent() {
         <PublicCountdownScreen
           countdownTime={3}
           questionNumber={questionIndex + 1}
-          totalQuestions={questions.length}
+          totalQuestions={totalQuestionsCount}
           startedAt={countdownStartedAt}
           onCountdownComplete={() => {
             // Countdown completed - now transition to question phase
@@ -583,7 +777,7 @@ function HostScreenContent() {
           }}
           currentTime={currentTimeSeconds}
           questionNumber={questionIndex + 1}
-          totalQuestions={questions.length}
+          totalQuestions={totalQuestionsCount}
           // No controls on public screen - read-only display
         />
       );
@@ -597,7 +791,7 @@ function HostScreenContent() {
           }}
           currentTime={currentTimeSeconds}
           questionNumber={questionIndex + 1}
-          totalQuestions={questions.length}
+          totalQuestions={totalQuestionsCount}
           // No controls on public screen - read-only display
         />
       );
@@ -611,7 +805,12 @@ function HostScreenContent() {
         );
       }
 
-      const totalAnswered = Object.values(answerStats).reduce((sum, count) => sum + count, 0);
+      // IMPORTANT: Always compute totals only from the CURRENT question's choices.
+      // This prevents inflated totals if answerStats contains keys from previous questions.
+      const totalAnswered = currentQuestion.choices.reduce(
+        (sum, choice) => sum + (answerStats[choice.id] ?? 0),
+        0,
+      );
       const statistics = currentQuestion.choices.map((choice) => {
         const count = answerStats[choice.id] || 0;
         return {
@@ -631,7 +830,7 @@ function HostScreenContent() {
         playerAnswer: undefined,
         isCorrect: false,
         statistics,
-        totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
+        totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : leaderboardEntries.length,
         totalAnswered,
       };
 
@@ -639,37 +838,111 @@ function HostScreenContent() {
         <HostAnswerRevealScreen
           answerResult={answerResult}
           questionNumber={questionIndex + 1}
-          totalQuestions={questions.length}
+          totalQuestions={totalQuestionsCount}
           timeLimit={5}
-          // No controls on public screen - read-only display
+          onTimeExpired={() => {
+            // Answer reveal must NOT auto-advance. We wait for the host to press "Next",
+            // which will broadcast `game:phase:change` to move everyone forward.
+            console.log('HostScreen: Answer reveal time expired, waiting for host to advance');
+          }}
         />
       );
     }
 
-    case 'leaderboard':
+    case 'leaderboard': {
+      // Check if this is the last question - if so, show loading while redirecting
+      const currentQuestionNum = questionIndex + 1;
+      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
+
+      // Show loading if redirecting (useEffect will handle the redirect)
+      if (isLastQuestion) {
+        return (
+          <div className="flex items-center justify-center h-screen">
+            <div className="text-center">
+              <div className="p-6 text-white text-xl">リダイレクト中...</div>
+            </div>
+          </div>
+        );
+      }
+
+      // Debug log for leaderboard phase
+      console.log('[HostScreen Leaderboard Phase]', {
+        rawLeaderboard: leaderboard,
+        transformedEntries: leaderboardEntries,
+        loading: leaderboardLoading,
+        gameId,
+        leaderboardData,
+      });
+
       return (
         <HostLeaderboardScreen
           leaderboardData={leaderboardData}
-          // No controls on public screen - read-only display
+          onTimeExpired={() => {
+            // Leaderboard must NOT auto-advance. We wait for the host to press "Next",
+            // which will broadcast `game:phase:change` to move everyone forward.
+            console.log('HostScreen: Leaderboard time expired, waiting for host to advance');
+          }}
         />
       );
+    }
 
-    case 'explanation':
+    case 'explanation': {
+      const currentQuestionNum = questionIndex + 1;
+
+      const handleExplanationTimeExpired = () => {
+        // Explanation timer expired - wait for host to manually advance via phase change event
+        // Do not auto-advance - public screen is read-only and waits for host control
+        console.log('HostScreen: Explanation time expired, waiting for host to advance');
+      };
+
       return (
         <HostExplanationScreen
           explanation={{
-            questionNumber: questionIndex + 1,
-            totalQuestions: questions.length,
-            timeLimit: 10,
-            title: '解説',
-            body: currentQuestion.explanation || '解説は近日追加されます。',
+            questionNumber: currentQuestionNum,
+            totalQuestions: totalQuestionsCount,
+            timeLimit: explanationData?.show_time || 10,
+            title: explanationData?.title || '解説',
+            body:
+              explanationData?.text || currentQuestion.explanation || '解説は近日追加されます。',
+            image: explanationData?.image_url || undefined,
           }}
-          // No controls on public screen - read-only display
+          onTimeExpired={handleExplanationTimeExpired}
         />
       );
+    }
 
-    case 'podium':
-      return <HostPodiumScreen entries={leaderboardData.entries} />;
+    case 'podium': {
+      // Ensure leaderboard entries are properly formatted for podium
+      const podiumEntries = Array.isArray(leaderboard)
+        ? leaderboard
+            .map((entry) => ({
+              playerId: entry.player_id,
+              playerName: entry.player_name,
+              score: entry.score,
+              rank: entry.rank,
+              previousRank: entry.rank,
+              rankChange: 'same' as const,
+            }))
+            .sort((a, b) => (a.rank || 0) - (b.rank || 0))
+        : leaderboardEntries;
+
+      console.log('[HostScreen Podium Phase]', {
+        rawLeaderboard: leaderboard,
+        podiumEntries,
+        gameId,
+      });
+
+      return (
+        <HostPodiumScreen
+          entries={podiumEntries}
+          onAnimationComplete={() => {
+            // After podium animation completes, transition to ended phase
+            console.log('HostScreen: Podium animation complete');
+            setCurrentPhase('ended');
+          }}
+        />
+      );
+    }
 
     case 'ended':
       // Game end screen - show final message
