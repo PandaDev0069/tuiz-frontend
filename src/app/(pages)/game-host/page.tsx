@@ -69,7 +69,7 @@ function HostGameContent() {
     },
   });
 
-  const { leaderboard } = useGameLeaderboard({
+  const { leaderboard, refreshLeaderboard } = useGameLeaderboard({
     gameId,
     autoRefresh: true,
   });
@@ -433,6 +433,14 @@ function HostGameContent() {
   useEffect(() => {
     setCurrentPhase(phaseParam);
   }, [phaseParam]);
+
+  // Refresh leaderboard when entering leaderboard phase
+  useEffect(() => {
+    if (currentPhase === 'leaderboard' && gameId && refreshLeaderboard) {
+      console.log('[GameHost Leaderboard] Refreshing leaderboard on phase entry');
+      refreshLeaderboard();
+    }
+  }, [currentPhase, gameId, refreshLeaderboard]);
 
   // Auto-transition from countdown to question after countdown completes
   useEffect(() => {
