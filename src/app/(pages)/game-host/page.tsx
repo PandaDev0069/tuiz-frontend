@@ -254,7 +254,12 @@ function HostGameContent() {
   // Calculate statistics
   const totalPlayers = players.length;
   const connectedPlayers = players.length; // All players in list are connected
-  const totalAnswered = Object.values(answerStats).reduce((sum, count) => sum + count, 0);
+  // IMPORTANT: `answerStats` may contain keys from previous questions (or other payloads).
+  // Always compute totals based only on the CURRENT question's answer IDs to avoid cumulative inflation.
+  const totalAnswered = (currentQuestion?.answers ?? []).reduce(
+    (sum, answer) => sum + (answerStats[answer.id] ?? 0),
+    0,
+  );
   const answerRate = totalPlayers > 0 ? Math.round((totalAnswered / totalPlayers) * 100) : 0;
 
   // Get game code for public screen
