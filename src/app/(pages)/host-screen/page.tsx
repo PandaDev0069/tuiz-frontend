@@ -49,6 +49,7 @@ function HostScreenContent() {
     isActive: boolean;
     answeringTime?: number;
     showQuestionTime?: number;
+    showExplanationTime?: number;
     totalQuestions?: number;
   } | null>(null);
   const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
@@ -248,6 +249,7 @@ function HostScreenContent() {
           timeLimit: timeLimit,
           show_question_time: showQuestionTime,
           answering_time: answeringTime,
+          show_explanation_time: data.question.show_explanation_time,
           choices: data.answers
             .sort((a, b) => a.order_index - b.order_index)
             .map((a, i) => ({
@@ -266,6 +268,7 @@ function HostScreenContent() {
           isActive: data.is_active,
           answeringTime,
           showQuestionTime,
+          showExplanationTime: data.question.show_explanation_time,
           totalQuestions: data.total_questions,
         });
       } catch (err) {
@@ -900,7 +903,11 @@ function HostScreenContent() {
           explanation={{
             questionNumber: currentQuestionNum,
             totalQuestions: totalQuestionsCount,
-            timeLimit: explanationData?.show_time || 10,
+            timeLimit:
+              currentQuestionData?.showExplanationTime ??
+              explanationData?.show_time ??
+              currentQuestion.show_explanation_time ??
+              10,
             title: explanationData?.title || '解説',
             body:
               explanationData?.text || currentQuestion.explanation || '解説は近日追加されます。',

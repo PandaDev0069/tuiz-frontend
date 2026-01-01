@@ -13,6 +13,7 @@ export interface Question {
   timeLimit: number;
   show_question_time: number;
   answering_time: number;
+  show_explanation_time?: number;
   choices: Choice[];
   correctAnswerId: string;
   explanation?: string;

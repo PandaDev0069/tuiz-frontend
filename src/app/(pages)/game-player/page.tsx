@@ -211,6 +211,7 @@ function PlayerGameContent() {
     points: number;
     timeLimit: number;
     answeringTime?: number;
+    showExplanationTime?: number;
     totalQuestions?: number;
   } | null>(null);
   const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
@@ -495,6 +496,7 @@ function PlayerGameContent() {
           timeLimit: data.question.show_question_time + data.question.answering_time,
           show_question_time: data.question.show_question_time,
           answering_time: data.question.answering_time,
+          show_explanation_time: data.question.show_explanation_time,
           choices: data.answers
             .sort((a, b) => a.order_index - b.order_index)
             .map((a, i) => ({
@@ -514,6 +516,7 @@ function PlayerGameContent() {
           points: data.question.points,
           timeLimit: data.question.show_question_time + data.question.answering_time,
           answeringTime: data.question.answering_time,
+          showExplanationTime: data.question.show_explanation_time,
           totalQuestions: data.total_questions,
         });
       } catch (err) {
@@ -1553,19 +1556,11 @@ function PlayerGameContent() {
           : questionIndexParam + 1;
       const totalQuestionsCount =
         currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
-      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
 
       const handleExplanationTimeExpired = () => {
-        if (isLastQuestion) {
-          // Last question - go to podium
-          console.log('Player: Explanation time expired, moving to podium');
-          setCurrentPhase('podium');
-          router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
-        } else {
-          // Not last question - wait for next question (will be triggered by host)
-          console.log('Player: Explanation time expired, waiting for next question');
-          // The host will trigger the next question, so we just wait
-        }
+        // Explanation timer expired - wait for host to manually advance via phase change event
+        // Do not auto-advance - player waits for host control
+        console.log('Player: Explanation time expired, waiting for host to advance');
       };
 
       return (
@@ -1573,7 +1568,11 @@ function PlayerGameContent() {
           explanation={{
             questionNumber: currentQuestionNum,
             totalQuestions: totalQuestionsCount,
-            timeLimit: explanationData?.show_time || 10,
+            timeLimit:
+              currentQuestionData?.showExplanationTime ??
+              explanationData?.show_time ??
+              currentQuestion.show_explanation_time ??
+              10,
             title: explanationData?.title || '解説',
             body:
               explanationData?.text || currentQuestion.explanation || '解説は近日追加されます。',

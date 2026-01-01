@@ -84,6 +84,7 @@ function HostGameContent() {
   const hasJoinedRoomRef = useRef(false);
   const socketIdRef = useRef<string | null>(null);
   const currentQuestionIdRef = useRef<string | null>(null);
+  const currentPhaseRef = useRef<HostPhase>(phaseParam);
 
   // Fetch players list
   const fetchPlayers = useCallback(async () => {
@@ -138,6 +139,11 @@ function HostGameContent() {
     currentQuestionIdRef.current = gameFlow?.current_question_id ?? null;
   }, [gameFlow?.current_question_id]);
 
+  // Keep a ref for the current phase so socket handlers never go stale.
+  useEffect(() => {
+    currentPhaseRef.current = currentPhase;
+  }, [currentPhase]);
+
   // Fetch players periodically
   useEffect(() => {
     if (!gameId) return;
@@ -183,6 +189,30 @@ function HostGameContent() {
 
     const handlePhaseChange = (data: { roomId: string; phase: HostPhase }) => {
       if (data.roomId !== gameId) return;
+
+      // Prevent phase "downgrades" that cause issues (e.g., explanation -> leaderboard)
+      // Phase priority: waiting < countdown < question < answer_reveal < leaderboard < explanation < podium < ended
+      const phasePriority: Record<HostPhase, number> = {
+        waiting: 0,
+        countdown: 1,
+        question: 2,
+        answer_reveal: 3,
+        leaderboard: 4,
+        explanation: 5,
+        podium: 6,
+        ended: 7,
+      };
+
+      const currentPhase = currentPhaseRef.current || 'waiting';
+      const currentRank = phasePriority[currentPhase];
+      const nextRank = phasePriority[data.phase];
+
+      // Ignore phase downgrades (e.g., explanation -> leaderboard) unless it's a valid transition
+      if (Number.isFinite(currentRank) && Number.isFinite(nextRank) && nextRank < currentRank) {
+        console.log('[GameHost] Ignoring phase downgrade:', currentPhase, '->', data.phase);
+        return;
+      }
+
       // Keep host UI in sync even if phase was changed by another client/server event.
       setCurrentPhase(data.phase);
     };
