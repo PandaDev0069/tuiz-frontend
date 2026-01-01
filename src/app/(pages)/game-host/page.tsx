@@ -86,6 +86,7 @@ function HostGameContent() {
   } | null>(null);
   const hasJoinedRoomRef = useRef(false);
   const socketIdRef = useRef<string | null>(null);
+  const currentQuestionIdRef = useRef<string | null>(null);
 
   // Fetch players list
   const fetchPlayers = useCallback(async () => {
@@ -132,8 +133,15 @@ function HostGameContent() {
       setCurrentQuestion(questions[idx] || null);
       // Reset explanation data when question changes
       setExplanationData(null);
+      // Reset stats when question changes to avoid showing stale distribution briefly
+      setAnswerStats({});
     }
   }, [questions, gameFlow]);
+
+  // Keep a ref for the current questionId so socket handlers never go stale.
+  useEffect(() => {
+    currentQuestionIdRef.current = gameFlow?.current_question_id ?? null;
+  }, [gameFlow?.current_question_id]);
 
   // Fetch explanation data when entering explanation phase (fallback if API didn't provide it)
   useEffect(() => {
@@ -206,7 +214,7 @@ function HostGameContent() {
       questionId: string;
       counts: Record<string, number>;
     }) => {
-      if (data.roomId === gameId && data.questionId === gameFlow?.current_question_id) {
+      if (data.roomId === gameId && data.questionId === currentQuestionIdRef.current) {
         setAnswerStats(data.counts);
       }
     };
@@ -301,7 +309,10 @@ function HostGameContent() {
   const handleRevealAnswer = useCallback(async () => {
     if (!gameId) return;
     try {
-      await revealAnswer();
+      const result = await revealAnswer();
+      if (result?.answerStats) {
+        setAnswerStats(result.answerStats);
+      }
       setCurrentPhase('answer_reveal');
       emitPhaseChange('answer_reveal');
       toast.success('答えを表示しました');
@@ -352,48 +363,40 @@ function HostGameContent() {
     }
   }, [gameId, gameFlow?.current_question_id, emitPhaseChange]);
 
+  const handleGoToPodium = useCallback(() => {
+    setCurrentPhase('podium');
+    emitPhaseChange('podium');
+  }, [emitPhaseChange]);
+
   const handleNextPhase = useCallback(async () => {
     const isLastQuestion = currentQuestionIndex >= totalQuestions - 1;
 
     if (currentPhase === 'answer_reveal') {
-      // Check if question has explanation
-      if (hasExplanation()) {
-        // Show explanation before leaderboard
-        await handleShowExplanation();
-      } else if (isLastQuestion) {
-        // No explanation and last question: go directly to podium
-        setCurrentPhase('podium');
-        emitPhaseChange('podium');
-      } else {
-        // No explanation: go to leaderboard
-        setCurrentPhase('leaderboard');
-        emitPhaseChange('leaderboard');
-      }
-    } else if (currentPhase === 'explanation') {
-      // After explanation, go to leaderboard (or podium if last question)
+      // Flow rules:
+      // - Last question: skip leaderboard; go to explanation if available, otherwise podium
+      // - Otherwise: go to leaderboard (even if explanation exists)
       if (isLastQuestion) {
-        setCurrentPhase('podium');
-        emitPhaseChange('podium');
+        if (hasExplanation()) {
+          await handleShowExplanation();
+        } else {
+          handleGoToPodium();
+        }
       } else {
         setCurrentPhase('leaderboard');
         emitPhaseChange('leaderboard');
       }
     } else if (currentPhase === 'leaderboard') {
-      // Move to next question or podium based on whether it's the last question
-      if (isLastQuestion) {
-        // Last question: go to podium
-        setCurrentPhase('podium');
-        emitPhaseChange('podium');
+      // After leaderboard: go to explanation if available, otherwise advance to next question.
+      if (hasExplanation()) {
+        await handleShowExplanation();
       } else {
-        // Not last question: proceed to next question
         const nextIdx = currentQuestionIndex + 1;
         if (nextIdx < totalQuestions) {
           try {
             // Use the hook's nextQuestion function which properly updates game flow
             const data = await nextQuestionFlow();
             if (data.isComplete) {
-              setCurrentPhase('podium');
-              emitPhaseChange('podium');
+              handleGoToPodium();
             } else {
               // Game flow has been updated, transition to countdown
               // The phase change event is already emitted by the backend
@@ -407,9 +410,33 @@ function HostGameContent() {
             return;
           }
         } else {
-          setCurrentPhase('podium');
-          emitPhaseChange('podium');
+          handleGoToPodium();
         }
+      }
+    } else if (currentPhase === 'explanation') {
+      // After explanation: advance to next question, or podium if it was the last question.
+      if (isLastQuestion) {
+        handleGoToPodium();
+        return;
+      }
+
+      const nextIdx = currentQuestionIndex + 1;
+      if (nextIdx < totalQuestions) {
+        try {
+          const data = await nextQuestionFlow();
+          if (data.isComplete) {
+            handleGoToPodium();
+          } else {
+            setCurrentPhase('countdown');
+            emitPhaseChange('countdown');
+          }
+        } catch (e) {
+          console.error('Error advancing to next question:', e);
+          toast.error('次の問題への移動に失敗しました');
+          return;
+        }
+      } else {
+        handleGoToPodium();
       }
     }
   }, [
@@ -419,6 +446,7 @@ function HostGameContent() {
     emitPhaseChange,
     hasExplanation,
     handleShowExplanation,
+    handleGoToPodium,
     nextQuestionFlow,
   ]);
 
@@ -458,6 +486,26 @@ function HostGameContent() {
       return () => clearTimeout(timer);
     }
   }, [currentPhase, gameFlow?.current_question_id, handleStartQuestion, flowLoading]);
+
+  const nextButtonLabel = (() => {
+    const isLastQuestion = currentQuestionIndex >= totalQuestions - 1;
+    const explanationExists = hasExplanation();
+
+    if (currentPhase === 'answer_reveal') {
+      if (isLastQuestion) return explanationExists ? '解説へ' : '表彰台へ';
+      return 'ランキングへ';
+    }
+
+    if (currentPhase === 'leaderboard') {
+      return explanationExists ? '解説へ' : '次の問題へ';
+    }
+
+    if (currentPhase === 'explanation') {
+      return isLastQuestion ? '表彰台へ' : '次の問題へ';
+    }
+
+    return '次へ';
+  })();
 
   // Show explanation screen if in explanation phase
   if (currentPhase === 'explanation' && explanationData) {
@@ -668,7 +716,7 @@ function HostGameContent() {
                         className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 disabled:from-gray-500 disabled:to-gray-600 text-white py-3 px-4 rounded-lg transition-all duration-200 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                       >
                         <ChevronRight className="w-5 h-5" />
-                        <span>次へ</span>
+                        <span>{nextButtonLabel}</span>
                       </button>
                     )}
 
@@ -676,7 +724,7 @@ function HostGameContent() {
                       <div className="text-xs text-gray-400 mb-1">現在のフェーズ</div>
                       <div className="text-sm font-semibold text-white capitalize">
                         {currentPhase === 'waiting' && '待機中'}
-                        {currentPhase === 'countdown' && 'カウントダウン'}
+                        {currentPhase === 'countdown' && '次の問題準備中'}
                         {currentPhase === 'question' && '問題中'}
                         {currentPhase === 'answer_reveal' && '答え表示'}
                         {currentPhase === 'leaderboard' && 'ランキング'}

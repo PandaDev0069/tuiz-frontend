@@ -70,7 +70,11 @@ export interface UseGameFlowReturn {
 
   // Host Actions (only available if isHost=true)
   startQuestion: (questionId: string, questionIndex?: number) => Promise<GameFlow | void>;
-  revealAnswer: () => Promise<void>;
+  revealAnswer: () => Promise<{
+    message: string;
+    gameFlow: GameFlow;
+    answerStats?: Record<string, number>;
+  } | null>;
   nextQuestion: () => Promise<{
     message: string;
     gameFlow: GameFlow;
@@ -172,7 +176,14 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   const socketRef = useRef(socket);
   const isConnectedRef = useRef(isConnected);
   const isHostRef = useRef(isHost);
-  const revealAnswerRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  const revealAnswerRef = useRef<
+    | (() => Promise<{
+        message: string;
+        gameFlow: GameFlow;
+        answerStats?: Record<string, number>;
+      } | null>)
+    | undefined
+  >(undefined);
   const hasJoinedRoomRef = useRef(false);
   const triggerOnQuestionEndOnTimerRef = useRef(triggerOnQuestionEndOnTimer);
 
@@ -405,10 +416,15 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       setLoading(true);
       setError(null);
 
-      const { error: apiError } = await gameApi.revealAnswer(gameId);
+      const { data, error: apiError } = await gameApi.revealAnswer(gameId);
 
       if (apiError) {
         throw new Error(apiError.message || 'Failed to reveal answer');
+      }
+
+      // If backend returned updated flow, apply it immediately for snappier UI.
+      if (data?.gameFlow) {
+        setGameFlow(data.gameFlow);
       }
 
       // Stop timer
@@ -422,6 +438,9 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       refreshFlowRef.current?.();
 
       eventsRef.current?.onAnswerReveal?.(gameFlowRef.current?.current_question_id || '', '');
+
+      // Return data so callers (e.g., host control panel) can use answerStats if the backend includes it.
+      return data || null;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to reveal answer';
       setError(errorMessage);
