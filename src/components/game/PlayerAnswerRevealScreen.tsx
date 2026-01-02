@@ -7,6 +7,166 @@ import { TimeBar } from './TimeBar';
 import { CheckCircle } from 'lucide-react';
 import { AnswerResult, Choice, AnswerStatistic } from '@/types/game';
 
+// Animated Bar Component - moved outside to prevent recreation on every render
+const AnimatedBar: React.FC<{
+  choice: Choice;
+  index: number;
+  stat: AnswerStatistic | undefined;
+  maxPercentage: number;
+  colorClass: string;
+  shouldAnimate: boolean;
+  correctAnswer: Choice;
+  questionId: string; // Add questionId to track question changes
+  questionType: string;
+}> = ({
+  choice,
+  index,
+  stat,
+  maxPercentage,
+  colorClass,
+  shouldAnimate,
+  correctAnswer,
+  questionId,
+  questionType,
+}) => {
+  const percentage = stat?.percentage || 0;
+  const count = stat?.count || 0;
+
+  const [animatedCount, setAnimatedCount] = useState(0);
+  const [animatedHeight, setAnimatedHeight] = useState(0);
+  const hasAnimatedRef = useRef(false);
+  const lastCountRef = useRef(count);
+  const lastPercentageRef = useRef(percentage);
+  const lastQuestionIdRef = useRef(questionId);
+  const animationFrameRef = useRef<number | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Reset animation state only when question actually changes
+    if (lastQuestionIdRef.current !== questionId) {
+      hasAnimatedRef.current = false;
+      setAnimatedCount(0);
+      setAnimatedHeight(0);
+      lastQuestionIdRef.current = questionId;
+      lastCountRef.current = count;
+      lastPercentageRef.current = percentage;
+    }
+
+    if (!shouldAnimate) {
+      // Reset to initial state when animation hasn't started
+      if (!hasAnimatedRef.current) {
+        setAnimatedCount(0);
+        setAnimatedHeight(0);
+      }
+      return;
+    }
+
+    // If values haven't changed and animation already completed, don't restart
+    if (
+      hasAnimatedRef.current &&
+      lastCountRef.current === count &&
+      lastPercentageRef.current === percentage &&
+      lastQuestionIdRef.current === questionId
+    ) {
+      return;
+    }
+
+    // Update refs with current values
+    lastCountRef.current = count;
+    lastPercentageRef.current = percentage;
+
+    // Simplified single RAF animation with staggered delay
+    const delay = 300 + index * 150; // Reduced stagger delay
+
+    timeoutRef.current = setTimeout(() => {
+      let startTime: number;
+      const totalDuration = 2000; // Reduced total duration
+
+      const animate = (timestamp: number) => {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+        const progress = Math.min(elapsed / totalDuration, 1);
+
+        // Use easeOutQuart for snappier animation
+        const easeOut = 1 - Math.pow(1 - progress, 4);
+
+        // Update both values in single RAF call
+        setAnimatedCount(Math.round(count * easeOut));
+        setAnimatedHeight(percentage * easeOut);
+
+        if (progress < 1) {
+          animationFrameRef.current = requestAnimationFrame(animate);
+        } else {
+          // Mark animation as completed
+          hasAnimatedRef.current = true;
+          animationFrameRef.current = null;
+        }
+      };
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+    }, delay);
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [shouldAnimate, count, percentage, index, questionId]);
+
+  // Calculate bar height - memoized to avoid re-calculation
+  const barHeightPercent = React.useMemo(() => {
+    if (animatedHeight <= 0) return 0;
+    const scaledPercent = maxPercentage > 0 ? (animatedHeight / maxPercentage) * 100 : 0;
+    return Math.min(Math.max(scaledPercent, 8), 100);
+  }, [animatedHeight, maxPercentage]);
+
+  return (
+    <div className="flex flex-col items-center flex-1 h-full">
+      {/* Animated Number on top of bar - mobile optimized */}
+      <div className="text-sm md:text-lg lg:text-xl font-bold text-white mb-1 md:mb-2 h-6 md:h-8 flex items-center">
+        <span className="tabular-nums">{animatedCount}</span>
+      </div>
+
+      {/* Bar Container - slimmer bars */}
+      <div className="w-full max-w-12 md:max-w-14 lg:max-w-12 xl:max-w-14 flex-1 flex flex-col justify-end relative">
+        <div
+          className={`w-full ${colorClass} rounded-t-lg shadow-lg will-change-transform relative`}
+          style={{
+            height: `${barHeightPercent}%`,
+            minHeight: animatedHeight > 0 ? '6px' : '0px',
+            transform: 'translateZ(0)', // Force GPU acceleration
+          }}
+        >
+          {/* Correct Answer Checkmark on Bar - mobile optimized */}
+          {choice.id === correctAnswer.id && barHeightPercent > 20 && (
+            <div className="absolute top-1 right-1 md:top-2 md:right-2 w-4 h-4 md:w-5 md:h-5 lg:w-6 lg:h-6">
+              <CheckCircle className="w-full h-full text-white drop-shadow-lg opacity-90" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Choice letter - mobile optimized */}
+      <div className="mt-2 md:mt-4 h-6 md:h-8 flex items-center justify-center">
+        <div className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 bg-white/20 flex items-center justify-center rounded-full">
+          <span className="text-sm md:text-lg lg:text-xl font-bold text-white drop-shadow-lg">
+            {questionType === 'true_false'
+              ? choice.text === 'True' || choice.text === '正しい' || choice.text === 'はい'
+                ? '○'
+                : '×'
+              : choice.letter}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface PlayerAnswerRevealScreenProps {
   answerResult: AnswerResult;
   timeLimit?: number;
@@ -28,22 +188,38 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
   // Animation state
   const [isAnimationStarted, setIsAnimationStarted] = useState(false);
   const [currentTime, setCurrentTime] = useState(timeLimit);
+  const [isTimeExpired, setIsTimeExpired] = useState(false);
   const timeoutTriggered = useRef(false);
+  const questionIdRef = useRef(question.id);
 
-  // Start animation after component mounts
+  // Reset animation when question actually changes
+  useEffect(() => {
+    if (questionIdRef.current !== question.id) {
+      questionIdRef.current = question.id;
+      setIsAnimationStarted(false);
+      timeoutTriggered.current = false;
+      setCurrentTime(timeLimit);
+      setIsTimeExpired(false);
+    }
+  }, [question.id, timeLimit]);
+
+  // Start animation after component mounts or question changes
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsAnimationStarted(true);
     }, 200); // Reduced initial delay
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [question.id]); // Only restart animation when question changes
 
+  // Reset timer when timeLimit changes
   useEffect(() => {
-    timeoutTriggered.current = false;
     setCurrentTime(timeLimit);
-  }, [timeLimit, questionNumber]);
+    setIsTimeExpired(false);
+    timeoutTriggered.current = false;
+  }, [timeLimit]);
 
+  // Internal timer countdown
   useEffect(() => {
     if (!timeLimit || timeLimit <= 0) {
       return;
@@ -54,11 +230,7 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
         if (prev <= 1) {
           if (!timeoutTriggered.current) {
             timeoutTriggered.current = true;
-            if (onTimeExpired) {
-              onTimeExpired();
-            } else {
-              router.push('/player-leaderboard-screen');
-            }
+            setIsTimeExpired(true);
           }
           return 0;
         }
@@ -67,117 +239,24 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [onTimeExpired, router, timeLimit]);
+  }, [timeLimit]);
 
-  // Animated Bar Component
-  const AnimatedBar: React.FC<{
-    choice: Choice;
-    index: number;
-    stat: AnswerStatistic | undefined;
-    maxPercentage: number;
-    colorClass: string;
-    shouldAnimate: boolean;
-    correctAnswer: Choice;
-  }> = ({ choice, index, stat, maxPercentage, colorClass, shouldAnimate, correctAnswer }) => {
-    const percentage = stat?.percentage || 0;
-    const count = stat?.count || 0;
+  // Handle timeout navigation in separate effect
+  useEffect(() => {
+    if (isTimeExpired) {
+      // Use setTimeout to ensure navigation happens after current render cycle
+      const timeoutId = setTimeout(() => {
+        if (onTimeExpired) {
+          onTimeExpired();
+        } else {
+          // Default navigation to leaderboard screen
+          router.push('/player-leaderboard-screen');
+        }
+      }, 0);
 
-    const [animatedCount, setAnimatedCount] = useState(0);
-    const [animatedHeight, setAnimatedHeight] = useState(0);
-
-    useEffect(() => {
-      if (!shouldAnimate) {
-        // Reset to initial state when animation hasn't started
-        setAnimatedCount(0);
-        setAnimatedHeight(0);
-        return;
-      }
-
-      // Simplified single RAF animation with staggered delay
-      const delay = 300 + index * 150; // Reduced stagger delay
-
-      const timer = setTimeout(() => {
-        let startTime: number;
-        let animationFrame: number;
-        const totalDuration = 2000; // Reduced total duration
-
-        const animate = (timestamp: number) => {
-          if (!startTime) startTime = timestamp;
-          const elapsed = timestamp - startTime;
-          const progress = Math.min(elapsed / totalDuration, 1);
-
-          // Use easeOutQuart for snappier animation
-          const easeOut = 1 - Math.pow(1 - progress, 4);
-
-          // Update both values in single RAF call
-          setAnimatedCount(Math.round(count * easeOut));
-          setAnimatedHeight(percentage * easeOut);
-
-          if (progress < 1) {
-            animationFrame = requestAnimationFrame(animate);
-          }
-        };
-
-        animationFrame = requestAnimationFrame(animate);
-
-        return () => {
-          if (animationFrame) {
-            cancelAnimationFrame(animationFrame);
-          }
-        };
-      }, delay);
-
-      return () => clearTimeout(timer);
-    }, [shouldAnimate, count, percentage, index]);
-
-    // Calculate bar height - memoized to avoid re-calculation
-    const barHeightPercent = React.useMemo(() => {
-      if (animatedHeight <= 0) return 0;
-      const scaledPercent = maxPercentage > 0 ? (animatedHeight / maxPercentage) * 100 : 0;
-      return Math.min(Math.max(scaledPercent, 8), 100);
-    }, [animatedHeight, maxPercentage]);
-
-    return (
-      <div className="flex flex-col items-center flex-1 h-full">
-        {/* Animated Number on top of bar - mobile optimized */}
-        <div className="text-sm md:text-lg lg:text-xl font-bold text-white mb-1 md:mb-2 h-6 md:h-8 flex items-center">
-          <span className="tabular-nums">{animatedCount}</span>
-        </div>
-
-        {/* Bar Container - slimmer bars */}
-        <div className="w-full max-w-12 md:max-w-14 lg:max-w-12 xl:max-w-14 flex-1 flex flex-col justify-end relative">
-          <div
-            className={`w-full ${colorClass} rounded-t-lg shadow-lg will-change-transform relative`}
-            style={{
-              height: `${barHeightPercent}%`,
-              minHeight: animatedHeight > 0 ? '6px' : '0px',
-              transform: 'translateZ(0)', // Force GPU acceleration
-            }}
-          >
-            {/* Correct Answer Checkmark on Bar - mobile optimized */}
-            {choice.id === correctAnswer.id && barHeightPercent > 20 && (
-              <div className="absolute top-1 right-1 md:top-2 md:right-2 w-4 h-4 md:w-5 md:h-5 lg:w-6 lg:h-6">
-                <CheckCircle className="w-full h-full text-white drop-shadow-lg opacity-90" />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Choice letter - mobile optimized */}
-        <div className="mt-2 md:mt-4 h-6 md:h-8 flex items-center justify-center">
-          <div className="w-8 h-8 md:w-10 md:h-10 lg:w-12 lg:h-12 bg-white/20 flex items-center justify-center rounded-full">
-            <span className="text-sm md:text-lg lg:text-xl font-bold text-white drop-shadow-lg">
-              {question.type === 'true_false'
-                ? choice.text === 'True' || choice.text === '正しい' || choice.text === 'はい'
-                  ? '○'
-                  : '×'
-                : choice.letter}
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  };
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isTimeExpired, onTimeExpired, router]);
 
   // Get color classes for each choice - matching HostAnswerScreen exactly
   const getChoiceColors = () => {
@@ -287,6 +366,8 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
                           colorClass={colorClasses[index]}
                           shouldAnimate={isAnimationStarted}
                           correctAnswer={correctAnswer}
+                          questionId={question.id}
+                          questionType={question.type}
                         />
                       );
                     })}
@@ -400,6 +481,8 @@ export const PlayerAnswerRevealScreen: React.FC<PlayerAnswerRevealScreenProps> =
                           colorClass={colorClasses[index]}
                           shouldAnimate={isAnimationStarted}
                           correctAnswer={correctAnswer}
+                          questionId={question.id}
+                          questionType={question.type}
                         />
                       );
                     })}

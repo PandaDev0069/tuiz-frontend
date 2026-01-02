@@ -65,7 +65,7 @@ sequenceDiagram
 
 ## Data Flow Architecture
 
-```
+```text
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   Host Control  │    │  Public Screen  │    │ Player Devices  │
 │     Panel       │    │                 │    │                 │

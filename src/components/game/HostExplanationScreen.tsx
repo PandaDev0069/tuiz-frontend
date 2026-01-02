@@ -9,11 +9,13 @@ import { ExplanationData } from '@/types/game';
 interface HostExplanationScreenProps {
   explanation: ExplanationData;
   onTimeExpired?: () => void;
+  onNext?: () => void; // Callback for manual next action
 }
 
 export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
   explanation,
   onTimeExpired,
+  onNext,
 }) => {
   const { questionNumber, totalQuestions, timeLimit, title, body, image } = explanation;
   const [currentTime, setCurrentTime] = useState(timeLimit);
@@ -138,6 +140,18 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Next Button */}
+          {onNext && (
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20">
+              <button
+                onClick={onNext}
+                className="px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+              >
+                次へ
+              </button>
+            </div>
+          )}
         </div>
       </Main>
     </PageContainer>

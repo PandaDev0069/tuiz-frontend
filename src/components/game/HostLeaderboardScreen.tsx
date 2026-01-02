@@ -123,10 +123,12 @@ const LeaderboardEntryComponent: React.FC<{
       }`}
       style={{ transitionDelay: `${index * 100}ms` }}
     >
-      {/* Rank Change Indicator */}
-      <div className="absolute -top-1 -left-1 w-6 h-6 md:w-7 md:h-7 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
-        {getRankChangeIcon(entry.rankChange, 14)}
-      </div>
+      {/* Rank Change Indicator - Only show for top 5 */}
+      {entry.rank <= 5 && (
+        <div className="absolute -top-1 -left-1 w-6 h-6 md:w-7 md:h-7 bg-white/90 rounded-full flex items-center justify-center shadow-lg">
+          {getRankChangeIcon(entry.rankChange, 14)}
+        </div>
+      )}
 
       {/* Rank Crown/Medal for top 3 */}
       {rankIcon && (
@@ -172,11 +174,13 @@ const LeaderboardEntryComponent: React.FC<{
 interface HostLeaderboardScreenProps {
   leaderboardData: LeaderboardData;
   onTimeExpired?: () => void; // Callback for when timer expires
+  onNext?: () => void; // Callback for manual next action
 }
 
 export const HostLeaderboardScreen: React.FC<HostLeaderboardScreenProps> = ({
   leaderboardData,
   onTimeExpired,
+  onNext,
 }) => {
   const { entries, questionNumber, totalQuestions, timeLimit } = leaderboardData;
 
@@ -306,6 +310,18 @@ export const HostLeaderboardScreen: React.FC<HostLeaderboardScreenProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Next Button */}
+          {onNext && (
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20">
+              <button
+                onClick={onNext}
+                className="px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+              >
+                次へ
+              </button>
+            </div>
+          )}
 
           {/* Bottom spacing */}
           <div className="h-4"></div>

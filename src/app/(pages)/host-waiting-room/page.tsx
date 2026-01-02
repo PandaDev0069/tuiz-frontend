@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import React, { useState, Suspense, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { HostSettingsModal } from '@/components/ui/overlays/host-settings-modal';
 import {
@@ -12,11 +12,23 @@ import {
 } from '@/components/host-waiting-room';
 import { Settings } from 'lucide-react';
 import { QuizPlaySettings } from '@/types/quiz';
+import { gameApi, type PlayersResponse } from '@/services/gameApi';
+import { useSocket } from '@/components/providers/SocketProvider';
+import { quizService } from '@/lib/quizService';
+import toast from 'react-hot-toast';
 
 function HostWaitingRoomContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const roomCode = searchParams.get('code') || '';
   const quizId = searchParams.get('quizId') || '';
+  const gameIdParam = searchParams.get('gameId') || '';
+  const { socket, joinRoom: socketJoinRoom, leaveRoom: socketLeaveRoom } = useSocket();
+
+  const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
+  const [gameCode, setGameCode] = useState<string | null>(roomCode || null);
+  const [gameIdError, setGameIdError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(false);
 
   // Settings modal state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -35,58 +47,473 @@ function HostWaitingRoomContent() {
   // Start game confirmation modal state
   const [isStartConfirmOpen, setIsStartConfirmOpen] = useState(false);
 
-  // Mock player data for now - will be replaced with real-time data
-  const [players, setPlayers] = useState([
-    { id: '1', name: 'プレイヤー1', joinedAt: new Date(), isHost: true },
-    { id: '2', name: 'プレイヤー2', joinedAt: new Date() },
-    { id: '3', name: 'プレイヤー3', joinedAt: new Date() },
-    { id: '4', name: 'プレイヤー4', joinedAt: new Date() },
-    { id: '5', name: 'プレイヤー5', joinedAt: new Date() },
-  ]);
+  // Player data from backend
+  const [players, setPlayers] = useState<
+    Array<{
+      id: string;
+      name: string;
+      joinedAt: Date;
+      isBanned?: boolean;
+      isHost?: boolean;
+    }>
+  >([]);
+  const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
+
+  // Ref to track if component is navigating away
+  const isNavigatingRef = useRef(false);
+  // Ref to store latest fetchPlayers function to avoid dependency issues
+  const fetchPlayersRef = useRef<(() => Promise<void>) | undefined>(undefined);
+  // Ref to track room join state to prevent duplicate joins/leaves
+  const hasJoinedRoomRef = useRef(false);
+  // Ref to track the current gameId we're in the room for
+  const currentRoomGameIdRef = useRef<string | null>(null);
+  // Ref to track socket connection state to prevent re-runs on socket object changes
+  const socketConnectedRef = useRef(false);
+  const socketIdRef = useRef<string | null>(null);
+
+  // Fetch players from backend
+  const fetchPlayers = useCallback(async () => {
+    if (!gameId) return;
+
+    try {
+      setIsLoadingPlayers(true);
+      const { data: playersResponse, error } = await gameApi.getPlayers(gameId);
+
+      if (error || !playersResponse) {
+        console.error('Failed to fetch players:', error);
+        return;
+      }
+
+      // Backend returns PlayersResponse with { players: Player[], total: number, ... }
+      const playersResponseTyped = playersResponse as PlayersResponse;
+      const playersArray = playersResponseTyped.players || [];
+
+      // Map backend Player format to frontend format
+      // Backend returns player_name, created_at (not display_name, joined_at)
+      // Filter out hosts from the player list (they shouldn't be displayed)
+      // Deduplicate by device_id - if multiple players have the same device_id, keep only the first one (by created_at)
+      const deviceIdMap = new Map<string, (typeof playersArray)[0]>();
+
+      playersArray
+        .filter((player) => !player.is_host) // Exclude hosts from player list
+        .forEach((player) => {
+          if (player.device_id) {
+            const existing = deviceIdMap.get(player.device_id);
+            // Keep the first player (earliest created_at) for each device_id
+            if (!existing || new Date(player.created_at) < new Date(existing.created_at)) {
+              deviceIdMap.set(player.device_id, player);
+            }
+          } else {
+            // If no device_id, include the player (shouldn't happen, but handle it)
+            deviceIdMap.set(player.id, player);
+          }
+        });
+
+      const mappedPlayers = Array.from(deviceIdMap.values()).map((player) => ({
+        id: player.id,
+        name: player.player_name, // Backend uses player_name
+        joinedAt: new Date(player.created_at), // Backend uses created_at
+        isBanned: false, // is_kicked not implemented in backend
+        isHost: player.is_host,
+      }));
+
+      setPlayers(mappedPlayers);
+    } catch (err) {
+      console.error('Error fetching players:', err);
+    } finally {
+      setIsLoadingPlayers(false);
+    }
+  }, [gameId]);
+
+  // Update ref whenever fetchPlayers changes
+  useEffect(() => {
+    fetchPlayersRef.current = fetchPlayers;
+  }, [fetchPlayers]);
+
+  // Fetch game data, quiz settings, and players when gameId is available
+  useEffect(() => {
+    if (!gameId || !quizId) return;
+
+    let isMounted = true;
+
+    const initializeGameData = async () => {
+      setIsInitializing(true);
+      try {
+        // Fetch game data to get lock status and game code
+        const { data: game, error: gameError } = await gameApi.getGame(gameId);
+        if (!isMounted) return;
+
+        if (gameError || !game) {
+          console.error('Failed to fetch game data:', gameError);
+          setGameIdError('ゲームデータの取得に失敗しました');
+          return;
+        }
+
+        // Sync lock status and game code from backend
+        setIsRoomLocked(game.locked);
+        if (game.game_code || game.room_code) {
+          const actualGameCode = game.game_code || game.room_code || '';
+          setGameCode(actualGameCode);
+          // Update sessionStorage
+          sessionStorage.setItem(`game_${actualGameCode}`, gameId);
+        }
+
+        // Fetch quiz set to get play_settings
+        try {
+          const quizSet = await quizService.getQuiz(quizId);
+          if (!isMounted) return;
+
+          if (quizSet?.play_settings) {
+            // Sync play_settings from quiz set
+            setPlaySettings({
+              show_question_only: quizSet.play_settings.show_question_only ?? true,
+              show_explanation: quizSet.play_settings.show_explanation ?? true,
+              time_bonus: quizSet.play_settings.time_bonus ?? true,
+              streak_bonus: quizSet.play_settings.streak_bonus ?? true,
+              show_correct_answer: quizSet.play_settings.show_correct_answer ?? false,
+              max_players: quizSet.play_settings.max_players ?? 400,
+            });
+          }
+        } catch (quizError) {
+          console.warn('Failed to fetch quiz settings, using defaults:', quizError);
+          // Continue with default settings if quiz fetch fails
+        }
+
+        // Fetch players
+        await fetchPlayers();
+      } catch (err) {
+        if (!isMounted) return;
+        console.error('Error initializing game data:', err);
+        setGameIdError('ゲームの初期化に失敗しました');
+      } finally {
+        if (isMounted) {
+          setIsInitializing(false);
+        }
+      }
+    };
+
+    initializeGameData();
+
+    // Set up polling to refresh player list every 3 seconds
+    const pollInterval = setInterval(() => {
+      if (gameId && isMounted) {
+        fetchPlayers();
+      }
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+    // Note: fetchPlayers is stable (useCallback with gameId dependency)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, quizId]);
+
+  // Listen for WebSocket events for real-time player updates
+  useEffect(() => {
+    if (!socket || !gameId || !socket.connected || isNavigatingRef.current) {
+      // Wait for socket connection or skip if navigating away
+      return;
+    }
+
+    // Track socket connection state to prevent re-runs on socket object reference changes
+    const currentSocketId = socket.id || null;
+    const isSocketConnected = socket.connected;
+    const previousGameId = currentRoomGameIdRef.current;
+    const wasInDifferentRoom =
+      hasJoinedRoomRef.current && previousGameId && previousGameId !== gameId;
+
+    // If socket ID changed or disconnected, reset join state
+    if (socketIdRef.current !== currentSocketId || !isSocketConnected) {
+      if (socketIdRef.current && socketIdRef.current !== currentSocketId) {
+        console.log('[HostWaitingRoom] Socket ID changed, resetting room state');
+        // Leave previous room if we were in one
+        if (hasJoinedRoomRef.current && previousGameId) {
+          socketLeaveRoom(previousGameId);
+        }
+        hasJoinedRoomRef.current = false;
+        currentRoomGameIdRef.current = null;
+      }
+      socketIdRef.current = currentSocketId;
+      socketConnectedRef.current = isSocketConnected;
+    }
+
+    // If we were in a different room, leave it first (only if gameId actually changed)
+    if (wasInDifferentRoom) {
+      console.log('[HostWaitingRoom] Leaving previous room:', previousGameId);
+      socketLeaveRoom(previousGameId);
+      hasJoinedRoomRef.current = false;
+    }
+
+    // Skip if already joined to the same room (prevent re-join on effect re-run)
+    if (hasJoinedRoomRef.current && currentRoomGameIdRef.current === gameId) {
+      console.log('[HostWaitingRoom] Already joined room for this gameId, skipping duplicate join');
+      return;
+    }
+
+    // Join the game room to receive events using SocketProvider helper (has built-in deduplication)
+    console.log('[HostWaitingRoom] Joining room:', gameId);
+    hasJoinedRoomRef.current = true;
+    currentRoomGameIdRef.current = gameId;
+    socketJoinRoom(gameId);
+
+    // Listen for player join/leave events
+    const handlePlayerJoined = (data?: { playerId?: string; playerName?: string }) => {
+      if (isNavigatingRef.current) return;
+      console.log('Player joined:', data);
+      // Refresh player list when a player joins
+      fetchPlayersRef.current?.();
+    };
+
+    const handlePlayerLeft = (data?: { playerId?: string }) => {
+      if (isNavigatingRef.current) return;
+      console.log('Player left:', data);
+      // Refresh player list when a player leaves
+      fetchPlayersRef.current?.();
+    };
+
+    // Listen for room user events (these fire when players join/leave the room)
+    socket.on('room:user-joined', handlePlayerJoined);
+    socket.on('room:user-left', handlePlayerLeft);
+
+    // Also listen for game-specific player events if they exist
+    socket.on('game:player-joined', handlePlayerJoined);
+    socket.on('game:player-left', handlePlayerLeft);
+
+    // Listen for room lock status changes
+    const handleRoomLocked = (data: { locked: boolean }) => {
+      if (isNavigatingRef.current) return;
+      setIsRoomLocked(data.locked);
+    };
+    socket.on('game:room-locked', handleRoomLocked);
+
+    // Listen for player kicked events
+    const handlePlayerKicked = (data: { player_id: string; player_name: string }) => {
+      if (isNavigatingRef.current) return;
+      console.log('Player kicked:', data);
+      // Refresh player list when a player is kicked
+      fetchPlayersRef.current?.();
+      // Show notification
+      toast.success(`${data.player_name}がBANされました`, {
+        icon: '🚫',
+      });
+    };
+    socket.on('game:player-kicked', handlePlayerKicked);
+
+    return () => {
+      // Only clean up event listeners
+      // DO NOT leave room here - room leave is handled in the effect body when:
+      // 1. gameId changes (handled above)
+      // 2. socket ID changes (handled above)
+      // 3. Component unmounts (handled by separate unmount effect below)
+      socket.off('room:user-joined', handlePlayerJoined);
+      socket.off('room:user-left', handlePlayerLeft);
+      socket.off('game:player-joined', handlePlayerJoined);
+      socket.off('game:player-left', handlePlayerLeft);
+      socket.off('game:room-locked', handleRoomLocked);
+      socket.off('game:player-kicked', handlePlayerKicked);
+    };
+    // Use socket.id and socket.connected instead of socket object to prevent re-runs on reference changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket?.id, socket?.connected, gameId, socketJoinRoom, socketLeaveRoom]);
 
   // Player management functions
-  const handlePlayerBan = (playerId: string) => {
-    setPlayers((prev) =>
-      prev.map((player) => (player.id === playerId ? { ...player, isBanned: true } : player)),
-    );
+  const handlePlayerBan = async (playerId: string) => {
+    if (!gameId) return;
+
+    // Find player name for better error messages
+    const playerToBan = players.find((p) => p.id === playerId);
+    const playerName = playerToBan?.name || 'プレイヤー';
+
+    try {
+      // Call backend API to kick player
+      const { error } = await gameApi.kickPlayer(gameId, playerId);
+      if (error) {
+        const errorMessage = error.message || 'プレイヤーのBANに失敗しました';
+        toast.error(errorMessage, {
+          icon: '❌',
+        });
+        console.error('Failed to ban player:', error);
+        return;
+      }
+
+      // Show success message
+      toast.success(`${playerName}をBANしました`, {
+        icon: '🚫',
+      });
+
+      // Refresh player list after banning
+      await fetchPlayers();
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'プレイヤーのBAN中にエラーが発生しました';
+      toast.error(errorMessage, {
+        icon: '❌',
+      });
+      console.error('Error banning player:', err);
+    }
   };
 
   const handleStartQuiz = () => {
     setIsStartConfirmOpen(true);
   };
 
-  const handleConfirmStartQuiz = () => {
-    /**
-     * Implementation pending: Actual quiz start logic with backend integration
-     * Required: WebSocket event to notify all players, database state update
-     */
-    console.log('Starting quiz with settings:', playSettings);
-    // Redirect to host control panel
-    window.location.href = `/host-control-panel?code=${roomCode}&quizId=${quizId}`;
+  // Initialize game from URL params or sessionStorage
+  useEffect(() => {
+    // Skip if we already have a gameId (to avoid re-running when gameId state updates)
+    if (gameId) return;
+
+    // Priority 1: gameId from URL params (preferred - game should be created before navigation)
+    if (gameIdParam) {
+      setGameId(gameIdParam);
+      // Store in sessionStorage for player join flow
+      if (roomCode) {
+        sessionStorage.setItem(`game_${roomCode}`, gameIdParam);
+      }
+      setGameIdError(null);
+      return;
+    }
+
+    // Priority 2: gameId from sessionStorage (fallback for direct navigation)
+    if (roomCode) {
+      const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
+      if (storedGameId) {
+        setGameId(storedGameId);
+        setGameCode(roomCode);
+        setGameIdError(null);
+        // Update URL to include gameId
+        router.replace(
+          `/host-waiting-room?code=${roomCode}&quizId=${quizId}&gameId=${storedGameId}`,
+        );
+        return;
+      }
+    }
+
+    // If we have quizId but no gameId, show error (game should be created in dashboard)
+    if (quizId && !gameIdParam) {
+      setGameIdError('ゲームが見つかりません。ダッシュボードからゲームを開始してください。');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomCode, gameIdParam, quizId, router]);
+
+  const handleConfirmStartQuiz = async () => {
+    if (!gameId) {
+      setGameIdError('ゲームIDが必要です。ゲームを作成してから開始してください。');
+      setIsStartConfirmOpen(false);
+      return;
+    }
+
+    try {
+      // Set navigating flag to prevent socket room join/leave loops
+      isNavigatingRef.current = true;
+
+      setGameIdError(null);
+      // Start the game via API
+      const { data: game, error } = await gameApi.startGame(gameId);
+      if (error || !game) {
+        const errorMessage = error?.message || 'ゲームの開始に失敗しました';
+        setGameIdError(errorMessage);
+        console.error('Failed to start game:', error);
+        setIsStartConfirmOpen(false);
+        isNavigatingRef.current = false; // Reset flag on error
+        return;
+      }
+
+      // Wait a moment to ensure all players have joined the room before emitting events
+      // This prevents race conditions where events are emitted before players are listening
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Emit WebSocket events to notify all clients (players and public screen)
+      const actualGameCode = gameCode || roomCode;
+      if (socket && socket.connected) {
+        console.log('[HostWaitingRoom] Emitting game:started and phase:change events');
+        // Emit game:started event for players
+        socket.emit('game:started', { roomId: gameId, roomCode: actualGameCode });
+        // Emit phase change to countdown for public screen and players
+        socket.emit('game:phase:change', { roomId: gameId, phase: 'countdown' });
+      } else {
+        console.warn('[HostWaitingRoom] Socket not connected, cannot emit events');
+      }
+
+      // Don't leave the room - game-host page needs to be in the room
+      // The room will persist and game-host will join (or already be in it)
+      console.log('[HostWaitingRoom] Keeping room connection for game-host page');
+
+      // Small delay to ensure events are emitted before navigation
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Redirect to game host page
+      router.push(`/game-host?gameId=${gameId}&phase=countdown`);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'ゲームの開始中にエラーが発生しました';
+      setGameIdError(errorMessage);
+      console.error('Error starting game:', err);
+      setIsStartConfirmOpen(false);
+      isNavigatingRef.current = false; // Reset flag on error
+    }
   };
 
   const handleOpenScreen = () => {
     // Open host screen in new window
-    const hostScreenUrl = `/host-screen?code=${roomCode}&quizId=${quizId}`;
+    const actualGameCode = gameCode || roomCode;
+    const hostScreenUrl = `/host-screen?code=${actualGameCode}&quizId=${quizId}${
+      gameId ? `&gameId=${gameId}` : ''
+    }`;
     window.open(hostScreenUrl, 'host-screen', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+
+    // Track that public screen is open in sessionStorage
+    if (gameId) {
+      sessionStorage.setItem(`public_screen_open_${gameId}`, 'true');
+    }
   };
 
   const handleAddPlayer = () => {
-    const newPlayer = {
-      id: (players.length + 1).toString(),
-      name: `プレイヤー${players.length + 1}`,
-      joinedAt: new Date(),
-    };
-    setPlayers((prev) => [...prev, newPlayer]);
+    // Remove this function - players join via the join endpoint, not manually
+    // This was only for testing with mock data
+    console.warn('handleAddPlayer is deprecated - players join via the join endpoint');
   };
 
-  const handleRoomLockToggle = (isLocked: boolean) => {
-    setIsRoomLocked(isLocked);
-    /**
-     * Implementation pending: Actual room lock logic with backend API call
-     * Required: Update room status in database, emit WebSocket event to prevent new joins
-     */
-    console.log(`Room ${isLocked ? 'locked' : 'unlocked'}`);
+  const handleRoomLockToggle = async (isLocked: boolean) => {
+    if (!gameId) {
+      console.error('Cannot lock room: gameId is missing');
+      return;
+    }
+
+    try {
+      // Update room lock status via backend API
+      const { data: game, error } = await gameApi.lockGame(gameId, isLocked);
+
+      if (error || !game) {
+        const errorMessage =
+          error?.message || `ルームの${isLocked ? 'ロック' : 'アンロック'}に失敗しました`;
+        setGameIdError(errorMessage);
+        console.error('Failed to lock/unlock room:', error);
+        // Revert the state change on error
+        setIsRoomLocked(!isLocked);
+        return;
+      }
+
+      // Update local state on success
+      setIsRoomLocked(game.locked);
+
+      // Emit WebSocket event to notify players about room lock status
+      if (socket) {
+        socket.emit('game:room-locked', {
+          roomId: gameId,
+          locked: game.locked,
+        });
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : `ルームの${isLocked ? 'ロック' : 'アンロック'}中にエラーが発生しました`;
+      setGameIdError(errorMessage);
+      console.error('Error locking/unlocking room:', err);
+      // Revert the state change on error
+      setIsRoomLocked(!isLocked);
+    }
   };
 
   return (
@@ -134,17 +561,34 @@ function HostWaitingRoomContent() {
                 onPlayerBan={handlePlayerBan}
                 onAddPlayer={handleAddPlayer}
                 className="h-full"
+                isLoading={isLoadingPlayers}
               />
             </div>
 
             {/* Center Panel - Host Controls */}
             <div className="lg:col-span-1 h-full flex flex-col items-center justify-center space-y-6">
-              <HostControls
-                roomCode={roomCode}
-                onStartQuiz={handleStartQuiz}
-                onOpenScreen={handleOpenScreen}
-                className="w-full max-w-md h-fit"
-              />
+              {isInitializing && (
+                <div className="w-full max-w-md bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg shadow-md">
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <p className="text-sm">ゲームを初期化中...</p>
+                  </div>
+                </div>
+              )}
+              {gameIdError && (
+                <div className="w-full max-w-md bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-md">
+                  <p className="font-semibold">エラー</p>
+                  <p className="text-sm">{gameIdError}</p>
+                </div>
+              )}
+              {!isInitializing && (
+                <HostControls
+                  roomCode={gameCode || roomCode}
+                  onStartQuiz={handleStartQuiz}
+                  onOpenScreen={handleOpenScreen}
+                  className="w-full max-w-md h-fit"
+                />
+              )}
             </div>
 
             {/* Right Panel - Room Management */}
@@ -167,7 +611,7 @@ function HostWaitingRoomContent() {
         onClose={() => setIsSettingsOpen(false)}
         playSettings={playSettings}
         onPlaySettingsChange={setPlaySettings}
-        roomCode={roomCode}
+        roomCode={gameCode || roomCode}
       />
 
       {/* Start Game Confirmation Modal */}
@@ -177,7 +621,7 @@ function HostWaitingRoomContent() {
         onConfirm={handleConfirmStartQuiz}
         playerCount={players.length}
         maxPlayers={playSettings.max_players || 400}
-        roomCode={roomCode}
+        roomCode={gameCode || roomCode}
         playSettings={playSettings}
       />
     </PageContainer>

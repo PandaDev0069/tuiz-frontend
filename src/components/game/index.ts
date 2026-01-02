@@ -4,6 +4,8 @@ export { HostAnswerRevealScreen } from './HostAnswerRevealScreen';
 export { HostLeaderboardScreen } from './HostLeaderboardScreen';
 export { HostExplanationScreen } from './HostExplanationScreen';
 export { HostPodiumScreen } from './HostPodiumScreen';
+export { HostGameEndScreen } from './HostGameEndScreen';
+export { PlayerGameEndScreen } from './PlayerGameEndScreen';
 export { PlayerQuestionScreen } from './PlayerQuestionScreen';
 export { PlayerAnswerScreen } from './PlayerAnswerScreen';
 export { PlayerAnswerRevealScreen } from './PlayerAnswerRevealScreen';

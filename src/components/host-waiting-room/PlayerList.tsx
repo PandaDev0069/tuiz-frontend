@@ -18,6 +18,7 @@ interface PlayerListProps {
   onPlayerBan: (playerId: string) => void;
   onAddPlayer: () => void;
   className?: string;
+  isLoading?: boolean;
 }
 
 export const PlayerList: React.FC<PlayerListProps> = ({
@@ -25,14 +26,15 @@ export const PlayerList: React.FC<PlayerListProps> = ({
   onPlayerBan,
   onAddPlayer,
   className = '',
+  isLoading = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const { openModal, WarningModalComponent } = useWarningModal();
 
-  // Filter players based on search query and exclude banned players
+  // Filter players based on search query, exclude banned players, and exclude hosts
   const filteredPlayers = useMemo(() => {
-    // First filter out banned players
-    const activePlayers = players.filter((player) => !player.isBanned);
+    // First filter out banned players and hosts (hosts should not appear in player list)
+    const activePlayers = players.filter((player) => !player.isBanned && !player.isHost);
 
     // Then apply search filter
     if (!searchQuery.trim()) return activePlayers;
@@ -69,7 +71,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({
       <CardHeader className="pb-3 flex-shrink-0">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Users className="w-5 h-5 text-blue-600" />
-          参加プレイヤー ({players.length}人)
+          参加プレイヤー ({players.filter((p) => !p.isHost).length}人)
         </CardTitle>
       </CardHeader>
 
@@ -96,7 +98,12 @@ export const PlayerList: React.FC<PlayerListProps> = ({
 
         {/* Players List */}
         <div className="flex-1 overflow-y-auto space-y-2 max-h-[400px]">
-          {visiblePlayers.length === 0 ? (
+          {isLoading ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2">プレイヤーを読み込み中...</p>
+            </div>
+          ) : visiblePlayers.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               {searchQuery ? '検索結果が見つかりません' : 'プレイヤーがいません'}
             </div>

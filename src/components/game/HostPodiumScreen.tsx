@@ -259,9 +259,13 @@ const RemainingPlayersList: React.FC<{
 
 interface HostPodiumScreenProps {
   entries: LeaderboardEntry[];
+  onAnimationComplete?: () => void;
 }
 
-export const HostPodiumScreen: React.FC<HostPodiumScreenProps> = ({ entries }) => {
+export const HostPodiumScreen: React.FC<HostPodiumScreenProps> = ({
+  entries,
+  onAnimationComplete,
+}) => {
   // Animation state
   const [isAnimationStarted, setIsAnimationStarted] = useState(false);
 
@@ -277,6 +281,17 @@ export const HostPodiumScreen: React.FC<HostPodiumScreenProps> = ({ entries }) =
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Call onAnimationComplete after all animations finish (approximately 5-6 seconds)
+  useEffect(() => {
+    if (isAnimationStarted && onAnimationComplete) {
+      const timer = setTimeout(() => {
+        onAnimationComplete();
+      }, 6000); // Total animation time
+
+      return () => clearTimeout(timer);
+    }
+  }, [isAnimationStarted, onAnimationComplete]);
 
   return (
     <PageContainer className="h-screen">

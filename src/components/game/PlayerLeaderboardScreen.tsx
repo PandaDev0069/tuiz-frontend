@@ -79,8 +79,23 @@ const PlayerLeaderboardItem: React.FC<{ entry: LeaderboardEntry }> = ({ entry })
         </div>
 
         <div className="text-right">
-          <span className="block text-lg font-bold tracking-tight md:text-xl">{entry.score}</span>
+          <div className="flex items-center justify-end gap-2">
+            <span className="block text-lg font-bold tracking-tight md:text-xl">{entry.score}</span>
+            {entry.scoreChange && entry.scoreChange > 0 && (
+              <span className="text-sm font-bold text-emerald-300 animate-pulse">
+                +{entry.scoreChange}
+              </span>
+            )}
+          </div>
           <span className="text-[11px] text-white/70">ポイント</span>
+          {entry.previousRank !== undefined &&
+            entry.previousRank !== entry.rank &&
+            entry.rankChange && (
+              <div className="text-[10px] text-white/60 mt-0.5">
+                {entry.rankChange === 'up' && `↑ ${entry.previousRank}位`}
+                {entry.rankChange === 'down' && `↓ ${entry.previousRank}位`}
+              </div>
+            )}
         </div>
       </div>
 
@@ -170,9 +185,18 @@ export const PlayerLeaderboardScreen: React.FC<PlayerLeaderboardScreenProps> = (
           <div className="flex-1 px-4 py-4">
             <div className="mx-auto flex h-full w-full max-w-3xl flex-col rounded-2xl border border-white/20 bg-white/10 p-4 shadow-2xl backdrop-blur-sm">
               <div className="flex-1 space-y-3 overflow-y-auto px-2 py-3 pb-3 pt-1 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-                {entries.slice(0, 5).map((entry) => (
-                  <PlayerLeaderboardItem key={entry.playerId} entry={entry} />
-                ))}
+                {entries && entries.length > 0 ? (
+                  entries
+                    .slice(0, 5)
+                    .map((entry) => <PlayerLeaderboardItem key={entry.playerId} entry={entry} />)
+                ) : (
+                  <div className="flex h-full items-center justify-center">
+                    <div className="text-center">
+                      <p className="text-xl text-white/70 mb-2">リーダーボードデータがありません</p>
+                      <p className="text-sm text-white/50">ランキングデータを読み込み中...</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Bottom decoration */}

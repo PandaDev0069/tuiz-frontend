@@ -1,15 +1,39 @@
 'use client';
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { PlayerCountdownScreen } from '@/components/game';
+import { useSocket } from '@/components/providers/SocketProvider';
+import { gameApi } from '@/services/gameApi';
+import { useDeviceId } from '@/hooks/useDeviceId';
+import { toast } from 'react-hot-toast';
 
 function WaitingRoomContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || '';
   const roomCode = searchParams.get('code') || '';
+  const gameIdParam = searchParams.get('gameId') || '';
+  const { socket, isConnected, isRegistered, joinRoom, leaveRoom } = useSocket();
+  const { deviceId, isLoading: isDeviceIdLoading } = useDeviceId();
+
+  // State management
+  const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [isRoomLocked, setIsRoomLocked] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const isNavigatingRef = useRef(false);
+  const hasJoinedRoomRef = useRef(false);
+  const isJoiningRef = useRef(false); // Prevent multiple concurrent join attempts
+  const hasInitializedRef = useRef(false); // Track if we've completed initialization
+
+  // Computed: Check if we should show the waiting message
+  const shouldShowWaitingMessage = !isJoining && !joinError && isInitialized && !!playerId;
 
   // Mobile detection
   const [isMobile, setIsMobile] = useState(true);
@@ -25,18 +49,540 @@ function WaitingRoomContent() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Get gameId from room code and join game
+  const getGameIdFromCode = useCallback(async (code: string): Promise<string | null> => {
+    // Priority 1: Check sessionStorage (set when host creates game)
+    const storedGameId = sessionStorage.getItem(`game_${code}`);
+    if (storedGameId) {
+      return storedGameId;
+    }
+
+    // Priority 2: Fetch game by code from API
+    try {
+      const { data: game, error: gameError } = await gameApi.getGameByCode(code);
+      if (gameError || !game) {
+        console.warn('Failed to fetch game by code:', gameError);
+        return null;
+      }
+      // Store in sessionStorage for future use
+      sessionStorage.setItem(`game_${code}`, game.id);
+      return game.id;
+    } catch (err) {
+      console.error('Error fetching game by code:', err);
+      return null;
+    }
+  }, []);
+
+  // Handle reconnection: Check if player already exists for this device+game
+  const checkExistingPlayer = useCallback(
+    async (targetGameId?: string) => {
+      const gameIdToCheck = targetGameId || gameId;
+      if (!gameIdToCheck || !deviceId) {
+        return null;
+      }
+
+      try {
+        // Get all players for this game
+        const { data: playersResponse, error: playersError } =
+          await gameApi.getPlayers(gameIdToCheck);
+        if (playersError) {
+          console.warn('[WaitingRoom] Error fetching players:', playersError);
+          return null;
+        }
+        if (!playersResponse) {
+          return null;
+        }
+
+        const playersArray = playersResponse.players || [];
+        // Find player with matching device_id
+        const existingPlayer = playersArray.find((p) => p.device_id === deviceId);
+        return existingPlayer || null;
+      } catch (err) {
+        console.error('[WaitingRoom] Failed to check existing player:', err);
+        return null;
+      }
+    },
+    [gameId, deviceId],
+  );
+
+  // Fetch current game state to recover if websocket events were missed
+  const syncGameState = useCallback(async () => {
+    if (!gameId || isNavigatingRef.current) return;
+
+    try {
+      const { data, error } = await gameApi.getGameState(gameId);
+      if (error || !data) return;
+
+      const { game, gameFlow } = data;
+      let nextPhase: string = 'waiting';
+
+      if (game.status === 'finished') {
+        nextPhase = 'ended';
+      } else if (gameFlow.current_question_id) {
+        if (gameFlow.current_question_end_time) {
+          nextPhase = 'answer_reveal';
+        } else if (gameFlow.current_question_start_time) {
+          nextPhase = 'question';
+        } else {
+          nextPhase = 'countdown';
+        }
+      } else if (game.status === 'active') {
+        nextPhase = 'countdown';
+      }
+
+      // Only navigate if game has actually started (not in waiting state)
+      if (nextPhase !== 'waiting') {
+        isNavigatingRef.current = true;
+        router.replace(
+          `/game-player?gameId=${gameId}&phase=${nextPhase}&playerId=${playerId || playerName}`,
+        );
+      }
+    } catch (err) {
+      console.warn('[WaitingRoom] Failed to sync game state', err);
+    }
+  }, [gameId, router, playerId, playerName]);
+
+  // Initialize player join flow
+  useEffect(() => {
+    // Wait for deviceId to be ready
+    if (isDeviceIdLoading || !deviceId) return;
+
+    // Check required params
+    if (!roomCode || !playerName) {
+      setJoinError('ルームコードとプレイヤー名が必要です');
+      return;
+    }
+
+    // Skip if already initialized or if a join is already in progress
+    if (hasInitializedRef.current || isJoiningRef.current) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const initializeAndJoin = async () => {
+      // Prevent multiple concurrent join attempts
+      if (isJoiningRef.current) {
+        return;
+      }
+      isJoiningRef.current = true;
+
+      try {
+        setIsJoining(true);
+        setJoinError(null);
+
+        // Step 1: Get gameId from room code
+        let currentGameId: string | null = gameIdParam || null;
+        if (!currentGameId) {
+          currentGameId = await getGameIdFromCode(roomCode);
+          if (!currentGameId) {
+            if (!isMounted) {
+              setIsJoining(false);
+              isJoiningRef.current = false;
+              return;
+            }
+            setJoinError('ゲームが見つかりません。ルームコードを確認してください。');
+            setIsJoining(false);
+            isJoiningRef.current = false;
+            return;
+          }
+        }
+
+        if (!isMounted || !currentGameId) {
+          setIsJoining(false);
+          isJoiningRef.current = false;
+          return;
+        }
+        setGameId(currentGameId);
+
+        // Step 1.5: Check if player already exists (reconnection scenario)
+        // This handles the case where player refreshes page or reconnects
+        // Always verify player exists in DB, even if we have a cached playerId
+        const existingPlayer = await checkExistingPlayer(currentGameId);
+        if (existingPlayer) {
+          // Player already exists in DB, use existing player
+          if (!isMounted) {
+            setIsJoining(false);
+            isJoiningRef.current = false;
+            return;
+          }
+
+          // Prevent duplicate initialization
+          if (hasInitializedRef.current) {
+            return;
+          }
+
+          // Store playerId in sessionStorage immediately
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem(
+              `player_${currentGameId}_${deviceId || 'unknown'}`,
+              existingPlayer.id,
+            );
+          }
+          // Update all state together - use flushSync to force immediate re-render
+          isJoiningRef.current = false;
+          // Set all state in a single flushSync to ensure they update together
+          flushSync(() => {
+            setIsJoining(false);
+            setJoinError(null);
+            setPlayerId(existingPlayer.id);
+            setIsInitialized(true);
+          });
+          // Mark as initialized AFTER state is set
+          hasInitializedRef.current = true;
+          toast.success('再接続しました');
+          return;
+        }
+
+        // If we had a cached playerId but player doesn't exist in DB, clear the cache
+        const cachedPlayerId =
+          (typeof window !== 'undefined' &&
+            sessionStorage.getItem(`player_${currentGameId}_${deviceId || 'unknown'}`)) ||
+          null;
+        if (cachedPlayerId) {
+          if (typeof window !== 'undefined') {
+            sessionStorage.removeItem(`player_${currentGameId}_${deviceId || 'unknown'}`);
+          }
+        }
+
+        // Step 2: Join the game (creates players table record)
+        // Validate required parameters before joining
+        if (!deviceId) {
+          if (!isMounted) {
+            setIsJoining(false);
+            isJoiningRef.current = false;
+            return;
+          }
+          setJoinError('デバイスIDが見つかりません。ページを再読み込みしてください。');
+          setIsJoining(false);
+          isJoiningRef.current = false;
+          return;
+        }
+
+        if (!playerName || playerName.trim() === '') {
+          if (!isMounted) {
+            setIsJoining(false);
+            isJoiningRef.current = false;
+            return;
+          }
+          setJoinError('プレイヤー名が必要です');
+          setIsJoining(false);
+          isJoiningRef.current = false;
+          return;
+        }
+        const { data: player, error: joinError } = await gameApi.joinGame(
+          currentGameId,
+          playerName.trim(),
+          deviceId,
+        );
+
+        // Note: We continue even if unmounted to ensure state is set
+        // React will handle cleanup if component is actually unmounted
+
+        if (joinError || !player) {
+          const errorMessage = joinError?.message || 'ゲームへの参加に失敗しました';
+          console.error('[WaitingRoom] Join game failed:', {
+            error: joinError,
+            player,
+            errorMessage,
+          });
+          setJoinError(errorMessage);
+          setIsJoining(false);
+          isJoiningRef.current = false;
+          toast.error(errorMessage);
+
+          // Handle specific error cases
+          if (joinError?.error === 'join_game_failed') {
+            if (joinError.message?.includes('locked')) {
+              setIsRoomLocked(true);
+            }
+          }
+          return;
+        }
+
+        // Double-check player has required fields
+        if (!player.id) {
+          setJoinError('プレイヤー情報が不正です');
+          setIsJoining(false);
+          isJoiningRef.current = false;
+          return;
+        }
+
+        // Store playerId in sessionStorage immediately
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(`player_${currentGameId}_${deviceId || 'unknown'}`, player.id);
+        }
+
+        // Step 3: Initialize game_player_data (if not already created)
+        // Note: Backend creates this automatically when player joins, so this will likely return 409
+        // We try to create it anyway as a safety measure, but 409 is expected and harmless
+        try {
+          const { error: dataError } = await gameApi.initializePlayerData(
+            currentGameId,
+            player.id,
+            deviceId,
+          );
+          if (dataError) {
+            // 409 Conflict means it already exists, which is expected and fine
+            if (dataError.error !== 'conflict' && !dataError.message?.includes('already exists')) {
+              console.warn('[WaitingRoom] Game player data initialization error:', dataError);
+            }
+            // Silently ignore 409 conflicts - this is expected behavior
+          }
+        } catch (dataError) {
+          // Network errors or other unexpected errors - log but don't fail
+          const errorMessage = dataError instanceof Error ? dataError.message : String(dataError);
+          // Only log if it's not a 409 conflict
+          if (!errorMessage.includes('409') && !errorMessage.includes('Conflict')) {
+            console.warn('[WaitingRoom] Game player data initialization error:', dataError);
+          }
+        }
+
+        // Step 4: Fetch game data to check lock status
+        const { data: game } = await gameApi.getGame(currentGameId);
+
+        if (game) {
+          setIsRoomLocked(game.locked);
+        }
+
+        // Update all state together - use flushSync to force immediate re-render
+        isJoiningRef.current = false;
+        // Set all state in a single flushSync to ensure they update together
+        flushSync(() => {
+          setIsJoining(false);
+          setJoinError(null);
+          setPlayerId(player.id);
+          setIsInitialized(true);
+        });
+        // Mark as initialized AFTER state is set
+        hasInitializedRef.current = true;
+        toast.success('ゲームに参加しました！');
+      } catch (err) {
+        if (!isMounted) {
+          setIsJoining(false);
+          isJoiningRef.current = false;
+          return;
+        }
+        const errorMessage =
+          err instanceof Error ? err.message : 'ゲームへの参加中にエラーが発生しました';
+        setJoinError(errorMessage);
+        setIsJoining(false);
+        isJoiningRef.current = false;
+        toast.error(errorMessage);
+        console.error('Failed to join game:', err);
+      } finally {
+        // Ensure isJoining is always reset, even if something unexpected happens
+        if (isMounted) {
+          setIsJoining(false);
+          isJoiningRef.current = false;
+        }
+      }
+    };
+
+    initializeAndJoin();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    roomCode,
+    playerName,
+    deviceId,
+    gameIdParam,
+    isDeviceIdLoading,
+    getGameIdFromCode,
+    checkExistingPlayer,
+  ]);
+
+  // If already initialized, double-check the current game state to avoid missing phase changes
+  useEffect(() => {
+    if (isInitialized) {
+      syncGameState();
+    }
+  }, [isInitialized, syncGameState]);
+
+  // WebSocket room joining and event listeners
+  useEffect(() => {
+    // Wait for socket to be connected AND registered before joining room
+    if (!socket || !isConnected || !isRegistered || !gameId || !isInitialized || !playerId) {
+      return;
+    }
+
+    let reconnectAttempted = false;
+
+    // Join the game room via WebSocket
+    // Backend will create room_participants and websocket_connections records
+    const joinRoomSafe = () => {
+      if (hasJoinedRoomRef.current) {
+        return;
+      }
+      joinRoom(gameId);
+      hasJoinedRoomRef.current = true;
+    };
+
+    joinRoomSafe();
+
+    // Listen for game start event
+    const handleGameStarted = (data: {
+      roomId?: string;
+      gameId?: string;
+      roomCode?: string;
+      startedAt?: number;
+    }) => {
+      const targetGameId = data.gameId || data.roomId;
+      if (isNavigatingRef.current) return;
+      if (targetGameId === gameId || data.roomCode === roomCode) {
+        isNavigatingRef.current = true;
+        // Persist countdown start timestamp for the player page to sync timers
+        if (data.startedAt) {
+          sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
+        }
+        // Use replace for faster navigation (no history entry)
+        router.replace(
+          `/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId || playerName}`,
+        );
+      }
+    };
+
+    // Listen for explicit phase changes (fallback if game:started missed)
+    const handlePhaseChange = (data: { roomId: string; phase: string; startedAt?: number }) => {
+      if (data.roomId === gameId) {
+        // Always store countdown start timestamp so game-player can sync even if navigation is in-flight
+        if (data.phase === 'countdown' && data.startedAt) {
+          sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
+        }
+        if (isNavigatingRef.current) return;
+
+        isNavigatingRef.current = true;
+        // Use replace for faster navigation (no history entry)
+        router.replace(
+          `/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId || playerName}`,
+        );
+      }
+    };
+
+    // Listen for room lock status changes
+    const handleRoomLocked = (data: { gameId?: string; roomId?: string; locked: boolean }) => {
+      const targetGameId = data.gameId || data.roomId;
+      if (targetGameId === gameId) {
+        setIsRoomLocked(data.locked);
+      }
+    };
+
+    // Handle WebSocket reconnection
+    const handleReconnect = async () => {
+      if (reconnectAttempted) return;
+      reconnectAttempted = true;
+
+      // Wait a bit for socket to be registered
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Check if player still exists
+      const existingPlayer = await checkExistingPlayer();
+      if (existingPlayer) {
+        // Player exists, rejoin room (reset flag to allow rejoin)
+        hasJoinedRoomRef.current = false;
+        setPlayerId(existingPlayer.id);
+        if (typeof window !== 'undefined' && gameId) {
+          sessionStorage.setItem(`player_${gameId}_${deviceId || 'unknown'}`, existingPlayer.id);
+        }
+        if (gameId && isRegistered) {
+          joinRoom(gameId);
+        }
+        // Re-sync current phase in case we missed events while disconnected
+        syncGameState();
+        toast.success('再接続しました');
+      } else {
+        // Player doesn't exist, need to rejoin game
+        toast.error('接続が切断されました。ページを再読み込みしてください。');
+      }
+    };
+
+    // Listen for player join/leave events (for future use - showing player count)
+    const handlePlayerJoined = () => {
+      // Could update player list here if needed
+    };
+
+    const handlePlayerLeft = () => {
+      // Could update player list here if needed
+    };
+
+    // Handle player kicked event - redirect to join page
+    const handlePlayerKicked = (data: {
+      player_id: string;
+      player_name: string;
+      game_id: string;
+      kicked_by: string;
+      timestamp: string;
+    }) => {
+      // Check if the kicked player is the current player
+      if (data.player_id === playerId || data.game_id === gameId) {
+        // Show notification
+        toast.error('ホストによってBANされました', {
+          icon: '🚫',
+          duration: 5000,
+        });
+
+        // Clear stored game data
+        if (roomCode) {
+          sessionStorage.removeItem(`game_${roomCode}`);
+        }
+        if (typeof window !== 'undefined' && gameId) {
+          sessionStorage.removeItem(`player_${gameId}_${deviceId || 'unknown'}`);
+        }
+
+        // Redirect to join page after a short delay
+        setTimeout(() => {
+          router.push('/join');
+        }, 2000);
+      }
+    };
+
+    // Register event listeners
+    socket.on('game:started', handleGameStarted);
+    socket.on('game:phase:change', handlePhaseChange);
+    socket.on('game:room-locked', handleRoomLocked);
+    socket.on('room:user-joined', handlePlayerJoined);
+    socket.on('room:user-left', handlePlayerLeft);
+    socket.on('game:player-kicked', handlePlayerKicked);
+    socket.on('connect', handleReconnect); // Handle reconnection
+
+    // Cleanup on unmount
+    return () => {
+      socket.off('game:started', handleGameStarted);
+      socket.off('game:phase:change', handlePhaseChange);
+      socket.off('game:room-locked', handleRoomLocked);
+      socket.off('room:user-joined', handlePlayerJoined);
+      socket.off('room:user-left', handlePlayerLeft);
+      socket.off('game:player-kicked', handlePlayerKicked);
+      socket.off('connect', handleReconnect);
+
+      // Leave room on unmount unless we are navigating to the game
+      if (gameId && hasJoinedRoomRef.current && !isNavigatingRef.current) {
+        leaveRoom(gameId);
+        hasJoinedRoomRef.current = false;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    // Keep deps minimal to avoid repeated join/leave churn during navigation
+    socket?.id,
+    isConnected,
+    isRegistered, // Important: wait for registration, not just connection
+    gameId,
+    isInitialized,
+    playerId,
+    joinRoom,
+    leaveRoom,
+  ]);
+
   // Countdown state
-  const [showCountdown, setShowCountdown] = useState(false);
+  const [showCountdown] = useState(false);
   const [countdownTime] = useState(5);
 
   const handleCountdownComplete = () => {
     // Navigate to player question screen after countdown
     window.location.href = `/player-question-screen?code=${roomCode}&playerId=test&name=${encodeURIComponent(playerName)}`;
-  };
-
-  const handleManualStart = () => {
-    // Show countdown first
-    setShowCountdown(true);
   };
 
   // Show countdown screen if countdown is active
@@ -148,35 +694,68 @@ function WaitingRoomContent() {
               <div className="absolute top-1/2 -right-1 w-2 h-2 bg-gradient-to-br from-white to-cyan-200 rounded-full transform -skew-x-12"></div>
             </div>
           </div>
-          {/* Waiting Message */}
-          <div className="text-center max-w-md">
-            <div className="relative inline-block">
-              {/* Background glow */}
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-blue-100 rounded-2xl blur-sm opacity-50 scale-105"></div>
-
-              {/* Message container */}
-              <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-6 py-4 rounded-2xl border border-cyan-200">
-                <p className="text-lg md:text-xl font-medium bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent leading-relaxed">
-                  ホストがクイズ開始するのを待っています
-                  <br />
-                  お待ちください
-                </p>
-
-                {/* Decorative dots */}
-                <div className="flex justify-center space-x-2 mt-3">
-                  <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
-                  <div
-                    className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
-                    style={{ animationDelay: '0.1s' }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
-                    style={{ animationDelay: '0.2s' }}
-                  ></div>
+          {/* Loading/Error States */}
+          {isJoining && (
+            <div className="text-center max-w-md">
+              <div className="relative inline-block">
+                <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-6 py-4 rounded-2xl border border-cyan-200">
+                  <div className="flex items-center justify-center space-x-3">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-600"></div>
+                    <p className="text-lg font-medium bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent">
+                      ゲームに参加中...
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {joinError && (
+            <div className="text-center max-w-md">
+              <div className="relative inline-block">
+                <div className="relative bg-red-50 px-6 py-4 rounded-2xl border border-red-200">
+                  <p className="text-lg font-medium text-red-700">{joinError}</p>
+                  {isRoomLocked && (
+                    <p className="text-sm text-red-600 mt-2">このルームはロックされています</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Waiting Message */}
+          {shouldShowWaitingMessage && (
+            <div className="text-center max-w-md">
+              <div className="relative inline-block">
+                {/* Background glow */}
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-blue-100 rounded-2xl blur-sm opacity-50 scale-105"></div>
+
+                {/* Message container */}
+                <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-6 py-4 rounded-2xl border border-cyan-200">
+                  <p className="text-lg md:text-xl font-medium bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent leading-relaxed">
+                    {isRoomLocked
+                      ? 'ルームはロックされています'
+                      : 'ホストがクイズ開始するのを待っています'}
+                    <br />
+                    お待ちください
+                  </p>
+
+                  {/* Decorative dots */}
+                  <div className="flex justify-center space-x-2 mt-3">
+                    <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
+                    <div
+                      className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.1s' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0.2s' }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Room Code */}
           <div className="text-center">
@@ -200,20 +779,6 @@ function WaitingRoomContent() {
               <div className="absolute -bottom-3 -right-3 w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
               <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
             </div>
-          </div>
-
-          {/* Manual Start Game Button for Testing */}
-          <div className="text-center max-w-md">
-            <button
-              onClick={handleManualStart}
-              className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center space-x-2"
-            >
-              <span className="text-lg">🚀</span>
-              <span>テスト: ゲーム開始</span>
-            </button>
-            <p className="text-xs text-gray-500 text-center mt-2">
-              開発用: カウントダウン後にプレイヤー画面に移動
-            </p>
           </div>
         </Container>
       </Main>

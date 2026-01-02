@@ -221,6 +221,7 @@ export interface ErrorHandlingConfig {
   retryCount?: number;
   retryDelay?: number;
   customMessage?: string;
+  logToConsole?: boolean;
 }
 
 export type ErrorCode =

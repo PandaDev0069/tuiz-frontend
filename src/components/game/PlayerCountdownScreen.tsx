@@ -10,20 +10,90 @@ interface PlayerCountdownScreenProps {
   questionNumber?: number;
   totalQuestions?: number;
   isMobile?: boolean;
+  startedAt?: number; // Server timestamp when countdown started (for synchronization)
+  waitingMessage?: string; // Shown while waiting for startedAt to arrive
 }
 
 export const PlayerCountdownScreen: React.FC<PlayerCountdownScreenProps> = ({
   countdownTime,
   onCountdownComplete,
   message = '準備してください！',
+  waitingMessage = message,
   questionNumber,
   totalQuestions,
   isMobile = true,
+  startedAt,
 }) => {
+  const SYNC_DURATION_MS = 2000; // 2 seconds minimum sync window
+
+  const computeRemaining = (startTs?: number) => {
+    if (!startTs) return countdownTime;
+    const elapsedMs = Date.now() - startTs;
+    const elapsedSec = Math.max(0, Math.floor(elapsedMs / 1000));
+    return Math.max(0, countdownTime - elapsedSec);
+  };
+
+  const [isSyncing, setIsSyncing] = useState(true);
+  const [syncStartTime, setSyncStartTime] = useState(Date.now());
   const [currentTime, setCurrentTime] = useState(countdownTime);
   const [isAnimating, setIsAnimating] = useState(false);
 
+  // Track when component mounts or startedAt arrives (whichever is later)
   useEffect(() => {
+    const now = Date.now();
+    // If startedAt is in the future (server lead time), use it as sync start
+    // Otherwise use current time
+    const effectiveStart = startedAt && startedAt > now ? startedAt : now;
+    setSyncStartTime(effectiveStart);
+  }, [startedAt]);
+
+  // Update countdown time continuously during sync window when startedAt is available
+  useEffect(() => {
+    if (!startedAt) {
+      setIsSyncing(true);
+      setCurrentTime(countdownTime);
+      return;
+    }
+
+    let intervalId: NodeJS.Timeout | null = null;
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    // Update countdown time every 100ms during sync window
+    const updateCountdown = () => {
+      const remaining = computeRemaining(startedAt);
+      setCurrentTime(remaining);
+    };
+
+    const checkSync = () => {
+      const elapsed = Date.now() - syncStartTime;
+      if (elapsed >= SYNC_DURATION_MS) {
+        // 2 seconds have passed, exit sync mode and let normal countdown take over
+        updateCountdown();
+        setIsSyncing(false);
+        if (intervalId) clearInterval(intervalId);
+      } else {
+        // Still in sync window, update countdown and check again soon
+        updateCountdown();
+        const remainingMs = SYNC_DURATION_MS - elapsed;
+        timeoutId = setTimeout(checkSync, Math.min(remainingMs, 100));
+      }
+    };
+
+    // Start updating countdown immediately during sync
+    updateCountdown();
+    intervalId = setInterval(updateCountdown, 100);
+    checkSync();
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+    // computeRemaining is stable (no deps) and intentionally omitted
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startedAt, syncStartTime, countdownTime]);
+
+  useEffect(() => {
+    if (isSyncing) return;
     if (currentTime <= 0) {
       onCountdownComplete?.();
       return;
@@ -38,15 +108,39 @@ export const PlayerCountdownScreen: React.FC<PlayerCountdownScreenProps> = ({
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [currentTime, onCountdownComplete]);
+  }, [currentTime, onCountdownComplete, isSyncing]);
 
   const getCountdownText = () => {
+    // If syncing but we have startedAt, show countdown (it's being calculated)
+    if (isSyncing && startedAt) {
+      if (currentTime > 3) return message;
+      if (currentTime > 0) return currentTime.toString();
+      return 'スタート！';
+    }
+    // If syncing without startedAt, show waiting message
+    if (isSyncing) return waitingMessage;
+    // Normal countdown display
     if (currentTime > 3) return message;
     if (currentTime > 0) return currentTime.toString();
     return 'スタート！';
   };
 
   const getCountdownSize = () => {
+    // If syncing but showing countdown (startedAt available), use normal countdown sizes
+    if (isSyncing && startedAt) {
+      if (isMobile) {
+        if (currentTime > 3) return 'text-5xl sm:text-6xl';
+        if (currentTime > 0) return 'text-7xl sm:text-8xl';
+        return 'text-6xl sm:text-7xl';
+      } else {
+        if (currentTime > 3) return 'text-5xl md:text-6xl lg:text-7xl';
+        if (currentTime > 0) return 'text-7xl md:text-8xl lg:text-9xl';
+        return 'text-6xl md:text-7xl lg:text-8xl';
+      }
+    }
+    // If syncing without startedAt, show waiting message size
+    if (isSyncing) return isMobile ? 'text-5xl sm:text-6xl' : 'text-6xl md:text-7xl lg:text-8xl';
+    // Normal countdown sizes
     if (isMobile) {
       if (currentTime > 3) return 'text-5xl sm:text-6xl';
       if (currentTime > 0) return 'text-7xl sm:text-8xl';
@@ -59,6 +153,15 @@ export const PlayerCountdownScreen: React.FC<PlayerCountdownScreenProps> = ({
   };
 
   const getCountdownColor = () => {
+    // If syncing but showing countdown (startedAt available), use normal countdown colors
+    if (isSyncing && startedAt) {
+      if (currentTime > 3) return 'text-white';
+      if (currentTime > 0) return 'text-yellow-300';
+      return 'text-green-300';
+    }
+    // If syncing without startedAt, show white
+    if (isSyncing) return 'text-white';
+    // Normal countdown colors
     if (currentTime > 3) return 'text-white';
     if (currentTime > 0) return 'text-yellow-300';
     return 'text-green-300';
@@ -100,7 +203,16 @@ export const PlayerCountdownScreen: React.FC<PlayerCountdownScreenProps> = ({
             </div>
 
             {/* Subtitle for preparation message */}
-            {currentTime > 3 && (
+            {isSyncing && (
+              <div
+                className={`mt-6 text-white/80 drop-shadow-xl ${
+                  isMobile ? 'text-base sm:text-lg' : 'text-lg md:text-xl'
+                }`}
+              >
+                全員の準備を待っています...
+              </div>
+            )}
+            {!isSyncing && currentTime > 3 && (
               <div
                 className={`mt-6 text-white/90 drop-shadow-xl ${
                   isMobile ? 'text-lg sm:text-xl' : 'text-xl md:text-2xl lg:text-3xl'
@@ -129,7 +241,11 @@ export const PlayerCountdownScreen: React.FC<PlayerCountdownScreenProps> = ({
                 {/* Progress fill with multiple layers */}
                 <div
                   className="relative h-full transition-all duration-1000 ease-linear"
-                  style={{ width: `${((countdownTime - currentTime) / countdownTime) * 100}%` }}
+                  style={{
+                    width: isSyncing
+                      ? '0%'
+                      : `${((countdownTime - currentTime) / countdownTime) * 100}%`,
+                  }}
                 >
                   {/* Base gradient */}
                   <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400"></div>

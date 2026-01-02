@@ -47,7 +47,7 @@ This project has two repositories: one for the frontend and one for the backend.
   - Dashboard is currently being worked on.
   - Quiz creation is implemented (may need improvements).
   - Quiz editing is implemented (may need improvements).
-  - Profile settings UI exists but backend is not implemented.
+  - Profile settings is implemented.
   - Search bar is UI-only (implemented).
   - Filtering is UI-only (not functional).
   - Quick actions:
