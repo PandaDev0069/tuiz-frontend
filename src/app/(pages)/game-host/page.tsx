@@ -10,18 +10,7 @@ import { useSocket } from '@/components/providers/SocketProvider';
 import { gameApi, type PlayersResponse } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
 import type { QuestionWithAnswers } from '@/types/quiz';
-import {
-  Clock,
-  Play,
-  Eye,
-  EyeOff,
-  BarChart3,
-  Users,
-  Trophy,
-  ChevronRight,
-  Pause,
-  PlayCircle,
-} from 'lucide-react';
+import { Clock, Play, Eye, EyeOff, BarChart3, Users, Trophy, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type HostPhase =
@@ -49,8 +38,7 @@ function HostGameContent() {
     startQuestion,
     revealAnswer,
     nextQuestion: nextQuestionFlow,
-    pauseGame,
-    resumeGame,
+
     loading: flowLoading,
   } = useGameFlow({
     gameId,
@@ -467,16 +455,45 @@ function HostGameContent() {
   ]);
 
   const handleTogglePublicScreen = () => {
-    setIsPublicScreenVisible(!isPublicScreenVisible);
     if (!isPublicScreenVisible) {
-      const publicScreenUrl = `/host-screen?code=${gameCode}&gameId=${gameId}&quizId=${quizId}`;
-      window.open(
-        publicScreenUrl,
-        'public-screen',
-        'width=1200,height=800,scrollbars=yes,resizable=yes',
-      );
+      // Opening public screen
+      setIsPublicScreenVisible(true);
+
+      // Check if public screen was already opened from waiting room
+      const wasAlreadyOpen =
+        gameId && sessionStorage.getItem(`public_screen_open_${gameId}`) === 'true';
+
+      if (!wasAlreadyOpen) {
+        // Only open a new window if it wasn't already open from waiting room
+        const publicScreenUrl = `/host-screen?code=${gameCode}&gameId=${gameId}&quizId=${quizId}`;
+        window.open(
+          publicScreenUrl,
+          'public-screen',
+          'width=1200,height=800,scrollbars=yes,resizable=yes',
+        );
+        // Track that public screen is open
+        if (gameId) {
+          sessionStorage.setItem(`public_screen_open_${gameId}`, 'true');
+        }
+      }
+    } else {
+      // Closing public screen
+      setIsPublicScreenVisible(false);
+      // Remove tracking when closed
+      if (gameId) {
+        sessionStorage.removeItem(`public_screen_open_${gameId}`);
+      }
     }
   };
+
+  // Check on mount if public screen was already opened from waiting room
+  useEffect(() => {
+    if (!gameId) return;
+    const wasPublicScreenOpen = sessionStorage.getItem(`public_screen_open_${gameId}`) === 'true';
+    if (wasPublicScreenOpen) {
+      setIsPublicScreenVisible(true);
+    }
+  }, [gameId]);
 
   // Refresh leaderboard when entering leaderboard phase
   useEffect(() => {
@@ -673,25 +690,6 @@ function HostGameContent() {
                           <Eye className="w-5 h-5" />
                           <span>答えを表示</span>
                         </button>
-                        {timerState?.isActive ? (
-                          <button
-                            onClick={pauseGame}
-                            disabled={flowLoading}
-                            className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white py-2 px-4 rounded-lg transition-all duration-200 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                          >
-                            <Pause className="w-4 h-4" />
-                            <span>一時停止</span>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={resumeGame}
-                            disabled={flowLoading}
-                            className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white py-2 px-4 rounded-lg transition-all duration-200 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                          >
-                            <PlayCircle className="w-4 h-4" />
-                            <span>再開</span>
-                          </button>
-                        )}
                       </>
                     ) : (
                       <button

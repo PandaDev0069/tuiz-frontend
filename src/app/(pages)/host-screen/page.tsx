@@ -154,10 +154,32 @@ function HostScreenContent() {
     events: {
       onQuestionStart: (questionId, questionIndex) => {
         console.log('Public Screen: Question started', questionId, questionIndex);
-        setIsDisplayPhaseDone(false);
-        // Don't transition if we're in countdown - let countdown complete first
-        if (currentPhaseRef.current !== 'countdown') {
+
+        // Check if this is a genuinely new question (different from current)
+        const isNewQuestion = questionId !== currentQuestionIdRef.current;
+        if (isNewQuestion) {
+          console.log('[HostScreen] New question detected, resetting to question phase');
+          currentQuestionIdRef.current = questionId;
+          setIsDisplayPhaseDone(false);
+          setAnswerRemainingMs(null);
           setCurrentPhase('question');
+          return;
+        }
+
+        // For the same question, only transition if we're in early phases
+        // Don't override post-question phases for the same question
+        const currentPhase = currentPhaseRef.current;
+        const shouldTransitionToQuestion =
+          currentPhase === 'waiting' || currentPhase === 'countdown' || currentPhase === 'ended';
+        if (shouldTransitionToQuestion) {
+          setIsDisplayPhaseDone(false);
+          setCurrentPhase('question');
+        } else {
+          console.log(
+            '[HostScreen] Ignoring question start - already in phase:',
+            currentPhase,
+            'for same question',
+          );
         }
       },
       onQuestionEnd: () => {
@@ -166,10 +188,18 @@ function HostScreenContent() {
       },
       onAnswerReveal: () => {
         console.log('Public Screen: Answer revealed');
-        // Don't override if we're already in a later phase (e.g., leaderboard)
+        // Only transition to answer_reveal if we're in earlier phases
+        // Don't override leaderboard or explanation phases
         const current = currentPhaseRef.current;
-        if (phasePriority[current] < phasePriority['answer_reveal']) {
+        if (
+          current === 'question' ||
+          current === 'answering' ||
+          current === 'waiting' ||
+          current === 'countdown'
+        ) {
           setCurrentPhase('answer_reveal');
+        } else {
+          console.log('[HostScreen] Ignoring answer reveal - already in phase:', current);
         }
       },
       onExplanationShow: (questionId, explanation) => {
@@ -317,18 +347,38 @@ function HostScreenContent() {
       startedAt?: number;
     }) => {
       if (data.roomId === gameId) {
-        console.log('Public Screen: Phase changed to', data.phase, 'startedAt:', data.startedAt);
+        console.log('[HostScreen] Phase change event received:', {
+          from: currentPhaseRef.current,
+          to: data.phase,
+          startedAt: data.startedAt,
+        });
         // Prevent phase "downgrades" that cause flicker (e.g. answering -> question)
         const current = currentPhaseRef.current;
         if (data.phase !== 'waiting') {
+          // Allow valid transitions even if they appear as downgrades:
+          // - explanation -> countdown (starting next question after explanation)
+          // - leaderboard -> countdown (starting next question after leaderboard)
+          // - IMPORTANT: Always allow transitions TO explanation and leaderboard from any phase
+          const isValidTransition =
+            (current === 'explanation' && data.phase === 'countdown') ||
+            (current === 'leaderboard' && data.phase === 'countdown') ||
+            data.phase === 'explanation' ||
+            data.phase === 'leaderboard';
+
           const currentRank = phasePriority[current];
           const nextRank = phasePriority[data.phase];
-          if (Number.isFinite(currentRank) && Number.isFinite(nextRank) && nextRank < currentRank) {
+          if (
+            !isValidTransition &&
+            Number.isFinite(currentRank) &&
+            Number.isFinite(nextRank) &&
+            nextRank < currentRank
+          ) {
             console.log('[HostScreen] Ignoring phase downgrade:', current, '->', data.phase);
             return;
           }
         }
 
+        console.log('[HostScreen] Applying phase change to:', data.phase);
         setCurrentPhase(data.phase);
         // Store countdown start timestamp for synchronization
         if (data.phase === 'countdown' && data.startedAt) {
@@ -452,18 +502,23 @@ function HostScreenContent() {
     setExplanationData(null);
   }, [gameFlow?.current_question_id]);
 
-  // Sync phase with game flow state - but don't interrupt countdown
+  // Sync phase with game flow state - but don't interrupt countdown or post-question phases
   useEffect(() => {
     if (!gameFlow) return;
     // Don't transition if we're in countdown phase - let countdown complete naturally
     if (currentPhase === 'countdown') return;
+    // Don't auto-promote from post-question phases (answer_reveal, leaderboard, explanation)
+    // These should only change via explicit host actions
+    if (
+      currentPhase === 'answer_reveal' ||
+      currentPhase === 'leaderboard' ||
+      currentPhase === 'explanation'
+    ) {
+      return;
+    }
     if (gameFlow.current_question_id && timerState?.isActive) {
       const canPromoteToQuestion =
-        currentPhase === 'waiting' ||
-        currentPhase === 'leaderboard' ||
-        currentPhase === 'explanation' ||
-        currentPhase === 'ended' ||
-        currentPhase === 'podium';
+        currentPhase === 'waiting' || currentPhase === 'ended' || currentPhase === 'podium';
       if (canPromoteToQuestion) {
         setIsDisplayPhaseDone(false);
         setCurrentPhase('question');
@@ -598,10 +653,31 @@ function HostScreenContent() {
     setCurrentPhase('answering');
   }, [currentQuestion.answering_time, questionTimings.answeringTime, isDisplayPhaseDone]);
 
+  // Track when we entered question phase to prevent immediate transition
+  const questionPhaseEnteredAtRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (currentPhase === 'question') {
+      if (questionPhaseEnteredAtRef.current === null) {
+        questionPhaseEnteredAtRef.current = Date.now();
+      }
+    } else {
+      questionPhaseEnteredAtRef.current = null;
+    }
+  }, [currentPhase]);
+
   // Move to answering once the question display timer expires (player-style)
   useEffect(() => {
     if (currentPhase !== 'question') return;
     if (displayRemainingMs <= 0 && !isDisplayPhaseDone) {
+      // Prevent immediate transition - ensure we've been in question phase for at least 500ms
+      // This prevents the case where countdown completes and timer is already expired
+      const timeInQuestionPhase = questionPhaseEnteredAtRef.current
+        ? Date.now() - questionPhaseEnteredAtRef.current
+        : 0;
+      if (timeInQuestionPhase < 500) {
+        console.log('[HostScreen] Delaying answering transition - just entered question phase');
+        return;
+      }
       startAnsweringPhase();
     }
   }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
@@ -621,6 +697,24 @@ function HostScreenContent() {
     }, 1000);
 
     return () => clearInterval(interval);
+  }, [currentPhase, answerRemainingMs]);
+
+  // Transition to answer_reveal when answering timer expires (like player screen)
+  const hasTransitionedToRevealRef = useRef(false);
+  useEffect(() => {
+    if (currentPhase !== 'answering') {
+      // Reset transition flag when leaving answering phase
+      hasTransitionedToRevealRef.current = false;
+      return;
+    }
+    if (hasTransitionedToRevealRef.current) return;
+    if (answerRemainingMs === null || answerRemainingMs > 0) return;
+
+    // Timer has expired, transition to answer_reveal
+    console.log('HostScreen: Answering timer expired, transitioning to answer_reveal');
+    hasTransitionedToRevealRef.current = true;
+    setAnswerRemainingMs(0);
+    setCurrentPhase('answer_reveal');
   }, [currentPhase, answerRemainingMs]);
 
   // Calculate answering remaining time (exactly like player screen)
@@ -763,8 +857,10 @@ function HostScreenContent() {
           startedAt={countdownStartedAt}
           onCountdownComplete={() => {
             // Countdown completed - now transition to question phase
+            console.log('[HostScreen] Countdown complete, transitioning to question phase');
             if (gameFlow?.current_question_id) {
               setIsDisplayPhaseDone(false);
+              setAnswerRemainingMs(null);
               setCurrentPhase('question');
             }
           }}

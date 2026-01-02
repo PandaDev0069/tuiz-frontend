@@ -461,6 +461,11 @@ function HostWaitingRoomContent() {
       gameId ? `&gameId=${gameId}` : ''
     }`;
     window.open(hostScreenUrl, 'host-screen', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+
+    // Track that public screen is open in sessionStorage
+    if (gameId) {
+      sessionStorage.setItem(`public_screen_open_${gameId}`, 'true');
+    }
   };
 
   const handleAddPlayer = () => {
