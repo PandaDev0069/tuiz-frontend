@@ -58,10 +58,10 @@ function HostGameContent() {
     autoSync: true,
     events: {
       onQuestionEnd: () => {
-        setCurrentPhase('answer_reveal');
-      },
-      onExplanationShow: () => {
-        setCurrentPhase('explanation');
+        const currentPhase = currentPhaseRef.current;
+        if (currentPhase === 'question' || currentPhase === 'countdown') {
+          setCurrentPhase('answer_reveal');
+        }
       },
       onGameEnd: () => {
         setCurrentPhase('podium');
@@ -207,8 +207,19 @@ function HostGameContent() {
       const currentRank = phasePriority[currentPhase];
       const nextRank = phasePriority[data.phase];
 
+      // Allow valid transitions even if they appear as downgrades:
+      // - explanation -> countdown (starting next question after explanation)
+      const isValidTransition =
+        (currentPhase === 'explanation' && data.phase === 'countdown') ||
+        (currentPhase === 'leaderboard' && data.phase === 'countdown');
+
       // Ignore phase downgrades (e.g., explanation -> leaderboard) unless it's a valid transition
-      if (Number.isFinite(currentRank) && Number.isFinite(nextRank) && nextRank < currentRank) {
+      if (
+        !isValidTransition &&
+        Number.isFinite(currentRank) &&
+        Number.isFinite(nextRank) &&
+        nextRank < currentRank
+      ) {
         console.log('[GameHost] Ignoring phase downgrade:', currentPhase, '->', data.phase);
         return;
       }
@@ -341,22 +352,30 @@ function HostGameContent() {
     if (!gameId || !gameFlow?.current_question_id) return;
 
     try {
-      // Call API to show explanation (emits WebSocket event)
+      // Set phase and emit BEFORE calling API to ensure host UI updates immediately
+      // and other clients receive phase change before the explanation content
+      setCurrentPhase('explanation');
+      emitPhaseChange('explanation');
+
+      // Call API to show explanation (emits WebSocket event with explanation content)
       const { data, error } = await gameApi.showExplanation(gameId);
 
       if (error || !data) {
         console.error('Failed to show explanation:', error);
         toast.error('解説の表示に失敗しました');
+        // Revert phase on error
+        setCurrentPhase('leaderboard');
+        emitPhaseChange('leaderboard');
         return;
       }
 
-      // Transition to explanation phase
-      setCurrentPhase('explanation');
-      emitPhaseChange('explanation');
       toast.success('解説を表示しました');
     } catch (e) {
       console.error('Error showing explanation:', e);
       toast.error('解説の表示に失敗しました');
+      // Revert phase on error
+      setCurrentPhase('leaderboard');
+      emitPhaseChange('leaderboard');
     }
   }, [gameId, gameFlow?.current_question_id, emitPhaseChange]);
 
@@ -459,11 +478,6 @@ function HostGameContent() {
     }
   };
 
-  // Update phase when URL changes
-  useEffect(() => {
-    setCurrentPhase(phaseParam);
-  }, [phaseParam]);
-
   // Refresh leaderboard when entering leaderboard phase
   useEffect(() => {
     if (currentPhase === 'leaderboard' && gameId && refreshLeaderboard) {
@@ -506,7 +520,11 @@ function HostGameContent() {
     }
 
     if (currentPhase === 'explanation') {
-      return isLastQuestion ? '表彰台へ' : '次の問題へ';
+      if (isLastQuestion) {
+        return '表彰台へ';
+      } else {
+        return '次の問題へ';
+      }
     }
 
     return '次へ';
