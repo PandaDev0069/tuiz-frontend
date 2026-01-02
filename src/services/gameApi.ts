@@ -32,6 +32,7 @@ export interface GameFlow {
   id: string;
   game_id: string;
   current_question_id: string | null;
+  next_question_id: string | null;
   current_question_index: number | null;
   current_question_start_time: string | null;
   current_question_end_time: string | null;

@@ -3,7 +3,6 @@
 import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Header, PageContainer, Container, Main } from '@/components/ui';
-import { HostPodiumScreen, HostGameEndScreen } from '@/components/game';
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameLeaderboard } from '@/hooks/useGameLeaderboard';
 import { useSocket } from '@/components/providers/SocketProvider';
@@ -38,7 +37,6 @@ function HostGameContent() {
     startQuestion,
     revealAnswer,
     nextQuestion: nextQuestionFlow,
-
     loading: flowLoading,
   } = useGameFlow({
     gameId,
@@ -234,13 +232,20 @@ function HostGameContent() {
   }, [socket?.id, socket?.connected, gameId, socketJoinRoom, socketLeaveRoom]);
 
   const emitPhaseChange = useCallback(
-    (phase: HostPhase) => {
+    (phase: HostPhase, startedAt?: number) => {
       if (!socket || !gameId) {
         console.warn('[GameHost] Cannot emit phase change: socket or gameId missing');
         return;
       }
-      console.log('[GameHost] Emitting phase change:', phase, 'for room:', gameId);
-      socket.emit('game:phase:change', { roomId: gameId, phase });
+      console.log(
+        '[GameHost] Emitting phase change:',
+        phase,
+        'for room:',
+        gameId,
+        'startedAt:',
+        startedAt,
+      );
+      socket.emit('game:phase:change', { roomId: gameId, phase, startedAt });
     },
     [socket, gameId],
   );
@@ -266,23 +271,6 @@ function HostGameContent() {
   const quizId = searchParams.get('quizId') || '';
 
   // Function to reset game and return to waiting room (re-loop)
-  const handleReturnToWaitingRoom = useCallback(async () => {
-    if (!gameId) return;
-
-    try {
-      // Navigate to waiting room - the waiting room will handle resetting the game state
-      // when the host starts a new game from there
-      router.push(
-        `/host-waiting-room?gameId=${gameId}${gameCode ? `&code=${gameCode}` : ''}${quizId ? `&quizId=${quizId}` : ''}`,
-      );
-
-      // Emit phase change to notify players
-      emitPhaseChange('waiting');
-    } catch (err) {
-      console.error('Error returning to waiting room:', err);
-      toast.error('待機ルームへの戻りに失敗しました');
-    }
-  }, [gameId, router, gameCode, quizId, emitPhaseChange]);
 
   // Host control handlers
   const handleStartQuestion = useCallback(async () => {
@@ -404,8 +392,9 @@ function HostGameContent() {
             } else {
               // Game flow has been updated, transition to countdown
               // The phase change event is already emitted by the backend
+              const countdownStartTime = Date.now();
               setCurrentPhase('countdown');
-              emitPhaseChange('countdown');
+              emitPhaseChange('countdown', countdownStartTime);
             }
           } catch (e) {
             console.error('Error advancing to next question:', e);
@@ -431,8 +420,9 @@ function HostGameContent() {
           if (data.isComplete) {
             handleGoToPodium();
           } else {
+            const countdownStartTime = Date.now();
             setCurrentPhase('countdown');
-            emitPhaseChange('countdown');
+            emitPhaseChange('countdown', countdownStartTime);
           }
         } catch (e) {
           console.error('Error advancing to next question:', e);
@@ -442,6 +432,14 @@ function HostGameContent() {
       } else {
         handleGoToPodium();
       }
+    } else if (currentPhase === 'podium') {
+      // End the game
+      setCurrentPhase('ended');
+      emitPhaseChange('ended');
+      toast.success('ゲームを終了しました');
+    } else if (currentPhase === 'ended') {
+      // Return to dashboard
+      router.push('/dashboard');
     }
   }, [
     currentPhase,
@@ -452,6 +450,7 @@ function HostGameContent() {
     handleShowExplanation,
     handleGoToPodium,
     nextQuestionFlow,
+    router,
   ]);
 
   const handleTogglePublicScreen = () => {
@@ -503,11 +502,23 @@ function HostGameContent() {
     }
   }, [currentPhase, gameId, refreshLeaderboard]);
 
+  // Track if we've already emitted countdown for this phase transition
+  const countdownEmittedRef = useRef<string | null>(null);
+
   // Auto-transition from countdown to question after countdown completes
   useEffect(() => {
     // Use gameFlow.current_question_id instead of currentQuestion?.id
     // because currentQuestion might not be loaded yet when transitioning from previous question
     if (currentPhase === 'countdown' && gameFlow?.current_question_id && !flowLoading) {
+      // Emit countdown phase change with timestamp if not already emitted for this question
+      const questionKey = `${currentPhase}_${gameFlow.current_question_id}`;
+      if (countdownEmittedRef.current !== questionKey) {
+        const countdownStartTime = Date.now();
+        console.log('[GameHost] Emitting countdown phase with timestamp:', countdownStartTime);
+        emitPhaseChange('countdown', countdownStartTime);
+        countdownEmittedRef.current = questionKey;
+      }
+
       // Set a timer to auto-start question after countdown completes
       // Use 3.5 seconds to ensure countdown component (3 seconds) completes first
       // This prevents race condition where question starts while countdown is still showing
@@ -521,7 +532,13 @@ function HostGameContent() {
 
       return () => clearTimeout(timer);
     }
-  }, [currentPhase, gameFlow?.current_question_id, handleStartQuestion, flowLoading]);
+  }, [
+    currentPhase,
+    gameFlow?.current_question_id,
+    handleStartQuestion,
+    flowLoading,
+    emitPhaseChange,
+  ]);
 
   const nextButtonLabel = (() => {
     const isLastQuestion = currentQuestionIndex >= totalQuestions - 1;
@@ -544,69 +561,16 @@ function HostGameContent() {
       }
     }
 
+    if (currentPhase === 'podium') {
+      return 'ゲーム終了';
+    }
+
+    if (currentPhase === 'ended') {
+      return 'ダッシュボードへ';
+    }
+
     return '次へ';
   })();
-
-  // Show podium or end screen if in those phases
-  if (currentPhase === 'podium') {
-    const leaderboardData = {
-      entries: Array.isArray(leaderboard)
-        ? leaderboard.map((entry) => ({
-            playerId: entry.player_id,
-            playerName: entry.player_name,
-            score: entry.score,
-            rank: entry.rank,
-            previousRank: entry.rank,
-            rankChange: 'same' as const,
-          }))
-        : [],
-      questionNumber: currentQuestionIndex + 1,
-      totalQuestions,
-      timeRemaining: 0,
-      timeLimit: 0,
-    };
-    return (
-      <HostPodiumScreen
-        entries={leaderboardData.entries}
-        onAnimationComplete={() => {
-          setTimeout(() => {
-            setCurrentPhase('ended');
-            router.replace(`/game-host?gameId=${gameId}&phase=ended`);
-            emitPhaseChange('ended');
-          }, 5000);
-        }}
-      />
-    );
-  }
-
-  if (currentPhase === 'ended') {
-    const leaderboardData = {
-      entries: Array.isArray(leaderboard)
-        ? leaderboard.map((entry) => ({
-            playerId: entry.player_id,
-            playerName: entry.player_name,
-            score: entry.score,
-            rank: entry.rank,
-            previousRank: entry.rank,
-            rankChange: 'same' as const,
-          }))
-        : [],
-      questionNumber: currentQuestionIndex + 1,
-      totalQuestions,
-      timeRemaining: 0,
-      timeLimit: 0,
-    };
-    return (
-      <HostGameEndScreen
-        entries={leaderboardData.entries}
-        gameId={gameId}
-        onDismissRoom={() => {
-          router.push('/dashboard');
-        }}
-        onStartNewGame={handleReturnToWaitingRoom}
-      />
-    );
-  }
 
   // Control Panel UI
   return (
@@ -711,6 +675,8 @@ function HostGameContent() {
                         {currentPhase === 'answer_reveal' && '答え表示'}
                         {currentPhase === 'leaderboard' && 'ランキング'}
                         {currentPhase === 'explanation' && '解説'}
+                        {currentPhase === 'podium' && '表彰台'}
+                        {currentPhase === 'ended' && 'ゲーム終了'}
                       </div>
                     </div>
                   </div>
