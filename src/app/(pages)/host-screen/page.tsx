@@ -55,6 +55,7 @@ function HostScreenContent() {
   const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
   const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
   const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
+  const [questionRemainingMs, setQuestionRemainingMs] = useState<number | null>(null);
   // State for explanation data
   const [explanationData, setExplanationData] = useState<{
     title: string | null;
@@ -66,6 +67,8 @@ function HostScreenContent() {
   const currentPhaseRef = useRef<PublicPhase>('waiting');
   const currentQuestionIdRef = useRef<string | null>(null);
   const socketIdRef = useRef<string | null>(null);
+  const questionTimerInitializedRef = useRef<string | null>(null);
+  const previousPhaseRef = useRef<PublicPhase | null>(null);
 
   // Public screen phase ordering used to prevent "downgrade" transitions from host/gameflow events.
   // Example: the screen may locally transition `question -> answering` based on timer,
@@ -157,22 +160,33 @@ function HostScreenContent() {
 
         // Check if this is a genuinely new question (different from current)
         const isNewQuestion = questionId !== currentQuestionIdRef.current;
+        const currentPhase = currentPhaseRef.current;
+
         if (isNewQuestion) {
-          console.log('[HostScreen] New question detected, resetting to question phase');
+          console.log('[HostScreen] New question detected, resetting state');
           currentQuestionIdRef.current = questionId;
           setIsDisplayPhaseDone(false);
           setAnswerRemainingMs(null);
-          setCurrentPhase('question');
+          setQuestionRemainingMs(null); // Reset question timer for new question
+
+          // Only transition to question phase if not already there
+          // This prevents resetting questionPhaseEnteredAtRef timestamp
+          if (currentPhase !== 'question') {
+            console.log('[HostScreen] Transitioning to question phase for new question');
+            setCurrentPhase('question');
+          } else {
+            console.log('[HostScreen] Already in question phase, keeping timestamp intact');
+          }
           return;
         }
 
         // For the same question, only transition if we're in early phases
         // Don't override post-question phases for the same question
-        const currentPhase = currentPhaseRef.current;
         const shouldTransitionToQuestion =
           currentPhase === 'waiting' || currentPhase === 'countdown' || currentPhase === 'ended';
         if (shouldTransitionToQuestion) {
           setIsDisplayPhaseDone(false);
+          setQuestionRemainingMs(null); // Reset question timer when transitioning to question phase
           setCurrentPhase('question');
         } else {
           console.log(
@@ -252,9 +266,14 @@ function HostScreenContent() {
     autoRefresh: true,
   });
 
-  // Fetch current question from API when question changes (with full metadata)
+  // Preload question data during countdown to prevent delay when question phase starts
   useEffect(() => {
-    if (!gameId || !gameFlow?.current_question_id) {
+    if (!gameId) return;
+
+    // Start preloading as soon as countdown begins, or if we have a current question
+    const shouldPreload = currentPhase === 'countdown' || gameFlow?.current_question_id;
+
+    if (!shouldPreload) {
       setCurrentQuestionData(null);
       return;
     }
@@ -266,6 +285,9 @@ function HostScreenContent() {
           console.error('Failed to fetch current question:', error);
           return;
         }
+
+        // Check if this is a new question we haven't loaded yet
+        const isNewQuestion = currentQuestionIdRef.current !== data.question.id;
 
         // Transform API response to Question format
         const answeringTime = data.question.answering_time || 30;
@@ -292,6 +314,20 @@ function HostScreenContent() {
           type: (data.question.type as Question['type']) || 'multiple_choice_4',
         };
 
+        // Preload image if available to prevent flash during question phase
+        if (data.question.image_url) {
+          const img = new Image();
+          img.src = data.question.image_url;
+          console.log('[HostScreen] Preloading image:', data.question.image_url);
+        }
+
+        console.log('[HostScreen] Question data loaded/preloaded:', {
+          questionId: data.question.id,
+          phase: currentPhase,
+          hasImage: !!data.question.image_url,
+          isNewQuestion,
+        });
+
         setCurrentQuestionData({
           question,
           serverTime: data.server_time,
@@ -306,12 +342,17 @@ function HostScreenContent() {
       }
     };
 
+    // Fetch immediately when entering countdown or when question changes
     fetchCurrentQuestion();
 
-    // Refresh question data periodically to sync with server (every 5 seconds)
-    const refreshInterval = setInterval(fetchCurrentQuestion, 5000);
+    // During countdown, poll more frequently (every 1s) to catch the next question as soon as it's available
+    // For other phases, refresh less frequently (every 5 seconds)
+    const refreshInterval = setInterval(
+      fetchCurrentQuestion,
+      currentPhase === 'countdown' ? 1000 : 5000,
+    );
     return () => clearInterval(refreshInterval);
-  }, [gameId, gameFlow?.current_question_id]);
+  }, [gameId, gameFlow?.current_question_id, currentPhase]);
 
   // Listen for WebSocket events to sync with host control panel
   useEffect(() => {
@@ -379,7 +420,14 @@ function HostScreenContent() {
         }
 
         console.log('[HostScreen] Applying phase change to:', data.phase);
-        setCurrentPhase(data.phase);
+
+        // Only set phase if it's actually different to avoid resetting phase-entered timestamps
+        if (current !== data.phase) {
+          setCurrentPhase(data.phase);
+        } else {
+          console.log('[HostScreen] Already in phase', data.phase, '- skipping redundant setState');
+        }
+
         // Store countdown start timestamp for synchronization
         if (data.phase === 'countdown' && data.startedAt) {
           setCountdownStartedAt(data.startedAt);
@@ -496,6 +544,7 @@ function HostScreenContent() {
     if (!gameFlow?.current_question_id) return;
     setIsDisplayPhaseDone(false);
     setAnswerRemainingMs(null);
+    setQuestionRemainingMs(null); // Reset question timer for new question
     // Clear stats between questions so we never display cumulative totals.
     setAnswerStats({});
     // Reset explanation data for new question
@@ -620,6 +669,8 @@ function HostScreenContent() {
 
   const totalDurationMs = (showQuestionTime + answeringTime) * 1000;
 
+  // Prefer timerState from useGameFlow, but initialize immediately with full duration
+  // if we just entered question phase and timerState hasn't updated yet
   const totalRemainingMs =
     timerState?.remainingMs ??
     derivedRemainingMsFromFlow ??
@@ -637,8 +688,121 @@ function HostScreenContent() {
     Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0,
   );
 
+  // Initialize questionRemainingMs when question phase starts (only once per question)
+  // This ensures the timer starts immediately when entering question phase
+  useEffect(() => {
+    const currentQuestionId = gameFlow?.current_question_id;
+    const previousPhase = previousPhaseRef.current;
+
+    // Only reset timer when actually leaving question phase (not just when effect runs)
+    if (previousPhase === 'question' && currentPhase !== 'question') {
+      console.log('[HostScreen Question Timer] Leaving question phase, resetting timer');
+      setQuestionRemainingMs(null);
+      questionTimerInitializedRef.current = null;
+    }
+
+    // Update previous phase ref
+    previousPhaseRef.current = currentPhase;
+
+    if (currentPhase === 'question' && currentQuestionId) {
+      // Check if we've already initialized for this question
+      if (questionTimerInitializedRef.current === currentQuestionId) {
+        // Already initialized - but check if timer was lost due to re-render
+        // If questionRemainingMs is null but we've initialized, restore it
+        if (questionRemainingMs === null) {
+          console.log(
+            '[HostScreen Question Timer] Timer lost, restoring for question',
+            currentQuestionId,
+          );
+          // Recalculate values inside the effect to avoid dependency issues
+          const showQuestionTimeValue = Number.isFinite(currentQuestion.show_question_time)
+            ? currentQuestion.show_question_time
+            : (questionTimings.showQuestionTime ?? 10);
+          const viewingDurationMsValue = showQuestionTimeValue * 1000;
+          const totalDurationMsValue =
+            (showQuestionTimeValue + (questionTimings.answeringTime ?? 30)) * 1000;
+          const totalRemainingMsValue =
+            timerState?.remainingMs ?? derivedRemainingMsFromFlow ?? totalDurationMsValue;
+          const elapsedMsValue = Math.max(
+            0,
+            totalDurationMsValue -
+              (Number.isFinite(totalRemainingMsValue) ? totalRemainingMsValue : 0),
+          );
+          const currentViewingRemainingMs = Math.max(0, viewingDurationMsValue - elapsedMsValue);
+
+          if (currentViewingRemainingMs > 0) {
+            setQuestionRemainingMs(currentViewingRemainingMs);
+          } else {
+            // Timer expired, transition to answering
+            console.log(
+              '[HostScreen Question Timer] Timer expired during restore, transitioning to answering',
+            );
+            setIsDisplayPhaseDone(true);
+            const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
+              ? currentQuestion.answering_time
+              : (questionTimings.answeringTime ?? 30);
+            setAnswerRemainingMs(safeAnsweringTime * 1000);
+            setCurrentPhase('answering');
+          }
+        }
+        return; // Already initialized for this question - don't re-initialize
+      }
+
+      // Mark as initialized for this question BEFORE calculating to prevent re-initialization
+      questionTimerInitializedRef.current = currentQuestionId;
+
+      // Calculate values inside the effect to avoid dependency issues
+      const showQuestionTimeValue = Number.isFinite(currentQuestion.show_question_time)
+        ? currentQuestion.show_question_time
+        : (questionTimings.showQuestionTime ?? 10);
+      const viewingDurationMsValue = showQuestionTimeValue * 1000;
+      const totalDurationMsValue =
+        (showQuestionTimeValue + (questionTimings.answeringTime ?? 30)) * 1000;
+      const totalRemainingMsValue =
+        timerState?.remainingMs ?? derivedRemainingMsFromFlow ?? totalDurationMsValue;
+      const elapsedMsValue = Math.max(
+        0,
+        totalDurationMsValue - (Number.isFinite(totalRemainingMsValue) ? totalRemainingMsValue : 0),
+      );
+      const currentViewingRemainingMs = Math.max(0, viewingDurationMsValue - elapsedMsValue);
+      const initialTime =
+        currentViewingRemainingMs > 0 ? currentViewingRemainingMs : viewingDurationMsValue;
+
+      console.log('[HostScreen Question Timer] Initializing timer', {
+        questionId: currentQuestionId,
+        viewingRemainingMs: currentViewingRemainingMs,
+        viewingDurationMs: viewingDurationMsValue,
+        initialTime,
+        elapsedMs: elapsedMsValue,
+        showQuestionTime: showQuestionTimeValue,
+      });
+
+      if (initialTime > 0) {
+        setQuestionRemainingMs(initialTime);
+      } else {
+        // If initial time is 0 or negative, immediately transition to answering
+        console.log(
+          '[HostScreen Question Timer] Initial time is 0 or negative, transitioning to answering',
+        );
+        setIsDisplayPhaseDone(true);
+        const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
+          ? currentQuestion.answering_time
+          : (questionTimings.answeringTime ?? 30);
+        setAnswerRemainingMs(safeAnsweringTime * 1000);
+        setCurrentPhase('answering');
+      }
+    }
+    // Only depend on currentPhase and questionId - calculate everything else inside
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPhase, gameFlow?.current_question_id]);
+
+  // Use questionRemainingMs state for question phase (for smooth countdown), otherwise use calculated value
   const displayRemainingMs =
-    currentPhase === 'question' ? viewingRemainingMs : answeringRemainingMsDerived;
+    currentPhase === 'question'
+      ? questionRemainingMs !== null
+        ? questionRemainingMs
+        : viewingRemainingMs
+      : answeringRemainingMsDerived;
 
   const startAnsweringPhase = useCallback(() => {
     if (isDisplayPhaseDone) return;
@@ -653,34 +817,52 @@ function HostScreenContent() {
     setCurrentPhase('answering');
   }, [currentQuestion.answering_time, questionTimings.answeringTime, isDisplayPhaseDone]);
 
-  // Track when we entered question phase to prevent immediate transition
-  const questionPhaseEnteredAtRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (currentPhase === 'question') {
-      if (questionPhaseEnteredAtRef.current === null) {
-        questionPhaseEnteredAtRef.current = Date.now();
-      }
-    } else {
-      questionPhaseEnteredAtRef.current = null;
-    }
-  }, [currentPhase]);
-
   // Move to answering once the question display timer expires (player-style)
   useEffect(() => {
     if (currentPhase !== 'question') return;
     if (displayRemainingMs <= 0 && !isDisplayPhaseDone) {
-      // Prevent immediate transition - ensure we've been in question phase for at least 500ms
-      // This prevents the case where countdown completes and timer is already expired
-      const timeInQuestionPhase = questionPhaseEnteredAtRef.current
-        ? Date.now() - questionPhaseEnteredAtRef.current
-        : 0;
-      if (timeInQuestionPhase < 500) {
-        console.log('[HostScreen] Delaying answering transition - just entered question phase');
-        return;
-      }
       startAnsweringPhase();
     }
   }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
+
+  // Client-side question phase countdown timer (decrements every second) - exactly like player screen
+  useEffect(() => {
+    if (currentPhase !== 'question') return;
+    if (questionRemainingMs === null || questionRemainingMs <= 0) return;
+
+    // Set up interval to decrement timer every second
+    const interval = setInterval(() => {
+      setQuestionRemainingMs((prev) => {
+        if (prev === null || prev <= 0) return 0;
+        const newRemaining = Math.max(0, prev - 1000);
+        return newRemaining;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentPhase, questionRemainingMs]);
+
+  // Sync questionRemainingMs with viewingRemainingMs when it changes significantly
+  // (e.g., when gameFlow updates from server, but only if difference is large to avoid jitter)
+  // IMPORTANT: Only sync if server time is LESS than client time (don't reset timer backwards)
+  useEffect(() => {
+    if (currentPhase === 'question' && questionRemainingMs !== null && viewingRemainingMs > 0) {
+      // Only sync if server says we have LESS time (viewingRemainingMs < questionRemainingMs)
+      // This prevents resetting the timer backwards when question data loads
+      if (viewingRemainingMs < questionRemainingMs) {
+        const difference = questionRemainingMs - viewingRemainingMs;
+        // Only sync if difference is more than 2 seconds (to avoid constant micro-adjustments)
+        if (difference > 2000) {
+          console.log('[HostScreen Question Timer] Syncing timer with server (server is ahead)', {
+            clientTime: questionRemainingMs,
+            serverTime: viewingRemainingMs,
+            difference,
+          });
+          setQuestionRemainingMs(viewingRemainingMs);
+        }
+      }
+    }
+  }, [currentPhase, viewingRemainingMs, questionRemainingMs]);
 
   // Client-side answering countdown (separate from display timer) - exactly like player screen
   useEffect(() => {
@@ -856,13 +1038,10 @@ function HostScreenContent() {
           totalQuestions={totalQuestionsCount}
           startedAt={countdownStartedAt}
           onCountdownComplete={() => {
-            // Countdown completed - now transition to question phase
-            console.log('[HostScreen] Countdown complete, transitioning to question phase');
-            if (gameFlow?.current_question_id) {
-              setIsDisplayPhaseDone(false);
-              setAnswerRemainingMs(null);
-              setCurrentPhase('question');
-            }
+            // Countdown completed - wait for question start event instead of transitioning immediately
+            // This ensures timing is properly synchronized with the backend
+            console.log('[HostScreen] Countdown complete, waiting for question start event');
+            // Don't transition to question phase here - let onQuestionStart handle it
           }}
         />
       );
