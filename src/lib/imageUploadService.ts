@@ -3,7 +3,7 @@
 // Project     : TUIZ
 // Author      : PandaDev0069 / Panta Aashish
 // Created     : 2025-09-11
-// Last Update : 2025-09-11
+// Last Update : 2026-01-04
 
 // Description:
 // - Service for handling image uploads to Supabase storage
@@ -21,7 +21,7 @@
 //----------------------------------------------------
 // 1. Imports / Dependencies
 //----------------------------------------------------
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { toast } from 'react-hot-toast';
 
@@ -195,12 +195,13 @@ class ImageUploadService {
   async uploadMultipleImages(files: File[], options: UploadOptions = {}): Promise<UploadResult[]> {
     const results: UploadResult[] = [];
     const errors: string[] = [];
+    const batchTimestamp = Date.now();
 
     for (let i = 0; i < files.length; i++) {
       try {
         const result = await this.uploadImage(files[i], {
           ...options,
-          folder: `${options.folder || DEFAULT_FOLDER}/batch-${Date.now()}`,
+          folder: `${options.folder || DEFAULT_FOLDER}/batch-${batchTimestamp}`,
         });
         results.push(result);
       } catch (error) {
@@ -491,44 +492,62 @@ class ImageUploadService {
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        reject(new Error(ERROR_MESSAGE_PROCESS_FAILED));
+        return;
+      }
+
       const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      const cleanup = () => {
+        URL.revokeObjectURL(objectUrl);
+      };
 
       img.onload = () => {
-        let { width, height } = img;
+        try {
+          let { width, height } = img;
 
-        if (width > maxWidth || height > maxHeight) {
-          const ratio = Math.min(maxWidth / width, maxHeight / height);
-          width *= ratio;
-          height *= ratio;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width *= ratio;
+            height *= ratio;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              cleanup();
+              if (blob) {
+                const processedFile = new File([blob], file.name, {
+                  type: file.type,
+                  lastModified: Date.now(),
+                });
+                resolve(processedFile);
+              } else {
+                reject(new Error(ERROR_MESSAGE_PROCESS_FAILED));
+              }
+            },
+            file.type,
+            quality,
+          );
+        } catch {
+          cleanup();
+          reject(new Error(ERROR_MESSAGE_PROCESS_FAILED));
         }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const processedFile = new File([blob], file.name, {
-                type: file.type,
-                lastModified: Date.now(),
-              });
-              resolve(processedFile);
-            } else {
-              reject(new Error(ERROR_MESSAGE_PROCESS_FAILED));
-            }
-          },
-          file.type,
-          quality,
-        );
       };
 
       img.onerror = () => {
+        cleanup();
         reject(new Error(ERROR_MESSAGE_LOAD_FAILED));
       };
 
-      img.src = URL.createObjectURL(file);
+      img.src = objectUrl;
     });
   }
 }
@@ -546,6 +565,19 @@ export function useImageUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const progressResetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      if (progressResetTimeoutRef.current) {
+        clearTimeout(progressResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const uploadImage = async (file: File, options?: UploadOptions): Promise<UploadResult | null> => {
     try {
@@ -553,25 +585,42 @@ export function useImageUpload() {
       setError(null);
       setUploadProgress(0);
 
-      const progressInterval = setInterval(() => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+
+      progressIntervalRef.current = setInterval(() => {
         setUploadProgress((prev: number) => Math.min(prev + PROGRESS_INCREMENT, PROGRESS_MAX));
       }, PROGRESS_UPDATE_INTERVAL_MS);
 
       const result = await imageUploadService.uploadImage(file, options);
 
-      clearInterval(progressInterval);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
       setUploadProgress(PROGRESS_COMPLETE);
 
       toast.success(SUCCESS_MESSAGE_UPLOADED);
       return result;
     } catch (error) {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
       const message = error instanceof Error ? error.message : ERROR_MESSAGE_UPLOAD_FAILED_GENERIC;
       setError(message);
       toast.error(message);
       return null;
     } finally {
       setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), PROGRESS_RESET_DELAY_MS);
+      if (progressResetTimeoutRef.current) {
+        clearTimeout(progressResetTimeoutRef.current);
+      }
+      progressResetTimeoutRef.current = setTimeout(
+        () => setUploadProgress(0),
+        PROGRESS_RESET_DELAY_MS,
+      );
     }
   };
 
