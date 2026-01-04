@@ -1,21 +1,57 @@
-/**
- * Game API Service
- * REST API client for game operations including CRUD, state management,
- * player operations, answer submission, and leaderboard queries.
- */
+// ====================================================
+// File Name   : gameApi.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-12-11
+// Last Update : 2026-01-03
 
+// Description:
+// - REST API client for game operations
+// - Handles CRUD operations, state management, player operations
+// - Manages answer submission and leaderboard queries
+// - Provides typed interfaces for all game-related API interactions
+
+// Notes:
+// - Uses singleton pattern for service instance
+// - Handles authentication via localStorage session token
+// - All methods return typed promises with error handling
+// ====================================================
+
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import { cfg } from '@/config/config';
 
-// ============================================================================
-// TYPE DEFINITIONS
-// ============================================================================
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const STORAGE_KEY_SESSION = 'tuiz_session';
+const DEFAULT_API_BASE_URL = 'http://localhost:8080';
+const DEFAULT_PLAYER_NAME = 'Host';
+const DEFAULT_POINTS_EARNED = 0;
 
+const AUTH_BEARER_PREFIX = 'Bearer ';
+const HEADER_CONTENT_TYPE = 'application/json';
+
+const ERROR_CODE_NETWORK = 'network_error';
+const ERROR_CODE_INVALID_RESPONSE = 'invalid_response';
+const ERROR_CODE_DATA_CREATION_FAILED = 'data_creation_failed';
+
+const ERROR_MESSAGE_NETWORK_FAILED = 'Network request failed';
+const ERROR_MESSAGE_GAME_NOT_FOUND = 'Game not found in response';
+const ERROR_MESSAGE_PLAYER_NOT_FOUND = 'Player not found in response';
+const ERROR_MESSAGE_ALREADY_EXISTS = 'already exists';
+const ERROR_MESSAGE_PLAYER_DATA_EXISTS = 'Player data already exists';
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
 export interface Game {
   id: string;
-  room_code?: string; // Legacy field name
-  game_code?: string; // Backend field name (preferred)
-  quiz_id?: string; // Legacy field name
-  quiz_set_id?: string; // Backend field name (preferred)
+  room_code?: string;
+  game_code?: string;
+  quiz_id?: string;
+  quiz_set_id?: string;
   user_id: string;
   status: 'waiting' | 'active' | 'paused' | 'finished';
   current_question_index: number | null;
@@ -50,16 +86,11 @@ export interface Player {
   id: string;
   game_id: string;
   device_id: string;
-  player_name: string; // Backend uses player_name, not display_name
+  player_name: string;
   is_logged_in: boolean;
   is_host: boolean;
-  created_at: string; // Backend uses created_at, not joined_at
-  updated_at: string; // Backend uses updated_at, not last_active_at
-  // Note: These fields don't exist in players table but may be in joined queries:
-  // avatar_url - only in profiles table
-  // score - only in game_player_data table
-  // streak - not tracked
-  // is_kicked - not implemented
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PlayersResponse {
@@ -80,19 +111,18 @@ export interface PlayerStats {
 
 export interface LeaderboardEntry {
   player_id: string;
-  player_name: string; // Backend returns player_name, not display_name
+  player_name: string;
   device_id?: string;
   score: number;
   rank: number;
-  previous_rank?: number; // Rank before last update
-  rank_change?: 'up' | 'down' | 'same'; // Rank change direction
-  score_change?: number; // Points added in last question
+  previous_rank?: number;
+  rank_change?: 'up' | 'down' | 'same';
+  score_change?: number;
   total_answers: number;
   correct_answers: number;
   accuracy: number;
   is_host?: boolean;
   is_logged_in?: boolean;
-  // Note: avatar_url not in backend response (only in profiles table)
 }
 
 export interface Answer {
@@ -116,9 +146,9 @@ export interface AnswerReport {
     question_number: number;
     answer_id: string | null;
     is_correct: boolean;
-    time_taken: number; // seconds
+    time_taken: number;
     points_earned: number;
-    answered_at: string; // ISO timestamp
+    answered_at: string;
   }>;
   streaks?: {
     current_streak: number;
@@ -138,8 +168,8 @@ export interface GamePlayerData {
   game_id: string;
   score: number;
   answer_report: AnswerReport;
-  created_at: string; // ISO timestamp
-  updated_at: string; // ISO timestamp
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ApiError {
@@ -148,86 +178,43 @@ export interface ApiError {
   requestId?: string;
 }
 
-// ============================================================================
-// API CLIENT CLASS
-// ============================================================================
-
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
+/**
+ * Class: GameApiClient
+ * Description:
+ * - REST API client for game operations
+ * - Handles authentication, request formatting, and response parsing
+ * - Provides methods for game CRUD, state management, player operations, and leaderboard queries
+ */
 class GameApiClient {
   private baseUrl: string;
 
+  /**
+   * Constructor: GameApiClient
+   * Description:
+   * - Initializes the client with API base URL from configuration
+   * - Falls back to default localhost URL if configuration is missing
+   */
   constructor() {
-    this.baseUrl = cfg.apiBase || 'http://localhost:8080';
+    this.baseUrl = cfg.apiBase || DEFAULT_API_BASE_URL;
   }
 
   /**
-   * Get authorization header from stored session
-   */
-  private getAuthHeader(): Record<string, string> {
-    try {
-      // Auth service stores session in 'tuiz_session' key
-      const sessionStr = localStorage.getItem('tuiz_session');
-      if (!sessionStr) return {};
-
-      const session = JSON.parse(sessionStr);
-      if (!session?.access_token) return {};
-
-      return {
-        Authorization: `Bearer ${session.access_token}`,
-      };
-    } catch {
-      return {};
-    }
-  }
-
-  /**
-   * Make HTTP request with unified error handling
-   */
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {},
-  ): Promise<{ data: T | null; error: ApiError | null }> {
-    try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.getAuthHeader(),
-          ...options.headers,
-        },
-      });
-
-      const json = await response.json();
-
-      if (!response.ok) {
-        return {
-          data: null,
-          error: json as ApiError,
-        };
-      }
-
-      return {
-        data: json as T,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        data: null,
-        error: {
-          error: 'network_error',
-          message: error instanceof Error ? error.message : 'Network request failed',
-        },
-      };
-    }
-  }
-
-  // ==========================================================================
-  // GAME CRUD OPERATIONS
-  // ==========================================================================
-
-  /**
-   * POST /games
-   * Create a new game session
-   * Backend returns { game: Game, host_player?: Player }, so we need to unwrap it
+   * Method: createGame
+   * Description:
+   * - Creates a new game session
+   * - Unwraps game from backend response format
+   *
+   * Parameters:
+   * - quizSetId (string): Quiz set identifier
+   * - gameSettings (Record<string, unknown>, optional): Game configuration settings
+   * - deviceId (string, optional): Host device identifier
+   * - playerName (string, optional): Host player name (defaults to 'Host')
+   *
+   * Returns:
+   * - Promise<{ data: Game | null; error: ApiError | null }>: Created game or error
    */
   async createGame(
     quizSetId: string,
@@ -241,11 +228,10 @@ class GameApiClient {
         quiz_set_id: quizSetId,
         game_settings: gameSettings || {},
         device_id: deviceId,
-        player_name: playerName || 'Host',
+        player_name: playerName || DEFAULT_PLAYER_NAME,
       }),
     });
 
-    // Unwrap the game from the response
     if (result.data?.game) {
       return {
         data: result.data.game,
@@ -255,13 +241,23 @@ class GameApiClient {
 
     return {
       data: null,
-      error: result.error || { error: 'invalid_response', message: 'Game not found in response' },
+      error: result.error || {
+        error: ERROR_CODE_INVALID_RESPONSE,
+        message: ERROR_MESSAGE_GAME_NOT_FOUND,
+      },
     };
   }
 
   /**
-   * GET /games/:gameId
-   * Get game details
+   * Method: getGame
+   * Description:
+   * - Fetches game details by game ID
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: Game | null; error: ApiError | null }>: Game data or error
    */
   async getGame(gameId: string) {
     return this.request<Game>(`/games/${gameId}`, {
@@ -270,9 +266,16 @@ class GameApiClient {
   }
 
   /**
-   * GET /games/by-code/:gameCode
-   * Get game details by room code
-   * Public access (for players to join using room code)
+   * Method: getGameByCode
+   * Description:
+   * - Fetches game details by room code
+   * - Public access endpoint for players to join using room code
+   *
+   * Parameters:
+   * - gameCode (string): Game room code
+   *
+   * Returns:
+   * - Promise<{ data: Game | null; error: ApiError | null }>: Game data or error
    */
   async getGameByCode(gameCode: string) {
     return this.request<Game>(`/games/by-code/${gameCode}`, {
@@ -281,8 +284,15 @@ class GameApiClient {
   }
 
   /**
-   * GET /games/:gameId/state
-   * Get current game state including flow information
+   * Method: getGameState
+   * Description:
+   * - Fetches current game state including flow information
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: GameState | null; error: ApiError | null }>: Game state or error
    */
   async getGameState(gameId: string) {
     return this.request<GameState>(`/games/${gameId}/state`, {
@@ -291,8 +301,15 @@ class GameApiClient {
   }
 
   /**
-   * GET /games/:gameId/questions/current
-   * Get current question with full metadata (images, answers, server timestamps)
+   * Method: getCurrentQuestion
+   * Description:
+   * - Fetches current question with full metadata including images, answers, and server timestamps
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: CurrentQuestionResponse | null; error: ApiError | null }>: Question data or error
    */
   async getCurrentQuestion(gameId: string) {
     return this.request<{
@@ -329,13 +346,16 @@ class GameApiClient {
     });
   }
 
-  // ==========================================================================
-  // GAME STATE MANAGEMENT
-  // ==========================================================================
-
   /**
-   * POST /games/:gameId/start
-   * Start a game - moves status from WAITING to ACTIVE
+   * Method: startGame
+   * Description:
+   * - Starts a game by moving status from WAITING to ACTIVE
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: Game | null; error: ApiError | null }>: Updated game or error
    */
   async startGame(gameId: string) {
     return this.request<Game>(`/games/${gameId}/start`, {
@@ -344,8 +364,16 @@ class GameApiClient {
   }
 
   /**
-   * PATCH /games/:gameId/status
-   * Update game status (pause, resume, end)
+   * Method: updateGameStatus
+   * Description:
+   * - Updates game status (pause, resume, or end)
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - action ('pause' | 'resume' | 'end'): Status action to perform
+   *
+   * Returns:
+   * - Promise<{ data: Game | null; error: ApiError | null }>: Updated game or error
    */
   async updateGameStatus(gameId: string, action: 'pause' | 'resume' | 'end') {
     return this.request<Game>(`/games/${gameId}/status`, {
@@ -355,29 +383,61 @@ class GameApiClient {
   }
 
   /**
-   * Pause the game
+   * Method: pauseGame
+   * Description:
+   * - Pauses the game
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: Game | null; error: ApiError | null }>: Updated game or error
    */
   async pauseGame(gameId: string) {
     return this.updateGameStatus(gameId, 'pause');
   }
 
   /**
-   * Resume the game
+   * Method: resumeGame
+   * Description:
+   * - Resumes the game
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: Game | null; error: ApiError | null }>: Updated game or error
    */
   async resumeGame(gameId: string) {
     return this.updateGameStatus(gameId, 'resume');
   }
 
   /**
-   * End the game
+   * Method: endGame
+   * Description:
+   * - Ends the game
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: Game | null; error: ApiError | null }>: Updated game or error
    */
   async endGame(gameId: string) {
     return this.updateGameStatus(gameId, 'end');
   }
 
   /**
-   * PATCH /games/:gameId/lock
-   * Lock or unlock the game room
+   * Method: lockGame
+   * Description:
+   * - Locks or unlocks the game room
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - locked (boolean): Lock state to set
+   *
+   * Returns:
+   * - Promise<{ data: Game | null; error: ApiError | null }>: Updated game or error
    */
   async lockGame(gameId: string, locked: boolean) {
     return this.request<Game>(`/games/${gameId}/lock`, {
@@ -386,13 +446,18 @@ class GameApiClient {
     });
   }
 
-  // ==========================================================================
-  // QUESTION CONTROL
-  // ==========================================================================
-
   /**
-   * POST /games/:gameId/questions/start
-   * Start a specific question
+   * Method: startQuestion
+   * Description:
+   * - Starts a specific question in the game
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - questionId (string): Question identifier
+   * - questionIndex (number, optional): Question index number
+   *
+   * Returns:
+   * - Promise<{ data: GameFlow | null; error: ApiError | null }>: Updated game flow or error
    */
   async startQuestion(gameId: string, questionId: string, questionIndex?: number) {
     return this.request<GameFlow>(`/games/${gameId}/questions/start`, {
@@ -402,9 +467,15 @@ class GameApiClient {
   }
 
   /**
-   * POST /games/:gameId/questions/reveal
-   * Trigger answer reveal for current question
-   * Backend returns: message, gameFlow, answerStats (optional)
+   * Method: revealAnswer
+   * Description:
+   * - Triggers answer reveal for current question
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: RevealAnswerResponse | null; error: ApiError | null }>: Reveal response or error
    */
   async revealAnswer(gameId: string) {
     return this.request<{
@@ -417,8 +488,15 @@ class GameApiClient {
   }
 
   /**
-   * POST /games/:gameId/questions/next
-   * Advance to the next question
+   * Method: nextQuestion
+   * Description:
+   * - Advances to the next question in the game
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: NextQuestionResponse | null; error: ApiError | null }>: Next question response or error
    */
   async nextQuestion(gameId: string) {
     return this.request<{
@@ -432,8 +510,15 @@ class GameApiClient {
   }
 
   /**
-   * POST /games/:gameId/questions/explanation/show
-   * Show explanation for current question
+   * Method: showExplanation
+   * Description:
+   * - Shows explanation for current question
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: ExplanationResponse | null; error: ApiError | null }>: Explanation data or error
    */
   async showExplanation(gameId: string) {
     return this.request<{
@@ -450,8 +535,15 @@ class GameApiClient {
   }
 
   /**
-   * POST /games/:gameId/questions/explanation/hide
-   * Hide explanation for current question
+   * Method: hideExplanation
+   * Description:
+   * - Hides explanation for current question
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: { message: string } | null; error: ApiError | null }>: Success message or error
    */
   async hideExplanation(gameId: string) {
     return this.request<{ message: string }>(`/games/${gameId}/questions/explanation/hide`, {
@@ -460,8 +552,16 @@ class GameApiClient {
   }
 
   /**
-   * GET /games/:gameId/questions/:questionId/explanation
-   * Get explanation data for a question
+   * Method: getExplanation
+   * Description:
+   * - Fetches explanation data for a specific question
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - questionId (string): Question identifier
+   *
+   * Returns:
+   * - Promise<{ data: QuestionExplanation | null; error: ApiError | null }>: Explanation data or error
    */
   async getExplanation(gameId: string, questionId: string) {
     return this.request<{
@@ -475,14 +575,20 @@ class GameApiClient {
     });
   }
 
-  // ==========================================================================
-  // PLAYER MANAGEMENT
-  // ==========================================================================
-
   /**
-   * POST /games/:gameId/join
-   * Join a game as a player (public endpoint, no auth required)
-   * Backend returns { success: true, player: Player, message: string }
+   * Method: joinGame
+   * Description:
+   * - Joins a game as a player
+   * - Public endpoint that does not require authentication
+   * - Unwraps player from backend response format
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - playerName (string): Player display name
+   * - deviceId (string): Device identifier
+   *
+   * Returns:
+   * - Promise<{ data: Player | null; error: ApiError | null }>: Player data or error
    */
   async joinGame(gameId: string, playerName: string, deviceId: string) {
     const result = await this.request<{ success: boolean; player: Player; message: string }>(
@@ -496,7 +602,6 @@ class GameApiClient {
       },
     );
 
-    // Unwrap the player from the response
     if (result.data?.player) {
       return {
         data: result.data.player,
@@ -505,14 +610,23 @@ class GameApiClient {
     }
     return {
       data: null,
-      error: result.error || { error: 'invalid_response', message: 'Player not found in response' },
+      error: result.error || {
+        error: ERROR_CODE_INVALID_RESPONSE,
+        message: ERROR_MESSAGE_PLAYER_NOT_FOUND,
+      },
     };
   }
 
   /**
-   * GET /games/:gameId/players
-   * Get all players in a game
-   * Backend returns PlayersResponse with { players: Player[], total: number, ... }
+   * Method: getPlayers
+   * Description:
+   * - Fetches all players in a game
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: PlayersResponse | null; error: ApiError | null }>: Players data or error
    */
   async getPlayers(gameId: string) {
     return this.request<PlayersResponse>(`/games/${gameId}/players`, {
@@ -521,8 +635,16 @@ class GameApiClient {
   }
 
   /**
-   * GET /games/:gameId/players/:playerId/stats
-   * Get player statistics
+   * Method: getPlayerStats
+   * Description:
+   * - Fetches player statistics for a game
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - playerId (string): Player identifier
+   *
+   * Returns:
+   * - Promise<{ data: PlayerStats | null; error: ApiError | null }>: Player stats or error
    */
   async getPlayerStats(gameId: string, playerId: string) {
     return this.request<PlayerStats>(`/games/${gameId}/players/${playerId}/stats`, {
@@ -531,8 +653,17 @@ class GameApiClient {
   }
 
   /**
-   * PATCH /games/:gameId/players/:playerId
-   * Update player information
+   * Method: updatePlayer
+   * Description:
+   * - Updates player information
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - playerId (string): Player identifier
+   * - updates (Partial<Player>): Player fields to update
+   *
+   * Returns:
+   * - Promise<{ data: Player | null; error: ApiError | null }>: Updated player or error
    */
   async updatePlayer(gameId: string, playerId: string, updates: Partial<Player>) {
     return this.request<Player>(`/games/${gameId}/players/${playerId}`, {
@@ -542,8 +673,16 @@ class GameApiClient {
   }
 
   /**
-   * DELETE /games/:gameId/players/:playerId
-   * Remove/kick a player from the game
+   * Method: kickPlayer
+   * Description:
+   * - Removes or kicks a player from the game
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - playerId (string): Player identifier
+   *
+   * Returns:
+   * - Promise<{ data: { message: string } | null; error: ApiError | null }>: Success message or error
    */
   async kickPlayer(gameId: string, playerId: string) {
     return this.request<{ message: string }>(`/games/${gameId}/players/${playerId}`, {
@@ -552,9 +691,18 @@ class GameApiClient {
   }
 
   /**
-   * POST /games/:gameId/players/:playerId/data
-   * Initialize player data for a game (creates game_player_data record)
-   * Note: Returns success even if data already exists (409 Conflict) - this is expected
+   * Method: initializePlayerData
+   * Description:
+   * - Initializes player data for a game by creating game_player_data record
+   * - Returns success even if data already exists (409 Conflict) as this is expected behavior
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - playerId (string): Player identifier
+   * - deviceId (string): Device identifier
+   *
+   * Returns:
+   * - Promise<{ data: PlayerDataInitResponse | null; error: ApiError | null }>: Initialization result or error
    */
   async initializePlayerData(gameId: string, playerId: string, deviceId: string) {
     const result = await this.request<{
@@ -569,32 +717,38 @@ class GameApiClient {
       }),
     });
 
-    // If we get a 409 Conflict or "already exists" message, it means the data already exists
-    // This is expected (backend creates it automatically) and not an error - return success
     if (
       result.error &&
-      (result.error.error === 'data_creation_failed' ||
-        result.error.message?.includes('already exists') ||
-        result.error.message?.includes('Player data already exists'))
+      (result.error.error === ERROR_CODE_DATA_CREATION_FAILED ||
+        result.error.message?.includes(ERROR_MESSAGE_ALREADY_EXISTS) ||
+        result.error.message?.includes(ERROR_MESSAGE_PLAYER_DATA_EXISTS))
     ) {
-      // Data already exists - this is expected and fine
       return {
-        data: null, // Data exists but we don't need the ID
-        error: null, // Treat as success
+        data: null,
+        error: null,
       };
     }
 
     return result;
   }
 
-  // ==========================================================================
-  // ANSWER SUBMISSION
-  // ==========================================================================
-
   /**
-   * POST /games/:gameId/players/:playerId/answer
-   * Submit an answer for a question
-   * Backend expects: question_id, question_number, answer_id, is_correct, time_taken (seconds), points_earned
+   * Method: submitAnswer
+   * Description:
+   * - Submits an answer for a question
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - playerId (string): Player identifier
+   * - questionId (string): Question identifier
+   * - questionNumber (number): Question number in sequence
+   * - answerId (string | null): Selected answer identifier
+   * - isCorrect (boolean): Whether answer is correct
+   * - timeTakenSeconds (number): Time taken to answer in seconds
+   * - pointsEarned (number, optional): Points earned for answer (defaults to 0)
+   *
+   * Returns:
+   * - Promise<{ data: GamePlayerData | null; error: ApiError | null }>: Updated player data or error
    */
   async submitAnswer(
     gameId: string,
@@ -604,7 +758,7 @@ class GameApiClient {
     answerId: string | null,
     isCorrect: boolean,
     timeTakenSeconds: number,
-    pointsEarned: number = 0,
+    pointsEarned: number = DEFAULT_POINTS_EARNED,
   ) {
     return this.request<GamePlayerData>(`/games/${gameId}/players/${playerId}/answer`, {
       method: 'POST',
@@ -620,8 +774,16 @@ class GameApiClient {
   }
 
   /**
-   * GET /games/:gameId/players/:playerId/answers
-   * Get all answers for a player in the game
+   * Method: getPlayerAnswers
+   * Description:
+   * - Fetches all answers for a player in the game
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   * - playerId (string): Player identifier
+   *
+   * Returns:
+   * - Promise<{ data: Answer[] | null; error: ApiError | null }>: Player answers or error
    */
   async getPlayerAnswers(gameId: string, playerId: string) {
     return this.request<Answer[]>(`/games/${gameId}/players/${playerId}/answers`, {
@@ -629,14 +791,16 @@ class GameApiClient {
     });
   }
 
-  // ==========================================================================
-  // LEADERBOARD & RESULTS
-  // ==========================================================================
-
   /**
-   * GET /games/:gameId/leaderboard
-   * Get game leaderboard with rankings
-   * Backend returns: { entries: LeaderboardEntry[], total: number, ... }
+   * Method: getLeaderboard
+   * Description:
+   * - Fetches game leaderboard with rankings
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: LeaderboardResponse | null; error: ApiError | null }>: Leaderboard data or error
    */
   async getLeaderboard(gameId: string) {
     return this.request<
@@ -647,13 +811,104 @@ class GameApiClient {
   }
 
   /**
-   * GET /games/:gameId/results
-   * Get final game results (alias for leaderboard)
+   * Method: getGameResults
+   * Description:
+   * - Fetches final game results (alias for leaderboard)
+   *
+   * Parameters:
+   * - gameId (string): Game identifier
+   *
+   * Returns:
+   * - Promise<{ data: LeaderboardResponse | null; error: ApiError | null }>: Game results or error
    */
   async getGameResults(gameId: string) {
     return this.getLeaderboard(gameId);
   }
+
+  //----------------------------------------------------
+  // 5. Helper Functions
+  //----------------------------------------------------
+  /**
+   * Method: getAuthHeader
+   * Description:
+   * - Retrieves authorization header from stored session
+   * - Safely handles browser environment and parsing errors
+   *
+   * Returns:
+   * - Record<string, string>: Authorization header object or empty object
+   */
+  private getAuthHeader(): Record<string, string> {
+    try {
+      const sessionStr = localStorage.getItem(STORAGE_KEY_SESSION);
+      if (!sessionStr) return {};
+
+      const session = JSON.parse(sessionStr);
+      if (!session?.access_token) return {};
+
+      return {
+        Authorization: `${AUTH_BEARER_PREFIX}${session.access_token}`,
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Method: request
+   * Description:
+   * - Makes HTTP request with unified error handling
+   * - Handles authentication token injection
+   * - Parses JSON responses and handles errors gracefully
+   *
+   * Parameters:
+   * - endpoint (string): API endpoint path
+   * - options (RequestInit): Optional fetch request options
+   *
+   * Returns:
+   * - Promise<{ data: T | null; error: ApiError | null }>: Typed response data or error
+   */
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+  ): Promise<{ data: T | null; error: ApiError | null }> {
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': HEADER_CONTENT_TYPE,
+          ...this.getAuthHeader(),
+          ...options.headers,
+        },
+      });
+
+      const json = await response.json();
+
+      if (!response.ok) {
+        return {
+          data: null,
+          error: json as ApiError,
+        };
+      }
+
+      return {
+        data: json as T,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: {
+          error: ERROR_CODE_NETWORK,
+          message: error instanceof Error ? error.message : ERROR_MESSAGE_NETWORK_FAILED,
+        },
+      };
+    }
+  }
 }
 
-// Export singleton instance
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------
 export const gameApi = new GameApiClient();
+
+export default gameApi;
