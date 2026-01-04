@@ -1,9 +1,33 @@
-// Quiz Types for Quiz Management System
+// ====================================================
+// File Name   : quiz.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-24
+// Last Update : 2025-09-13
+//
+// Description:
+// - Quiz types for quiz management system
+// - Defines enums, interfaces, and types for quizzes, questions, and answers
+// - Provides type safety for quiz creation, editing, and management workflows
+//
+// Notes:
+// - Form types support quiz creation and editing workflows
+// - Extended interfaces combine related data structures
+// - Constants provide UI styling mappings for enums
+// ====================================================
 
-// ============================================================================
-// ENUMS
-// ============================================================================
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+/**
+ * Enum: DifficultyLevel
+ * Description:
+ * - Represents quiz difficulty levels
+ */
 export enum DifficultyLevel {
   EASY = 'easy',
   MEDIUM = 'medium',
@@ -11,24 +35,37 @@ export enum DifficultyLevel {
   EXPERT = 'expert',
 }
 
+/**
+ * Enum: QuizStatus
+ * Description:
+ * - Represents quiz publication status
+ */
 export enum QuizStatus {
   DRAFT = 'draft',
   PUBLISHED = 'published',
   ARCHIVED = 'archived',
 }
 
+/**
+ * Enum: QuestionType
+ * Description:
+ * - Represents question types
+ * - Multiple choice supports 2-4 answer options
+ */
 export enum QuestionType {
-  MULTIPLE_CHOICE = 'multiple_choice', // Multiple Choice with options range (2~4)
+  MULTIPLE_CHOICE = 'multiple_choice',
   TRUE_FALSE = 'true_false',
 }
 
-// ============================================================================
-// CORE INTERFACES
-// ============================================================================
-
+/**
+ * Interface: QuizSet
+ * Description:
+ * - Core quiz set data structure
+ * - Contains quiz metadata, settings, and status information
+ */
 export interface QuizSet {
   id: string;
-  user_id: string; // Creator/owner from profiles table
+  user_id: string;
   title: string;
   description: string;
   thumbnail_url?: string;
@@ -37,15 +74,21 @@ export interface QuizSet {
   category: string;
   total_questions: number;
   times_played: number;
-  created_at: string; // ISO date string
-  updated_at: string; // ISO date string
+  created_at: string;
+  updated_at: string;
   status: QuizStatus;
   tags: string[];
-  last_played_at?: string; // ISO date string
-  play_settings: QuizPlaySettings; // Json object
-  cloned_from?: string; // ID of original quiz if duplicated
+  last_played_at?: string;
+  play_settings: QuizPlaySettings;
+  cloned_from?: string;
 }
 
+/**
+ * Interface: Question
+ * Description:
+ * - Individual question within a quiz set
+ * - Includes question text, timing settings, and explanation data
+ */
 export interface Question {
   id: string;
   question_set_id: string;
@@ -57,14 +100,20 @@ export interface Question {
   points: number;
   difficulty: DifficultyLevel;
   order_index: number;
-  created_at: string; // ISO date string
-  updated_at: string; // ISO date string
+  created_at: string;
+  updated_at: string;
   explanation_title?: string;
   explanation_text?: string;
   explanation_image_url?: string;
   show_explanation_time: number;
 }
 
+/**
+ * Interface: Answer
+ * Description:
+ * - Answer option for a question
+ * - Supports text and optional image, tracks correctness
+ */
 export interface Answer {
   id: string;
   question_id: string;
@@ -72,44 +121,59 @@ export interface Answer {
   image_url?: string;
   is_correct: boolean;
   order_index: number;
-  created_at: string; // ISO date string
-  updated_at: string; // ISO date string
+  created_at: string;
+  updated_at: string;
 }
 
-// ============================================================================
-// EXTENDED INTERFACES (Combined data)
-// ============================================================================
-
+/**
+ * Interface: QuizSetWithQuestions
+ * Description:
+ * - Quiz set extended with questions array
+ */
 export interface QuizSetWithQuestions extends QuizSet {
   questions: Question[];
 }
 
+/**
+ * Interface: QuestionWithAnswers
+ * Description:
+ * - Question extended with answers array
+ */
 export interface QuestionWithAnswers extends Question {
   answers: Answer[];
 }
 
+/**
+ * Interface: QuizSetComplete
+ * Description:
+ * - Complete quiz set with all questions and their answers
+ */
 export interface QuizSetComplete extends QuizSet {
   questions: QuestionWithAnswers[];
 }
 
-// ============================================================================
-// PLAY SETTINGS INTERFACE
-// ============================================================================
-
+/**
+ * Interface: QuizPlaySettings
+ * Description:
+ * - Gameplay settings for quiz sessions
+ * - Configures timing, bonuses, and display options
+ */
 export interface QuizPlaySettings {
-  code: number; // 6 digits code for the quiz , can be randomly generated or manually set
-  show_question_only: boolean; // Show question only before answering
-  show_explanation: boolean; // Shows explanation after answering and if explanation is not present, shows leaderboard only
+  code: number;
+  show_question_only: boolean;
+  show_explanation: boolean;
   time_bonus: boolean;
   streak_bonus: boolean;
-  show_correct_answer: boolean; // Show correct answer after answering in the answering section
-  max_players: number; // Max 400 players
+  show_correct_answer: boolean;
+  max_players: number;
 }
 
-// ============================================================================
-// FORM TYPES (For creating/editing quizzes)
-// ============================================================================
-
+/**
+ * Interface: CreateQuizSetForm
+ * Description:
+ * - Form data structure for creating a new quiz set
+ * - Includes temporary file field for thumbnail upload
+ */
 export interface CreateQuizSetForm {
   title: string;
   description: string;
@@ -119,15 +183,25 @@ export interface CreateQuizSetForm {
   category: string;
   tags: string[];
   play_settings: Partial<QuizPlaySettings>;
-  // Temporary field to store file before quiz creation
   _thumbnailFile?: File;
 }
 
+/**
+ * Interface: UpdateQuizSetForm
+ * Description:
+ * - Form data structure for updating an existing quiz set
+ */
 export interface UpdateQuizSetForm extends Partial<CreateQuizSetForm> {
   id: string;
   status?: QuizStatus;
 }
 
+/**
+ * Interface: CreateQuestionForm
+ * Description:
+ * - Form data structure for creating a new question
+ * - Includes nested answer forms
+ */
 export interface CreateQuestionForm {
   question_text: string;
   question_type: QuestionType;
@@ -144,6 +218,11 @@ export interface CreateQuestionForm {
   answers: CreateAnswerForm[];
 }
 
+/**
+ * Interface: CreateAnswerForm
+ * Description:
+ * - Form data structure for creating a new answer
+ */
 export interface CreateAnswerForm {
   answer_text: string;
   image_url?: string | null;
@@ -151,25 +230,51 @@ export interface CreateAnswerForm {
   order_index: number;
 }
 
+/**
+ * Interface: UpdateQuestionForm
+ * Description:
+ * - Form data structure for updating an existing question
+ */
 export interface UpdateQuestionForm extends Partial<CreateQuestionForm> {
   id: string;
   question_set_id: string;
 }
 
-// ============================================================================
-// UTILITY TYPES
-// ============================================================================
-
+/**
+ * Type: QuizSetStatus
+ * Description:
+ * - Alias for QuizStatus enum
+ */
 export type QuizSetStatus = QuizStatus;
+
+/**
+ * Type: QuizDifficulty
+ * Description:
+ * - Alias for DifficultyLevel enum
+ */
 export type QuizDifficulty = DifficultyLevel;
+
+/**
+ * Type: QuestionTypeEnum
+ * Description:
+ * - Alias for QuestionType enum
+ */
 export type QuestionTypeEnum = QuestionType;
 
-// Helper type for form validation
+/**
+ * Type: FormErrors
+ * Description:
+ * - Helper type for form validation errors
+ */
 export type FormErrors<T> = {
   [K in keyof T]?: string;
 };
 
-// Type for quiz creation workflow
+/**
+ * Interface: QuizCreationWorkflow
+ * Description:
+ * - Tracks state through quiz creation workflow steps
+ */
 export interface QuizCreationWorkflow {
   step: 'basic_info' | 'questions' | 'settings' | 'preview' | 'publish';
   quiz_data: Partial<CreateQuizSetForm>;
@@ -177,10 +282,9 @@ export interface QuizCreationWorkflow {
   is_complete: boolean;
 }
 
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
 export const DIFFICULTY_COLORS = {
   [DifficultyLevel.EASY]: 'text-green-600 bg-green-100',
   [DifficultyLevel.MEDIUM]: 'text-yellow-600 bg-yellow-100',
