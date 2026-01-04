@@ -1,11 +1,51 @@
-// src/services/websocket/useWebSocket.ts
+// ====================================================
+// File Name   : useWebSocket.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-11-23
+// Last Update : 2025-11-23
+
+// Description:
+// - React hook for WebSocket service integration
+// - Provides reactive connection state and WebSocket API methods
+// - Manages WebSocket service lifecycle and event listeners
+// - Wraps WebSocketService singleton for React component usage
+
+// Notes:
+// - Client-side only hook (uses 'use client' directive)
+// - Does not disconnect WebSocket on unmount (singleton pattern)
+// - All methods are memoized with useCallback for performance
+// ====================================================
 
 'use client';
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { WebSocketService } from './WebSocketService';
 import { ConnectionStatus, WebSocketServiceEvents } from './types';
 
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const DEFAULT_CONNECTION_STATUS: ConnectionStatus = {
+  connected: false,
+  deviceId: '',
+  reconnectCount: 0,
+};
+
+const DEFAULT_AUTO_CONNECT = true;
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+/**
+ * Interface: UseWebSocketReturn
+ * Description:
+ * - Return type for useWebSocket hook
+ * - Provides connection state and WebSocket API methods
+ */
 export interface UseWebSocketReturn {
   isConnected: boolean;
   status: ConnectionStatus;
@@ -19,23 +59,35 @@ export interface UseWebSocketReturn {
   sendGameState: (roomId: string, state: unknown) => void;
 }
 
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
+/**
+ * Hook: useWebSocket
+ * Description:
+ * - React hook for WebSocket service integration
+ * - Initializes WebSocket service singleton and sets up event listeners
+ * - Provides reactive connection state and WebSocket API methods
+ * - Does not disconnect on unmount to preserve singleton connection
+ *
+ * Parameters:
+ * - apiUrl (string): WebSocket server URL
+ * - events (WebSocketServiceEvents, optional): Event listener callbacks
+ *
+ * Returns:
+ * - UseWebSocketReturn: Connection state and WebSocket API methods
+ */
 export function useWebSocket(apiUrl: string, events?: WebSocketServiceEvents): UseWebSocketReturn {
   const [isConnected, setIsConnected] = useState(false);
-  const [status, setStatus] = useState<ConnectionStatus>({
-    connected: false,
-    deviceId: '',
-    reconnectCount: 0,
-  });
+  const [status, setStatus] = useState<ConnectionStatus>(DEFAULT_CONNECTION_STATUS);
   const wsRef = useRef<WebSocketService | null>(null);
 
   useEffect(() => {
-    // Initialize WebSocket service
     wsRef.current = WebSocketService.getInstance({
       url: apiUrl,
-      autoConnect: true,
+      autoConnect: DEFAULT_AUTO_CONNECT,
     });
 
-    // Set up event listeners
     wsRef.current.on({
       onConnected: (newStatus) => {
         setIsConnected(true);
@@ -76,11 +128,7 @@ export function useWebSocket(apiUrl: string, events?: WebSocketServiceEvents): U
       },
     });
 
-    // Cleanup on unmount
-    return () => {
-      // Don't disconnect on unmount as it's a singleton
-      // Only disconnect when explicitly called
-    };
+    return () => {};
   }, [apiUrl, events]);
 
   const connect = useCallback(() => {
