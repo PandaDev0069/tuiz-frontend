@@ -1,15 +1,34 @@
+/* ====================================================
+   File Name   : globals.css
+   Project     : TUIZ
+   Author      : PandaDev0069 / Panta Aashish
+   Created     : 2025-08-22
+   Last Update : 2025-09-02
+   
+   Description:
+   - Global styles and design tokens
+   - Base element styles and resets
+   - Utility classes, animations, and component fixes
+   
+   Notes:
+   - Imports Tailwind CSS and modular style files
+   - Defines CSS custom properties for theming
+   - Includes responsive styles and animations
+   ==================================================== */
+
+/*----------------------------------------------------
+  1. Imports
+  ----------------------------------------------------*/
 @import 'tailwindcss';
 @import './mobile.css';
 @import './tokens.css';
 @import './utilities.css';
 @import './scrollbar.css';
 
-/* ============================================================================
-   CSS CUSTOM PROPERTIES (DESIGN TOKENS)
-   ============================================================================ */
-
+/*----------------------------------------------------
+  2. CSS Custom Properties (Design Tokens)
+  ----------------------------------------------------*/
 :root {
-  /* Light theme colors */
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
   --card: 0 0% 100%;
@@ -32,7 +51,6 @@
 }
 
 .dark {
-  /* Dark theme colors */
   --background: 222.2 84% 4.9%;
   --foreground: 210 40% 98%;
   --card: 222.2 84% 4.9%;
@@ -53,9 +71,9 @@
   --input: 217.2 32.6% 17.5%;
 }
 
-/* ============================================================================
-   BASE STYLES
-   ============================================================================ */
+/*----------------------------------------------------
+  3. Base Styles
+  ----------------------------------------------------*/
 * {
   box-sizing: border-box;
 }
@@ -82,34 +100,9 @@ body {
   width: 100%;
 }
 
-/* ============================================================================
-   MOBILE RESPONSIVENESS
-   ============================================================================ */
-
-@media (max-width: 768px) {
-  body {
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-  }
-
-  /* Ensure content stays within viewport */
-  div,
-  section,
-  main,
-  header,
-  footer,
-  article,
-  aside,
-  nav {
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-}
-
-/* ============================================================================
-   FORM ELEMENTS
-   ============================================================================ */
-
+/*----------------------------------------------------
+  4. Component Styles
+  ----------------------------------------------------*/
 button {
   font: inherit;
 }
@@ -120,27 +113,39 @@ select {
   font: inherit;
 }
 
-/* Default form styling - let components handle their own styling */
 .form-input {
-  border-color: #65a30d; /* lime-600 */
+  border-color: #65a30d;
 }
 
 .form-input:focus {
-  border-color: #4d7c0f; /* lime-700 */
+  border-color: #4d7c0f;
   box-shadow: 0 0 0 2px rgba(101, 163, 13, 0.2);
 }
 
-/* Focus ring for textarea components - matches input field */
 textarea:focus {
   border-color: #2563eb !important;
   box-shadow: 0 0 0 2px rgba(59, 130, 246) !important;
   outline: none !important;
 }
 
-/* ============================================================================
-   UTILITY CLASSES
-   ============================================================================ */
+.rounded-full,
+[class*='rounded-full'] {
+  border-radius: 50%;
+  -webkit-border-radius: 50%;
+  -moz-border-radius: 50%;
+  overflow: hidden;
+}
 
+.rounded-full img,
+[class*='rounded-full'] img {
+  border-radius: inherit;
+  -webkit-border-radius: inherit;
+  -moz-border-radius: inherit;
+}
+
+/*----------------------------------------------------
+  5. Utility Classes
+  ----------------------------------------------------*/
 ::selection {
   background: rgba(28, 212, 184, 0.3);
   color: var(--foreground);
@@ -156,7 +161,6 @@ textarea:focus {
   color: transparent;
 }
 
-/* Line clamp utilities */
 .line-clamp-1 {
   overflow: hidden;
   display: -webkit-box;
@@ -181,10 +185,50 @@ textarea:focus {
   line-clamp: 3;
 }
 
-/* ============================================================================
-   ANIMATIONS
-   ============================================================================ */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
 
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/*----------------------------------------------------
+  6. Media Queries
+  ----------------------------------------------------*/
+@media (max-width: 768px) {
+  body {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+
+  div,
+  section,
+  main,
+  header,
+  footer,
+  article,
+  aside,
+  nav {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+/*----------------------------------------------------
+  7. Animations
+  ----------------------------------------------------*/
 @keyframes float {
   0%,
   100% {
@@ -251,7 +295,6 @@ textarea:focus {
   }
 }
 
-/* Animation classes */
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
@@ -279,10 +322,6 @@ textarea:focus {
   white-space: nowrap;
   animation: typewriter 2s steps(40, end);
 }
-
-/* ============================================================================
-   SCROLLBAR STYLES
-   ============================================================================ */
 
 ::-webkit-scrollbar {
   width: 12px;
@@ -316,27 +355,6 @@ textarea:focus {
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* Scrollbar variants */
-.scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.scrollbar-hidden {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.scrollbar-hidden::-webkit-scrollbar {
-  display: none;
-}
-
-/* Dark theme scrollbar */
 .dark ::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.2);
 }
@@ -353,24 +371,4 @@ textarea:focus {
 
 .dark ::-webkit-scrollbar-corner {
   background: rgba(0, 0, 0, 0.2);
-}
-
-/* ============================================================================
-   COMPONENT FIXES
-   ============================================================================ */
-
-/* Fix Next.js Image rounded-full issues */
-.rounded-full,
-[class*='rounded-full'] {
-  border-radius: 50%;
-  -webkit-border-radius: 50%;
-  -moz-border-radius: 50%;
-  overflow: hidden;
-}
-
-.rounded-full img,
-[class*='rounded-full'] img {
-  border-radius: inherit;
-  -webkit-border-radius: inherit;
-  -moz-border-radius: inherit;
 }
