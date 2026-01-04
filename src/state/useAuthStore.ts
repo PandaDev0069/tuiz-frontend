@@ -1,11 +1,43 @@
-// src/state/useAuthStore.ts
+// ====================================================
+// File Name   : useAuthStore.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-22
+// Last Update : 2025-12-22
+//
+// Description:
+// - Zustand store for authentication state management
+// - Handles user login, registration, logout, and session management
+// - Manages user and session state with device ID support
+//
+// Notes:
+// - Clears user-specific data on login/logout
+// - Integrates with auth service and query client
+// - Provides device ID for WebSocket connections
+// ====================================================
+
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import { create } from 'zustand';
+
 import { authService } from '@/lib/auth';
 import { getOrCreateDeviceId } from '@/lib/deviceId';
-import type { User, Session, AuthState, LoginRequest, RegisterRequest } from '@/types/auth';
-import { useQuizLibraryStore } from './useQuizLibraryStore';
 import { clearUserSpecificQueries } from '@/lib/queryClient';
 
+import type { User, Session, AuthState, LoginRequest, RegisterRequest } from '@/types/auth';
+
+import { useQuizLibraryStore } from './useQuizLibraryStore';
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+/**
+ * Interface: AuthActions
+ * Description:
+ * - Action methods for authentication store
+ * - Provides login, register, logout, and state management methods
+ */
 interface AuthActions {
   login: (data: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
@@ -18,29 +50,46 @@ interface AuthActions {
   getDeviceId: () => string;
 }
 
-// Helper function to clear all user-specific data
-const clearUserSpecificData = () => {
-  // Clear quiz library store
+//----------------------------------------------------
+// 5. Helper Functions
+//----------------------------------------------------
+/**
+ * Function: clearUserSpecificData
+ * Description:
+ * - Clears all user-specific data from stores and caches
+ * - Resets quiz library store and React Query caches
+ *
+ * Returns:
+ * - void
+ */
+function clearUserSpecificData(): void {
   useQuizLibraryStore.getState().resetAllState();
 
-  // Clear React Query caches
   clearUserSpecificQueries();
+}
 
-  // Clear any other user-specific stores here
-};
-
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
+/**
+ * Hook: useAuthStore
+ * Description:
+ * - Main Zustand store hook for authentication state
+ * - Manages user, session, and loading states
+ * - Provides authentication actions and device ID
+ *
+ * Returns:
+ * - AuthState & AuthActions: Combined state and actions
+ */
 export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
-  // State
   user: null,
   session: null,
   loading: false,
 
-  // Actions
   login: async (data: LoginRequest) => {
     try {
       set({ loading: true });
 
-      // Clear any existing user data before logging in
       clearUserSpecificData();
 
       const response = await authService.login(data);
@@ -60,7 +109,6 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
     try {
       set({ loading: true });
 
-      // Clear any existing user data before registering
       clearUserSpecificData();
 
       const response = await authService.register(data);
@@ -81,7 +129,6 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
       set({ loading: true });
       await authService.logout(clearCredentials);
 
-      // Clear all user-specific data
       clearUserSpecificData();
 
       set({
@@ -90,11 +137,9 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
         loading: false,
       });
     } catch (error) {
-      // Even if server logout fails, clear local state
       console.warn('Logout failed, but clearing local state:', error);
       authService.clearAuthData();
 
-      // Clear all user-specific data
       clearUserSpecificData();
 
       set({
@@ -108,18 +153,18 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
   setUser: (user: User | null) => {
     const currentUser = useAuthStore.getState().user;
 
-    // If user is changing (not just setting to null), clear user-specific data
     if (currentUser && user && currentUser.id !== user.id) {
       clearUserSpecificData();
     }
 
     set({ user });
   },
+
   setSession: (session: Session | null) => set({ session }),
+
   setLoading: (loading: boolean) => set({ loading }),
 
   clearAuth: () => {
-    // Clear all user-specific data
     clearUserSpecificData();
 
     set({
@@ -137,7 +182,6 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
         session: authData.session as Session,
       });
     } else {
-      // Clear expired data
       authService.clearAuthData();
       set({
         user: null,
@@ -146,10 +190,7 @@ export const useAuthStore = create<AuthState & AuthActions>()((set) => ({
     }
   },
 
-  // Get or create device ID
-  // This ensures device ID is always available for WebSocket connections and game sessions
   getDeviceId: () => {
-    // Only get device ID on client side
     if (typeof window === 'undefined') {
       return '';
     }
