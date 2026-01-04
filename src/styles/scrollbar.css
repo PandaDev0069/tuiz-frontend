@@ -1,50 +1,86 @@
-/* Scrollbar Utility Classes */
+/* ====================================================
+   File Name   : scrollbar.css
+   Project     : TUIZ
+   Author      : PandaDev0069 / Panta Aashish
+   Created     : 2025-08-20
+   Last Update : 2025-08-29
+   
+   Description:
+   - Scrollbar utility classes and variants
+   - Custom scrollbar styling for different use cases
+   - Supports hide, thin, wide, colored, and overlay scrollbars
+   
+   Notes:
+   - Provides multiple scrollbar variants for different UI needs
+   - Includes auto-hide and overlay scrollbar options
+   - Uses CSS custom properties for theme-aware scrollbars
+   ==================================================== */
 
-/* Hide scrollbars completely */
+/*----------------------------------------------------
+  1. Imports
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  2. CSS Custom Properties (Design Tokens)
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  3. Base Styles
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  4. Component Styles
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  5. Utility Classes
+  ----------------------------------------------------*/
 .scrollbar-hide {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
 
-/* Hide scrollbars completely */
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
 
-/* Thin scrollbars */
 .scrollbar-thin {
   scrollbar-width: thin;
 }
+
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 .scrollbar-thin::-webkit-scrollbar-thumb {
   border-radius: 3px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Wide scrollbars */
 .scrollbar-wide {
   scrollbar-width: auto;
 }
+
 .scrollbar-wide::-webkit-scrollbar {
   width: 16px;
   height: 16px;
 }
+
 .scrollbar-wide::-webkit-scrollbar-thumb {
   border-radius: 8px;
   border: 3px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Colored scrollbar variants */
 .scrollbar-primary::-webkit-scrollbar-thumb {
   background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-foreground)) 100%);
 }
@@ -61,7 +97,6 @@
   background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(var(--accent-foreground)) 100%);
 }
 
-/* Glow effect scrollbars */
 .scrollbar-glow::-webkit-scrollbar-thumb {
   background: linear-gradient(135deg, #6fd6ff 0%, #bff098 100%);
   box-shadow: 0 0 10px rgba(111, 214, 255, 0.3);
@@ -71,7 +106,6 @@
   box-shadow: 0 0 15px rgba(111, 214, 255, 0.5);
 }
 
-/* Rounded corner variations */
 .scrollbar-square::-webkit-scrollbar-thumb {
   border-radius: 0;
 }
@@ -84,12 +118,10 @@
   border-radius: 50px;
 }
 
-/* Smooth scrolling behavior */
 .scroll-smooth {
   scroll-behavior: smooth;
 }
 
-/* Auto-hide scrollbars (only show on hover/scroll) */
 .scrollbar-auto-hide {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
@@ -109,7 +141,6 @@
   background: linear-gradient(135deg, #6fd6ff 0%, #bff098 100%);
 }
 
-/* Overlay scrollbars (floating over content) */
 .scrollbar-overlay {
   position: relative;
 }
@@ -134,3 +165,11 @@
 .scrollbar-overlay::-webkit-scrollbar-thumb:hover {
   background: rgba(111, 214, 255, 0.8);
 }
+
+/*----------------------------------------------------
+  6. Media Queries
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  7. Animations
+  ----------------------------------------------------*/

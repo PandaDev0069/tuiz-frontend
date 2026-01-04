@@ -1,40 +1,58 @@
-:root {
-  /* Primary gradient theme - #BFF098 → #6FD6FF */
-  --gradient-primary: linear-gradient(135deg, #bff098 0%, #6fd6ff 100%);
-  --gradient-fallback: #9fe3cb; /* Midpoint color */
+/* ====================================================
+   File Name   : tokens.css
+   Project     : TUIZ
+   Author      : PandaDev0069 / Panta Aashish
+   Created     : 2025-08-20
+   Last Update : 2025-08-29
+   
+   Description:
+   - CSS custom properties (design tokens)
+   - Color palette, gradients, spacing, typography, and theme variables
+   - Comprehensive design system tokens for consistent styling
+   
+   Notes:
+   - All tokens use CSS custom properties for easy theming
+   - Includes light theme colors optimized for bright backgrounds
+   - Extensive gradient library for various UI needs
+   ==================================================== */
 
-  /* Theme colors derived from gradient */
+/*----------------------------------------------------
+  1. Imports
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  2. CSS Custom Properties (Design Tokens)
+  ----------------------------------------------------*/
+:root {
+  --gradient-primary: linear-gradient(135deg, #bff098 0%, #6fd6ff 100%);
+  --gradient-fallback: #9fe3cb;
+
   --light-green: #bff098;
   --light-blue: #6fd6ff;
   --primary: #6fd6ff;
   --primary-light: #8fdbff;
-  /* Darker variants derived from gradient */
   --light-green-dark: #9fd078;
   --light-blue-dark: #4abbe6;
   --primary-dark: #4abbe6;
   --secondary: #bff098;
   --secondary-dark: #9fd078;
 
-  /* Light/bright background - using the gradient */
   --bg: var(--gradient-primary);
   --bg-fallback: var(--gradient-fallback);
   --bg-subtle: rgba(255, 255, 255, 0.85);
   --bg-muted: rgba(255, 255, 255, 0.75);
   --bg-accent: rgba(255, 255, 255, 0.65);
 
-  /* Darker text colors for bright background */
-  --fg: #1f2937; /* Dark gray */
-  --fg-muted: #374151; /* Medium gray */
-  --fg-subtle: #4b5563; /* Light gray */
+  --fg: #1f2937;
+  --fg-muted: #374151;
+  --fg-subtle: #4b5563;
 
-  /* Accent colors using theme palette */
   --accent: var(--primary);
   --accent-hover: var(--primary-light);
   --accent-dark: var(--primary-dark);
   --accent-ink: rgba(255, 255, 255, 0.95);
   --accent-subtle: rgba(111, 214, 255, 0.15);
 
-  /* Semantic colors that complement the bright theme */
   --success: #059669;
   --success-light: #10b981;
   --success-bg: rgba(5, 150, 105, 0.1);
@@ -50,7 +68,6 @@
   --info: var(--primary);
   --info-bg: rgba(111, 214, 255, 0.1);
 
-  /* Extended color palette */
   --purple: #8b5cf6;
   --purple-light: #a78bfa;
   --purple-dark: #7c3aed;
@@ -111,7 +128,6 @@
   --neutral-dark: #525252;
   --neutral-bg: rgba(115, 115, 115, 0.1);
 
-  /* Gradient variations */
   --gradient-purple: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
   --gradient-sunset: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
   --gradient-ocean: linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%);
@@ -119,7 +135,6 @@
   --gradient-midnight: linear-gradient(135deg, #1e293b 0%, #6366f1 100%);
   --gradient-dawn: linear-gradient(135deg, #fbbf24 0%, #f472b6 100%);
   --gradient-arctic: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
-  /* Additional gradients */
   --gradient-mango: linear-gradient(135deg, #ffcf71 0%, #f76b1c 100%);
   --gradient-berry: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
   --gradient-aurora: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
@@ -133,7 +148,6 @@
   --gradient-peach: linear-gradient(135deg, #ffd3a5 0%, #fd6585 100%);
   --gradient-lilac: linear-gradient(135deg, #b993d6 0%, #8ca6db 100%);
 
-  /* Dark gradient variations */
   --gradient-dark-purple: linear-gradient(135deg, #4c1d95 0%, #7c2d12 100%);
   --gradient-dark-blue: linear-gradient(135deg, #1e3a8a 0%, #065f46 100%);
   --gradient-dark-green: linear-gradient(135deg, #14532d 0%, #1f2937 100%);
@@ -153,14 +167,12 @@
   --gradient-wine: linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%);
   --gradient-royal: linear-gradient(135deg, #581c87 0%, #312e81 100%);
 
-  /* Metallic gradients */
   --gradient-gold: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
   --gradient-silver: linear-gradient(135deg, #e5e7eb 0%, #9ca3af 100%);
   --gradient-bronze: linear-gradient(135deg, #d97706 0%, #92400e 100%);
   --gradient-copper: linear-gradient(135deg, #ea580c 0%, #9a3412 100%);
   --gradient-platinum: linear-gradient(135deg, #f3f4f6 0%, #6b7280 100%);
 
-  /* Theme-specific color schemes */
   --gaming-primary: #ff6b35;
   --gaming-secondary: #004e89;
   --gaming-accent: #ffd23f;
@@ -181,62 +193,55 @@
   --pastel-accent: #d9ffb3;
   --pastel-bg: linear-gradient(135deg, #ffb3d9 0%, #b3d9ff 100%);
 
-  /* Border colors for bright theme */
   --border: rgba(31, 41, 55, 0.15);
   --border-hover: rgba(31, 41, 55, 0.25);
 
-  /* Surface colors - cards and overlays */
   --card: rgba(255, 255, 255, 0.9);
   --card-hover: rgba(255, 255, 255, 0.95);
   --overlay: rgba(255, 255, 255, 0.4);
 
-  /* Spacing system */
   --space-px: 1px;
   --space-0: 0;
-  --space-1: 0.25rem; /* 4px */
-  --space-2: 0.5rem; /* 8px */
-  --space-3: 0.75rem; /* 12px */
-  --space-4: 1rem; /* 16px */
-  --space-5: 1.25rem; /* 20px */
-  --space-6: 1.5rem; /* 24px */
-  --space-7: 1.75rem; /* 28px */
-  --space-8: 2rem; /* 32px */
-  --space-9: 2.25rem; /* 36px */
-  --space-10: 2.5rem; /* 40px */
-  --space-12: 3rem; /* 48px */
-  --space-16: 4rem; /* 64px */
-  --space-20: 5rem; /* 80px */
-  --space-24: 6rem; /* 96px */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --space-9: 2.25rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
 
-  /* Typography */
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
     'Noto Sans', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 
-  /* Font sizes */
-  --text-xs: 0.75rem; /* 12px */
-  --text-sm: 0.875rem; /* 14px */
-  --text-base: 1rem; /* 16px */
-  --text-lg: 1.125rem; /* 18px */
-  --text-xl: 1.25rem; /* 20px */
-  --text-2xl: 1.5rem; /* 24px */
-  --text-3xl: 1.875rem; /* 30px */
-  --text-4xl: 2.25rem; /* 36px */
-  --text-5xl: 3rem; /* 48px */
-  --text-6xl: 3.75rem; /* 60px */
-  --text-7xl: 4.5rem; /* 72px */
-  --text-8xl: 6rem; /* 96px */
-  --text-9xl: 8rem; /* 128px */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
+  --text-6xl: 3.75rem;
+  --text-7xl: 4.5rem;
+  --text-8xl: 6rem;
+  --text-9xl: 8rem;
 
-  /* Border radius */
   --radius-none: 0;
   --radius-1: 4px;
   --radius-2: 8px;
   --radius-3: 12px;
   --radius-4: 16px;
 
-  /* Shadows for bright theme - darker shadows */
   --shadow-sm: 0 1px 2px 0 rgba(31, 41, 55, 0.08);
   --shadow-1: 0 2px 8px rgba(31, 41, 55, 0.15);
   --shadow-2: 0 4px 16px rgba(31, 41, 55, 0.2);
@@ -244,13 +249,31 @@
   --shadow-glow: 0 0 20px rgba(111, 214, 255, 0.3);
   --shadow-inner: inset 0 2px 4px 0 rgba(31, 41, 55, 0.1);
 
-  /* Transitions */
   --transition-fast: 150ms ease;
   --transition-normal: 250ms ease;
   --transition-slow: 350ms ease;
 
-  /* Z-index scale */
   --z-dropdown: 1000;
   --z-modal: 1050;
   --z-tooltip: 1070;
 }
+
+/*----------------------------------------------------
+  3. Base Styles
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  4. Component Styles
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  5. Utility Classes
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  6. Media Queries
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  7. Animations
+  ----------------------------------------------------*/

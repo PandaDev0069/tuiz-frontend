@@ -63,7 +63,7 @@ function EditQuizPageContent() {
       time_bonus: true,
       streak_bonus: true,
       show_correct_answer: false,
-      max_players: 400,
+      max_players: 200,
     },
   });
   const [questions, setQuestions] = useState<CreateQuestionForm[]>([]);

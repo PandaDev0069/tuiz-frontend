@@ -1,11 +1,40 @@
-/**
- * Utility functions for transforming explanation data between backend and frontend formats
- */
+// ====================================================
+// File Name   : explanationUtils.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-12-30
+// Last Update : 2025-12-30
 
+// Description:
+// - Utility functions for transforming explanation data
+// - Converts between backend API format and frontend component format
+// - Handles default values and field mapping
+
+// Notes:
+// - Provides default values for missing explanation data
+// - Supports both direct backend responses and question object formats
+// ====================================================
+
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import type { ExplanationData } from '@/types/game';
 
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const DEFAULT_EXPLANATION_TIME_SECONDS = 10;
+const DEFAULT_EXPLANATION_TITLE = '解説';
+const DEFAULT_EXPLANATION_BODY = '解説は近日追加されます。';
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
 /**
- * Backend explanation response format
+ * Interface: BackendExplanationResponse
+ * Description:
+ * - Backend API response format for explanation data
+ * - Matches the structure returned by explanation endpoints
  */
 export interface BackendExplanationResponse {
   title: string | null;
@@ -14,13 +43,23 @@ export interface BackendExplanationResponse {
   show_time: number | null;
 }
 
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
 /**
- * Transform backend explanation response to frontend ExplanationData format
+ * Function: transformExplanationData
+ * Description:
+ * - Transforms backend explanation response to frontend ExplanationData format
+ * - Applies default values for missing fields
+ * - Maps backend field names to frontend field names
  *
- * @param backendData - The explanation data from backend API
- * @param questionNumber - Current question number (1-indexed)
- * @param totalQuestions - Total number of questions in the game
- * @returns Transformed ExplanationData for frontend components
+ * Parameters:
+ * - backendData (BackendExplanationResponse): Explanation data from backend API
+ * - questionNumber (number): Current question number (1-indexed)
+ * - totalQuestions (number): Total number of questions in the game
+ *
+ * Returns:
+ * - ExplanationData: Transformed explanation data for frontend components
  */
 export function transformExplanationData(
   backendData: BackendExplanationResponse,
@@ -30,21 +69,28 @@ export function transformExplanationData(
   return {
     questionNumber,
     totalQuestions,
-    timeLimit: backendData.show_time || 10, // Default to 10 seconds if not specified
-    title: backendData.title || '解説', // Default title if not provided
-    body: backendData.text || '解説は近日追加されます。', // Default body if not provided
+    timeLimit: backendData.show_time || DEFAULT_EXPLANATION_TIME_SECONDS,
+    title: backendData.title || DEFAULT_EXPLANATION_TITLE,
+    body: backendData.text || DEFAULT_EXPLANATION_BODY,
     image: backendData.image_url || undefined,
-    subtitle: undefined, // Not provided by backend, can be added if needed
+    subtitle: undefined,
   };
 }
 
 /**
- * Transform explanation data from question object (used in current question endpoint)
+ * Function: transformQuestionExplanationData
+ * Description:
+ * - Transforms explanation data from question object format
+ * - Maps question explanation fields to backend format, then transforms
+ * - Used for current question endpoint responses
  *
- * @param questionData - Question data with explanation fields
- * @param questionNumber - Current question number (1-indexed)
- * @param totalQuestions - Total number of questions in the game
- * @returns Transformed ExplanationData for frontend components
+ * Parameters:
+ * - questionData (object): Question data with explanation fields
+ * - questionNumber (number): Current question number (1-indexed)
+ * - totalQuestions (number): Total number of questions in the game
+ *
+ * Returns:
+ * - ExplanationData: Transformed explanation data for frontend components
  */
 export function transformQuestionExplanationData(
   questionData: {

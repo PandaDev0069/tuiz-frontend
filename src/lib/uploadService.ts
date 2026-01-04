@@ -1,50 +1,149 @@
-// src/lib/uploadService.ts
-// Service for handling file uploads via backend API
+// ====================================================
+// File Name   : uploadService.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-11
+// Last Update : 2025-09-13
+//
+// Description:
+// - Service for handling file uploads via backend API
+// - Provides methods for uploading quiz thumbnails, question images, and answer images
+// - Includes React hook for upload state management with progress tracking
+//
+// Notes:
+// - Uses fetch directly for file uploads with FormData
+// - Validates files before upload (size and type)
+// - Matches backend upload validation logic
+// ====================================================
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
+import { useState, useEffect, useRef } from 'react';
 import { cfg } from '@/config/config';
 import { toast } from 'react-hot-toast';
-import { useState } from 'react';
 
-// ============================================================================
-// TYPES
-// ============================================================================
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const STORAGE_KEY_SESSION = 'tuiz_session';
 
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const BYTES_PER_MB = 1024 * 1024;
+const MAX_FILE_SIZE_MB = MAX_FILE_SIZE_BYTES / BYTES_PER_MB;
+
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+] as const;
+
+const FILE_FIELD_THUMBNAIL = 'thumbnail';
+const FILE_FIELD_IMAGE = 'image';
+
+const HTTP_METHOD_POST = 'POST';
+const AUTH_BEARER_PREFIX = 'Bearer ';
+
+const API_ENDPOINT_QUIZ_THUMBNAIL = '/upload/quiz-thumbnail';
+const API_ENDPOINT_QUESTION_IMAGE = '/upload/question-image';
+const API_ENDPOINT_ANSWER_IMAGE = '/upload/answer-image';
+
+const PROGRESS_INCREMENT = 10;
+const PROGRESS_MAX = 90;
+const PROGRESS_COMPLETE = 100;
+const PROGRESS_UPDATE_INTERVAL_MS = 100;
+const PROGRESS_RESET_DELAY_MS = 1000;
+
+const ERROR_MESSAGE_UPLOAD_FAILED = 'Upload failed';
+const ERROR_MESSAGE_UPLOAD_FAILED_GENERIC = 'アップロードに失敗しました';
+const ERROR_MESSAGE_FILE_SIZE_TOO_LARGE = `ファイルサイズが大きすぎます。最大${MAX_FILE_SIZE_MB}MBまでです。`;
+const ERROR_MESSAGE_UNSUPPORTED_FILE_TYPE =
+  'サポートされていないファイル形式です。JPEG、PNG、WebP、GIFのみ対応しています。';
+
+const SUCCESS_MESSAGE_IMAGE_UPLOADED = '画像がアップロードされました';
+const SUCCESS_MESSAGE_QUESTION_IMAGE_UPLOADED = '問題画像がアップロードされました';
+const SUCCESS_MESSAGE_ANSWER_IMAGE_UPLOADED = '選択肢画像がアップロードされました';
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+/**
+ * Interface: UploadResult
+ * Description:
+ * - Result object returned after successful file upload
+ * - Contains URL and path for the uploaded file
+ */
 export interface UploadResult {
   url: string;
   path: string;
 }
 
+/**
+ * Interface: UploadError
+ * Description:
+ * - Error object returned from upload API
+ * - Contains error code and optional message
+ */
 export interface UploadError {
   error: string;
   message?: string;
 }
 
-// ============================================================================
-// UPLOAD SERVICE CLASS
-// ============================================================================
+/**
+ * Interface: ValidationResult
+ * Description:
+ * - Result of file validation
+ * - Indicates if file is valid and provides error message if not
+ */
+interface ValidationResult {
+  isValid: boolean;
+  error?: string;
+}
 
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
+/**
+ * Class: UploadService
+ * Description:
+ * - Service for handling file uploads via backend API
+ * - Provides methods for uploading quiz thumbnails, question images, and answer images
+ * - Validates files before upload
+ */
 class UploadService {
   /**
-   * Upload quiz thumbnail via backend API
+   * Method: uploadQuizThumbnail
+   * Description:
+   * - Uploads quiz thumbnail image via backend API
+   *
+   * Parameters:
+   * - file (File): Thumbnail image file
+   * - quizId (string): Quiz set ID
+   *
+   * Returns:
+   * - Promise<UploadResult>: Upload result with URL and path
+   *
+   * Throws:
+   * - Error: When upload fails
    */
   async uploadQuizThumbnail(file: File, quizId: string): Promise<UploadResult> {
     try {
       const formData = new FormData();
-      formData.append('thumbnail', file);
+      formData.append(FILE_FIELD_THUMBNAIL, file);
 
-      // Use fetch directly for file uploads with progress
-      const response = await fetch(`${cfg.apiBase}/upload/quiz-thumbnail/${quizId}`, {
-        method: 'POST',
+      const response = await fetch(`${cfg.apiBase}${API_ENDPOINT_QUIZ_THUMBNAIL}/${quizId}`, {
+        method: HTTP_METHOD_POST,
         body: formData,
         headers: {
-          // Don't set Content-Type - let browser set it with boundary for FormData
-          Authorization: `Bearer ${this.getAuthToken()}`,
+          Authorization: `${AUTH_BEARER_PREFIX}${this.getAuthToken()}`,
         },
       });
 
       if (!response.ok) {
         const errorData: UploadError = await response.json();
-        throw new Error(errorData.message || errorData.error || 'Upload failed');
+        throw new Error(errorData.message || errorData.error || ERROR_MESSAGE_UPLOAD_FAILED);
       }
 
       const result: UploadResult = await response.json();
@@ -56,24 +155,36 @@ class UploadService {
   }
 
   /**
-   * Upload question image via backend API
+   * Method: uploadQuestionImage
+   * Description:
+   * - Uploads question image via backend API
+   *
+   * Parameters:
+   * - file (File): Question image file
+   * - quizId (string): Quiz set ID
+   *
+   * Returns:
+   * - Promise<UploadResult>: Upload result with URL and path
+   *
+   * Throws:
+   * - Error: When upload fails
    */
   async uploadQuestionImage(file: File, quizId: string): Promise<UploadResult> {
     try {
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append(FILE_FIELD_IMAGE, file);
 
-      const response = await fetch(`${cfg.apiBase}/upload/question-image/${quizId}`, {
-        method: 'POST',
+      const response = await fetch(`${cfg.apiBase}${API_ENDPOINT_QUESTION_IMAGE}/${quizId}`, {
+        method: HTTP_METHOD_POST,
         body: formData,
         headers: {
-          Authorization: `Bearer ${this.getAuthToken()}`,
+          Authorization: `${AUTH_BEARER_PREFIX}${this.getAuthToken()}`,
         },
       });
 
       if (!response.ok) {
         const errorData: UploadError = await response.json();
-        throw new Error(errorData.message || errorData.error || 'Upload failed');
+        throw new Error(errorData.message || errorData.error || ERROR_MESSAGE_UPLOAD_FAILED);
       }
 
       const result: UploadResult = await response.json();
@@ -85,24 +196,36 @@ class UploadService {
   }
 
   /**
-   * Upload answer image via backend API
+   * Method: uploadAnswerImage
+   * Description:
+   * - Uploads answer image via backend API
+   *
+   * Parameters:
+   * - file (File): Answer image file
+   * - quizId (string): Quiz set ID
+   *
+   * Returns:
+   * - Promise<UploadResult>: Upload result with URL and path
+   *
+   * Throws:
+   * - Error: When upload fails
    */
   async uploadAnswerImage(file: File, quizId: string): Promise<UploadResult> {
     try {
       const formData = new FormData();
-      formData.append('image', file);
+      formData.append(FILE_FIELD_IMAGE, file);
 
-      const response = await fetch(`${cfg.apiBase}/upload/answer-image/${quizId}`, {
-        method: 'POST',
+      const response = await fetch(`${cfg.apiBase}${API_ENDPOINT_ANSWER_IMAGE}/${quizId}`, {
+        method: HTTP_METHOD_POST,
         body: formData,
         headers: {
-          Authorization: `Bearer ${this.getAuthToken()}`,
+          Authorization: `${AUTH_BEARER_PREFIX}${this.getAuthToken()}`,
         },
       });
 
       if (!response.ok) {
         const errorData: UploadError = await response.json();
-        throw new Error(errorData.message || errorData.error || 'Upload failed');
+        throw new Error(errorData.message || errorData.error || ERROR_MESSAGE_UPLOAD_FAILED);
       }
 
       const result: UploadResult = await response.json();
@@ -114,72 +237,90 @@ class UploadService {
   }
 
   /**
-   * Get stored auth token
+   * Method: validateImageFile
+   * Description:
+   * - Validates image file before upload
+   * - Checks file size and MIME type
+   * - Matches backend validation logic
+   *
+   * Parameters:
+   * - file (File): File to validate
+   *
+   * Returns:
+   * - ValidationResult: Validation result with error message if invalid
    */
-  private getAuthToken(): string {
-    // Get token from localStorage - matching the auth service pattern
-    const sessionStr = localStorage.getItem('tuiz_session');
-    if (sessionStr) {
-      try {
-        const session = JSON.parse(sessionStr);
-        const token = session?.access_token || '';
-        console.log('UploadService: Getting auth token', {
-          hasSession: !!sessionStr,
-          hasToken: !!token,
-          tokenLength: token?.length || 0,
-        });
-        return token;
-      } catch (error) {
-        console.error('UploadService: Error parsing session', error);
-        return '';
-      }
-    }
-    console.log('UploadService: No session found in localStorage');
-    return '';
-  }
-
-  /**
-   * Validate file before upload
-   */
-  validateImageFile(file: File): { isValid: boolean; error?: string } {
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-
-    if (file.size > maxSize) {
+  validateImageFile(file: File): ValidationResult {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
       return {
         isValid: false,
-        error: 'ファイルサイズが大きすぎます。最大10MBまでです。',
+        error: ERROR_MESSAGE_FILE_SIZE_TOO_LARGE,
       };
     }
 
-    if (!allowedTypes.includes(file.type)) {
+    if (!ALLOWED_MIME_TYPES.includes(file.type as (typeof ALLOWED_MIME_TYPES)[number])) {
       return {
         isValid: false,
-        error: 'サポートされていないファイル形式です。JPEG、PNG、WebP、GIFのみ対応しています。',
+        error: ERROR_MESSAGE_UNSUPPORTED_FILE_TYPE,
       };
     }
 
     return { isValid: true };
   }
+
+  //----------------------------------------------------
+  // 5. Helper Functions
+  //----------------------------------------------------
+  /**
+   * Method: getAuthToken
+   * Description:
+   * - Retrieves authentication token from localStorage
+   * - Parses session data and extracts access token
+   *
+   * Returns:
+   * - string: Authentication token or empty string if not found
+   */
+  private getAuthToken(): string {
+    const sessionStr = localStorage.getItem(STORAGE_KEY_SESSION);
+    if (sessionStr) {
+      try {
+        const session = JSON.parse(sessionStr);
+        return session?.access_token || '';
+      } catch (error) {
+        console.error('UploadService: Error parsing session', error);
+        return '';
+      }
+    }
+    return '';
+  }
 }
 
-// ============================================================================
-// SINGLETON INSTANCE
-// ============================================================================
-
-export const uploadService = new UploadService();
-
-// ============================================================================
-// REACT HOOK
-// ============================================================================
-
 /**
- * Hook for uploading files with loading state and error handling
+ * Hook: useFileUpload
+ * Description:
+ * - React hook for uploading files with loading state and error handling
+ * - Provides upload progress tracking and error management
+ * - Handles cleanup of progress intervals on unmount
+ *
+ * Returns:
+ * - { uploadQuizThumbnail, uploadQuestionImage, uploadAnswerImage, isUploading, uploadProgress, error }: Upload state and functions
  */
 export function useFileUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const progressResetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      if (progressResetTimeoutRef.current) {
+        clearTimeout(progressResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const uploadQuizThumbnail = async (file: File, quizId: string): Promise<string | null> => {
     try {
@@ -187,32 +328,47 @@ export function useFileUpload() {
       setError(null);
       setUploadProgress(0);
 
-      // Validate file
       const validation = uploadService.validateImageFile(file);
       if (!validation.isValid) {
         throw new Error(validation.error);
       }
 
-      // Simulate progress for better UX
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev: number) => Math.min(prev + 10, 90));
-      }, 100);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+
+      progressIntervalRef.current = setInterval(() => {
+        setUploadProgress((prev: number) => Math.min(prev + PROGRESS_INCREMENT, PROGRESS_MAX));
+      }, PROGRESS_UPDATE_INTERVAL_MS);
 
       const result = await uploadService.uploadQuizThumbnail(file, quizId);
 
-      clearInterval(progressInterval);
-      setUploadProgress(100);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      setUploadProgress(PROGRESS_COMPLETE);
 
-      toast.success('画像がアップロードされました');
+      toast.success(SUCCESS_MESSAGE_IMAGE_UPLOADED);
       return result.url;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'アップロードに失敗しました';
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      const message = error instanceof Error ? error.message : ERROR_MESSAGE_UPLOAD_FAILED_GENERIC;
       setError(message);
       toast.error(message);
       return null;
     } finally {
       setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
+      if (progressResetTimeoutRef.current) {
+        clearTimeout(progressResetTimeoutRef.current);
+      }
+      progressResetTimeoutRef.current = setTimeout(
+        () => setUploadProgress(0),
+        PROGRESS_RESET_DELAY_MS,
+      );
     }
   };
 
@@ -222,32 +378,47 @@ export function useFileUpload() {
       setError(null);
       setUploadProgress(0);
 
-      // Validate file
       const validation = uploadService.validateImageFile(file);
       if (!validation.isValid) {
         throw new Error(validation.error);
       }
 
-      // Simulate progress for better UX
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev: number) => Math.min(prev + 10, 90));
-      }, 100);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+
+      progressIntervalRef.current = setInterval(() => {
+        setUploadProgress((prev: number) => Math.min(prev + PROGRESS_INCREMENT, PROGRESS_MAX));
+      }, PROGRESS_UPDATE_INTERVAL_MS);
 
       const result = await uploadService.uploadQuestionImage(file, quizId);
 
-      clearInterval(progressInterval);
-      setUploadProgress(100);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      setUploadProgress(PROGRESS_COMPLETE);
 
-      toast.success('問題画像がアップロードされました');
+      toast.success(SUCCESS_MESSAGE_QUESTION_IMAGE_UPLOADED);
       return result.url;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'アップロードに失敗しました';
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      const message = error instanceof Error ? error.message : ERROR_MESSAGE_UPLOAD_FAILED_GENERIC;
       setError(message);
       toast.error(message);
       return null;
     } finally {
       setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
+      if (progressResetTimeoutRef.current) {
+        clearTimeout(progressResetTimeoutRef.current);
+      }
+      progressResetTimeoutRef.current = setTimeout(
+        () => setUploadProgress(0),
+        PROGRESS_RESET_DELAY_MS,
+      );
     }
   };
 
@@ -257,32 +428,47 @@ export function useFileUpload() {
       setError(null);
       setUploadProgress(0);
 
-      // Validate file
       const validation = uploadService.validateImageFile(file);
       if (!validation.isValid) {
         throw new Error(validation.error);
       }
 
-      // Simulate progress for better UX
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev: number) => Math.min(prev + 10, 90));
-      }, 100);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+
+      progressIntervalRef.current = setInterval(() => {
+        setUploadProgress((prev: number) => Math.min(prev + PROGRESS_INCREMENT, PROGRESS_MAX));
+      }, PROGRESS_UPDATE_INTERVAL_MS);
 
       const result = await uploadService.uploadAnswerImage(file, quizId);
 
-      clearInterval(progressInterval);
-      setUploadProgress(100);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      setUploadProgress(PROGRESS_COMPLETE);
 
-      toast.success('選択肢画像がアップロードされました');
+      toast.success(SUCCESS_MESSAGE_ANSWER_IMAGE_UPLOADED);
       return result.url;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'アップロードに失敗しました';
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      const message = error instanceof Error ? error.message : ERROR_MESSAGE_UPLOAD_FAILED_GENERIC;
       setError(message);
       toast.error(message);
       return null;
     } finally {
       setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
+      if (progressResetTimeoutRef.current) {
+        clearTimeout(progressResetTimeoutRef.current);
+      }
+      progressResetTimeoutRef.current = setTimeout(
+        () => setUploadProgress(0),
+        PROGRESS_RESET_DELAY_MS,
+      );
     }
   };
 
@@ -295,3 +481,8 @@ export function useFileUpload() {
     error,
   };
 }
+
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------
+export const uploadService = new UploadService();

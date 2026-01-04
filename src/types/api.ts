@@ -1,6 +1,24 @@
-// src/types/api.ts
-// API request/response types and error contracts
+// ====================================================
+// File Name   : api.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-11
+// Last Update : 2025-12-26
+//
+// Description:
+// - API request/response types and error contracts
+// - Defines TypeScript interfaces for all API endpoints
+// - Provides type safety for API communication layer
+//
+// Notes:
+// - All types match backend API contracts
+// - Error types follow unified backend error format
+// - Endpoint constants provide type-safe route generation
+// ====================================================
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import type {
   QuizSet,
   Answer,
@@ -11,10 +29,33 @@ import type {
   CreateAnswerForm,
 } from './quiz';
 
-// ============================================================================
-// GENERIC API RESPONSE TYPES
-// ============================================================================
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+export const API_ENDPOINTS = {
+  QUIZ: '/quiz',
+  QUIZ_BY_ID: (id: string) => `/quiz/${id}`,
+  QUIZ_START_EDIT: (id: string) => `/quiz/${id}/start-edit`,
+  QUIZ_LIST: '/quiz',
+  QUESTIONS: (quizId: string) => `/quiz/${quizId}/questions`,
+  QUESTION_BY_ID: (quizId: string, questionId: string) => `/quiz/${quizId}/questions/${questionId}`,
+  REORDER_QUESTIONS: (quizId: string) => `/quiz/${quizId}/questions/reorder`,
+  ANSWERS: (quizId: string, questionId: string) =>
+    `/quiz/${quizId}/questions/${questionId}/answers`,
+  ANSWER_BY_ID: (quizId: string, questionId: string, answerId: string) =>
+    `/quiz/${quizId}/questions/${questionId}/answers/${answerId}`,
+  VALIDATE_QUIZ: (quizId: string) => `/quiz/${quizId}/validate`,
+  PUBLISH_QUIZ: (quizId: string) => `/quiz/${quizId}/publish`,
+  UNPUBLISH_QUIZ: (quizId: string) => `/quiz/${quizId}/unpublish`,
+  GENERATE_CODE: (quizId: string) => `/quiz/${quizId}/generate-code`,
+  CHECK_CODE: (code: number) => `/quiz/code/check/${code}`,
+  GET_CODE: (quizId: string) => `/quiz/${quizId}/code`,
+  REMOVE_CODE: (quizId: string) => `/quiz/${quizId}/code`,
+} as const;
 
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
 export interface ApiResponse<T> {
   data: T;
   pagination?: PaginationInfo;
@@ -36,7 +77,6 @@ export interface PaginationInfo {
   hasPreviousPage: boolean;
 }
 
-// Backend unified error contract
 export interface ApiError {
   error: string;
   message?: string;
@@ -44,11 +84,27 @@ export interface ApiError {
   details?: Record<string, unknown>;
 }
 
-// ============================================================================
-// QUIZ API TYPES
-// ============================================================================
+export interface ErrorHandlingConfig {
+  showToast?: boolean;
+  retryCount?: number;
+  retryDelay?: number;
+  customMessage?: string;
+  logToConsole?: boolean;
+}
 
-// Quiz CRUD operations
+export type ErrorCode =
+  | 'invalid_payload'
+  | 'invalid_credentials'
+  | 'not_found'
+  | 'validation_failed'
+  | 'server_error'
+  | 'network_error'
+  | 'timeout_error'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'duplicate_entry'
+  | 'rate_limit_exceeded';
+
 export type CreateQuizRequest = CreateQuizSetForm;
 
 export type UpdateQuizRequest = Partial<CreateQuizSetForm>;
@@ -74,10 +130,6 @@ export interface QuizCompleteResponse {
   quiz: QuizSetComplete;
 }
 
-// ============================================================================
-// QUESTION API TYPES
-// ============================================================================
-
 export type CreateQuestionRequest = CreateQuestionForm;
 
 export type UpdateQuestionRequest = Partial<CreateQuestionForm>;
@@ -97,10 +149,6 @@ export interface ReorderQuestionsRequest {
   }[];
 }
 
-// ============================================================================
-// ANSWER API TYPES
-// ============================================================================
-
 export type CreateAnswerRequest = CreateAnswerForm;
 
 export type UpdateAnswerRequest = Partial<CreateAnswerForm>;
@@ -112,10 +160,6 @@ export interface AnswerResponse {
 export interface AnswersListResponse {
   answers: Answer[];
 }
-
-// ============================================================================
-// PUBLISHING API TYPES
-// ============================================================================
 
 export interface ValidationResponse {
   isValid: boolean;
@@ -156,10 +200,6 @@ export interface UnpublishResponse {
   quiz: QuizSet;
 }
 
-// ============================================================================
-// CODE MANAGEMENT API TYPES
-// ============================================================================
-
 export interface GenerateCodeResponse {
   code: number;
   message: string;
@@ -177,69 +217,6 @@ export interface GetQuizCodeResponse {
 export interface RemoveCodeResponse {
   message: string;
 }
-
-// ============================================================================
-// API ENDPOINT CONSTANTS
-// ============================================================================
-
-export const API_ENDPOINTS = {
-  // Quiz endpoints
-  QUIZ: '/quiz',
-  QUIZ_BY_ID: (id: string) => `/quiz/${id}`,
-  QUIZ_START_EDIT: (id: string) => `/quiz/${id}/start-edit`,
-  QUIZ_LIST: '/quiz',
-
-  // Question endpoints
-  QUESTIONS: (quizId: string) => `/quiz/${quizId}/questions`,
-  QUESTION_BY_ID: (quizId: string, questionId: string) => `/quiz/${quizId}/questions/${questionId}`,
-  REORDER_QUESTIONS: (quizId: string) => `/quiz/${quizId}/questions/reorder`,
-
-  // Answer endpoints
-  ANSWERS: (quizId: string, questionId: string) =>
-    `/quiz/${quizId}/questions/${questionId}/answers`,
-  ANSWER_BY_ID: (quizId: string, questionId: string, answerId: string) =>
-    `/quiz/${quizId}/questions/${questionId}/answers/${answerId}`,
-
-  // Publishing endpoints
-  VALIDATE_QUIZ: (quizId: string) => `/quiz/${quizId}/validate`,
-  PUBLISH_QUIZ: (quizId: string) => `/quiz/${quizId}/publish`,
-  UNPUBLISH_QUIZ: (quizId: string) => `/quiz/${quizId}/unpublish`,
-
-  // Code management endpoints
-  GENERATE_CODE: (quizId: string) => `/quiz/${quizId}/generate-code`,
-  CHECK_CODE: (code: number) => `/quiz/code/check/${code}`,
-  GET_CODE: (quizId: string) => `/quiz/${quizId}/code`,
-  REMOVE_CODE: (quizId: string) => `/quiz/${quizId}/code`,
-} as const;
-
-// ============================================================================
-// ERROR HANDLING TYPES
-// ============================================================================
-
-export interface ErrorHandlingConfig {
-  showToast?: boolean;
-  retryCount?: number;
-  retryDelay?: number;
-  customMessage?: string;
-  logToConsole?: boolean;
-}
-
-export type ErrorCode =
-  | 'invalid_payload'
-  | 'invalid_credentials'
-  | 'not_found'
-  | 'validation_failed'
-  | 'server_error'
-  | 'network_error'
-  | 'timeout_error'
-  | 'unauthorized'
-  | 'forbidden'
-  | 'duplicate_entry'
-  | 'rate_limit_exceeded';
-
-// ============================================================================
-// LOADING STATE TYPES
-// ============================================================================
 
 export interface LoadingStates {
   create: boolean;

@@ -1,189 +1,171 @@
-// src/lib/imageUploadService.ts
-// Service for handling image uploads to Supabase storage
+// ====================================================
+// File Name   : imageUploadService.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-11
+// Last Update : 2026-01-04
 
-import { useState } from 'react';
+// Description:
+// - Service for handling image uploads to Supabase storage
+// - Provides client-side image processing (resize, compress)
+// - Handles file validation, upload, and deletion operations
+// - Includes React hooks for upload state management
+
+// Notes:
+// - Uses singleton pattern for service instance
+// - Supports image compression and resizing before upload
+// - Validates file types and sizes before upload
+// - Provides hooks for React component integration
+// ====================================================
+
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import { toast } from 'react-hot-toast';
 
-// ============================================================================
-// TYPES
-// ============================================================================
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const STORAGE_BUCKET_QUIZ_IMAGES = 'quiz-images';
+const DEFAULT_FOLDER = 'uploads';
+const DEFAULT_MAX_SIZE_BYTES = 10 * 1024 * 1024;
+const THUMBNAIL_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+const BYTES_PER_MB = 1024 * 1024;
 
-interface UploadResult {
+const DEFAULT_QUALITY = 0.8;
+const DEFAULT_MAX_WIDTH = 1920;
+const DEFAULT_MAX_HEIGHT = 1080;
+
+const CACHE_CONTROL_SECONDS = '3600';
+const RANDOM_STRING_START = 2;
+const RANDOM_STRING_END = 15;
+const RANDOM_STRING_BASE = 36;
+const DEFAULT_EXTENSION = 'jpg';
+
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+] as const;
+
+const PATH_SEGMENT_THUMBNAILS = 'thumbnails';
+
+const PROGRESS_INCREMENT = 10;
+const PROGRESS_MAX = 90;
+const PROGRESS_COMPLETE = 100;
+const PROGRESS_UPDATE_INTERVAL_MS = 100;
+const PROGRESS_RESET_DELAY_MS = 1000;
+
+const URL_PATH_PATTERN = /\/storage\/v1\/object\/public\/[^\/]+\/(.+)/;
+
+const ERROR_MESSAGE_PROCESS_FAILED = '画像の処理に失敗しました';
+const ERROR_MESSAGE_LOAD_FAILED = '画像の読み込みに失敗しました';
+const ERROR_MESSAGE_UPLOAD_FAILED = 'アップロードに失敗しました';
+const ERROR_MESSAGE_DELETE_FAILED = '画像の削除に失敗しました';
+const ERROR_MESSAGE_BULK_DELETE_FAILED = '画像の一括削除に失敗しました';
+const ERROR_MESSAGE_UPLOAD_FAILED_GENERIC = 'アップロードに失敗しました';
+
+const SUCCESS_MESSAGE_UPLOADED = '画像がアップロードされました';
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+/**
+ * Interface: UploadResult
+ * Description:
+ * - Result object returned after successful image upload
+ * - Contains URL, path, and public URL for the uploaded image
+ */
+export interface UploadResult {
   url: string;
   path: string;
   publicUrl: string;
 }
 
-interface UploadOptions {
+/**
+ * Interface: UploadOptions
+ * Description:
+ * - Configuration options for image upload
+ * - Controls bucket, folder, validation, and processing settings
+ */
+export interface UploadOptions {
   bucket?: string;
   folder?: string;
-  maxSize?: number; // in bytes
+  maxSize?: number;
   allowedTypes?: string[];
-  quality?: number; // for image compression (0-1)
-  maxWidth?: number; // for image resizing
-  maxHeight?: number; // for image resizing
+  quality?: number;
+  maxWidth?: number;
+  maxHeight?: number;
 }
 
+/**
+ * Interface: ValidationResult
+ * Description:
+ * - Result of file validation
+ * - Indicates if file is valid and provides error message if not
+ */
 interface ValidationResult {
   isValid: boolean;
   error?: string;
 }
 
-// ============================================================================
-// IMAGE UPLOAD SERVICE
-// ============================================================================
-
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
+/**
+ * Class: ImageUploadService
+ * Description:
+ * - Service for handling image uploads to Supabase storage
+ * - Provides image processing, validation, and upload functionality
+ * - Supports single and multiple image uploads
+ */
 class ImageUploadService {
-  private readonly DEFAULT_BUCKET = 'quiz-images';
-  private readonly DEFAULT_MAX_SIZE = 5 * 1024 * 1024; // 5MB
-  private readonly DEFAULT_ALLOWED_TYPES = [
-    'image/jpeg',
-    'image/jpg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-  ];
-
-  // ============================================================================
-  // VALIDATION METHODS
-  // ============================================================================
-
   /**
-   * Validate file before upload
-   */
-  private validateFile(file: File, options: UploadOptions = {}): ValidationResult {
-    const { maxSize = this.DEFAULT_MAX_SIZE, allowedTypes = this.DEFAULT_ALLOWED_TYPES } = options;
-
-    // Check file size
-    if (file.size > maxSize) {
-      const maxSizeMB = Math.round(maxSize / (1024 * 1024));
-      return {
-        isValid: false,
-        error: `ファイルサイズが大きすぎます。最大${maxSizeMB}MBまでです。`,
-      };
-    }
-
-    // Check file type
-    if (!allowedTypes.includes(file.type)) {
-      const allowedExtensions = allowedTypes.map((type) => type.split('/')[1]).join(', ');
-      return {
-        isValid: false,
-        error: `サポートされていないファイル形式です。使用可能な形式: ${allowedExtensions}`,
-      };
-    }
-
-    return { isValid: true };
-  }
-
-  /**
-   * Generate unique filename
-   */
-  private generateFileName(originalFile: File, folder?: string): string {
-    const timestamp = Date.now();
-    const randomString = Math.random().toString(36).substring(2, 15);
-    const extension = originalFile.name.split('.').pop()?.toLowerCase() || 'jpg';
-
-    const fileName = `${timestamp}-${randomString}.${extension}`;
-
-    return folder ? `${folder}/${fileName}` : fileName;
-  }
-
-  // ============================================================================
-  // IMAGE PROCESSING METHODS
-  // ============================================================================
-
-  /**
-   * Resize and compress image (client-side)
-   */
-  private async processImage(
-    file: File,
-    options: Pick<UploadOptions, 'quality' | 'maxWidth' | 'maxHeight'> = {},
-  ): Promise<File> {
-    const { quality = 0.8, maxWidth = 1920, maxHeight = 1080 } = options;
-
-    return new Promise((resolve, reject) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-
-      img.onload = () => {
-        // Calculate new dimensions
-        let { width, height } = img;
-
-        if (width > maxWidth || height > maxHeight) {
-          const ratio = Math.min(maxWidth / width, maxHeight / height);
-          width *= ratio;
-          height *= ratio;
-        }
-
-        // Set canvas size
-        canvas.width = width;
-        canvas.height = height;
-
-        // Draw and compress image
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const processedFile = new File([blob], file.name, {
-                type: file.type,
-                lastModified: Date.now(),
-              });
-              resolve(processedFile);
-            } else {
-              reject(new Error('画像の処理に失敗しました'));
-            }
-          },
-          file.type,
-          quality,
-        );
-      };
-
-      img.onerror = () => {
-        reject(new Error('画像の読み込みに失敗しました'));
-      };
-
-      img.src = URL.createObjectURL(file);
-    });
-  }
-
-  // ============================================================================
-  // UPLOAD METHODS
-  // ============================================================================
-
-  /**
-   * Upload image to Supabase storage
+   * Method: uploadImage
+   * Description:
+   * - Uploads a single image to Supabase storage
+   * - Validates file, processes image, and uploads to storage
+   *
+   * Parameters:
+   * - file (File): Image file to upload
+   * - options (UploadOptions, optional): Upload configuration options
+   *
+   * Returns:
+   * - Promise<UploadResult>: Upload result with URL and path
+   *
+   * Throws:
+   * - Error: When validation, processing, or upload fails
    */
   async uploadImage(file: File, options: UploadOptions = {}): Promise<UploadResult> {
-    const { bucket = this.DEFAULT_BUCKET, folder = 'uploads', ...processOptions } = options;
+    const {
+      bucket = STORAGE_BUCKET_QUIZ_IMAGES,
+      folder = DEFAULT_FOLDER,
+      ...processOptions
+    } = options;
 
     try {
-      // Validate file
       const validation = this.validateFile(file, options);
       if (!validation.isValid) {
         throw new Error(validation.error);
       }
 
-      // Process image (resize/compress)
       const processedFile = await this.processImage(file, processOptions);
-
-      // Generate unique filename
       const fileName = this.generateFileName(processedFile, folder);
 
-      // Upload to Supabase
       const { data, error } = await supabase.storage.from(bucket).upload(fileName, processedFile, {
-        cacheControl: '3600', // Cache for 1 hour
-        upsert: false, // Don't overwrite existing files
+        cacheControl: CACHE_CONTROL_SECONDS,
+        upsert: false,
       });
 
       if (error) {
         console.error('Supabase upload error:', error);
-        throw new Error('アップロードに失敗しました: ' + error.message);
+        throw new Error(`${ERROR_MESSAGE_UPLOAD_FAILED}: ${error.message}`);
       }
 
-      // Get public URL
       const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(data.path);
 
       return {
@@ -198,28 +180,39 @@ class ImageUploadService {
   }
 
   /**
-   * Upload multiple images
+   * Method: uploadMultipleImages
+   * Description:
+   * - Uploads multiple images sequentially
+   * - Returns partial results even if some uploads fail
+   *
+   * Parameters:
+   * - files (File[]): Array of image files to upload
+   * - options (UploadOptions, optional): Upload configuration options
+   *
+   * Returns:
+   * - Promise<UploadResult[]>: Array of successful upload results
    */
   async uploadMultipleImages(files: File[], options: UploadOptions = {}): Promise<UploadResult[]> {
     const results: UploadResult[] = [];
     const errors: string[] = [];
+    const batchTimestamp = Date.now();
 
     for (let i = 0; i < files.length; i++) {
       try {
         const result = await this.uploadImage(files[i], {
           ...options,
-          folder: `${options.folder || 'uploads'}/batch-${Date.now()}`,
+          folder: `${options.folder || DEFAULT_FOLDER}/batch-${batchTimestamp}`,
         });
         results.push(result);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'アップロードに失敗しました';
+        const errorMessage =
+          error instanceof Error ? error.message : ERROR_MESSAGE_UPLOAD_FAILED_GENERIC;
         errors.push(`ファイル ${i + 1}: ${errorMessage}`);
       }
     }
 
     if (errors.length > 0) {
-      console.warn('Some uploads failed:', errors);
-      // Don't throw error, return partial results
+      console.error('Some uploads failed:', errors);
       toast.error(`${errors.length}個のファイルのアップロードに失敗しました`);
     }
 
@@ -227,7 +220,19 @@ class ImageUploadService {
   }
 
   /**
-   * Upload pending thumbnail after quiz creation
+   * Method: uploadPendingThumbnail
+   * Description:
+   * - Uploads thumbnail image for a quiz after quiz creation
+   * - Uses specific folder structure: userId/quiz-{quizId}/thumbnails
+   *
+   * Parameters:
+   * - file (File): Thumbnail image file
+   * - userId (string): User identifier
+   * - quizId (string): Quiz identifier
+   * - options (UploadOptions, optional): Additional upload options
+   *
+   * Returns:
+   * - Promise<UploadResult>: Upload result with URL and path
    */
   async uploadPendingThumbnail(
     file: File,
@@ -235,38 +240,41 @@ class ImageUploadService {
     quizId: string,
     options: UploadOptions = {},
   ): Promise<UploadResult> {
-    const folderPath = `${userId}/quiz-${quizId}/thumbnails`;
-
-    // Debug logging
-    console.log('Uploading thumbnail with path:', folderPath);
-    console.log('User ID:', userId);
-    console.log('Quiz ID:', quizId);
+    const folderPath = `${userId}/quiz-${quizId}/${PATH_SEGMENT_THUMBNAILS}`;
 
     return this.uploadImage(file, {
-      bucket: 'quiz-images',
+      bucket: STORAGE_BUCKET_QUIZ_IMAGES,
       folder: folderPath,
-      maxSize: 5 * 1024 * 1024, // 5MB
-      maxWidth: 1920,
-      maxHeight: 1080,
-      quality: 0.8,
+      maxSize: THUMBNAIL_MAX_SIZE_BYTES,
+      maxWidth: DEFAULT_MAX_WIDTH,
+      maxHeight: DEFAULT_MAX_HEIGHT,
+      quality: DEFAULT_QUALITY,
       ...options,
     });
   }
 
-  // ============================================================================
-  // DELETE METHODS
-  // ============================================================================
-
   /**
-   * Delete image from storage
+   * Method: deleteImage
+   * Description:
+   * - Deletes a single image from Supabase storage
+   *
+   * Parameters:
+   * - path (string): File path in storage
+   * - bucket (string, optional): Storage bucket name (default: quiz-images)
+   *
+   * Returns:
+   * - Promise<void>: No return value
+   *
+   * Throws:
+   * - Error: When deletion fails
    */
-  async deleteImage(path: string, bucket: string = this.DEFAULT_BUCKET): Promise<void> {
+  async deleteImage(path: string, bucket: string = STORAGE_BUCKET_QUIZ_IMAGES): Promise<void> {
     try {
       const { error } = await supabase.storage.from(bucket).remove([path]);
 
       if (error) {
         console.error('Delete error:', error);
-        throw new Error('画像の削除に失敗しました: ' + error.message);
+        throw new Error(`${ERROR_MESSAGE_DELETE_FAILED}: ${error.message}`);
       }
     } catch (error) {
       console.error('Image delete error:', error);
@@ -275,15 +283,30 @@ class ImageUploadService {
   }
 
   /**
-   * Delete multiple images
+   * Method: deleteMultipleImages
+   * Description:
+   * - Deletes multiple images from Supabase storage
+   *
+   * Parameters:
+   * - paths (string[]): Array of file paths in storage
+   * - bucket (string, optional): Storage bucket name (default: quiz-images)
+   *
+   * Returns:
+   * - Promise<void>: No return value
+   *
+   * Throws:
+   * - Error: When bulk deletion fails
    */
-  async deleteMultipleImages(paths: string[], bucket: string = this.DEFAULT_BUCKET): Promise<void> {
+  async deleteMultipleImages(
+    paths: string[],
+    bucket: string = STORAGE_BUCKET_QUIZ_IMAGES,
+  ): Promise<void> {
     try {
       const { error } = await supabase.storage.from(bucket).remove(paths);
 
       if (error) {
         console.error('Bulk delete error:', error);
-        throw new Error('画像の一括削除に失敗しました: ' + error.message);
+        throw new Error(`${ERROR_MESSAGE_BULK_DELETE_FAILED}: ${error.message}`);
       }
     } catch (error) {
       console.error('Multiple images delete error:', error);
@@ -291,27 +314,37 @@ class ImageUploadService {
     }
   }
 
-  // ============================================================================
-  // UTILITY METHODS
-  // ============================================================================
-
   /**
-   * Get optimized URL with transformations
+   * Method: getOptimizedUrl
+   * Description:
+   * - Gets optimized URL with transformations
+   * - Placeholder for future Supabase image transformation features
+   *
+   * Parameters:
+   * - originalUrl (string): Original image URL
+   *
+   * Returns:
+   * - string: Optimized URL (currently returns original)
    */
   getOptimizedUrl(originalUrl: string): string {
-    // If using Supabase with image transformations (Pro plan)
-    // This would need to be implemented based on your storage setup
-    // For now, return the original URL
     return originalUrl;
   }
 
   /**
-   * Extract path from Supabase public URL
+   * Method: extractPathFromUrl
+   * Description:
+   * - Extracts file path from Supabase public URL
+   *
+   * Parameters:
+   * - url (string): Supabase public URL
+   *
+   * Returns:
+   * - string | null: Extracted file path or null if extraction fails
    */
   extractPathFromUrl(url: string): string | null {
     try {
       const urlObj = new URL(url);
-      const pathMatch = urlObj.pathname.match(/\/storage\/v1\/object\/public\/[^\/]+\/(.+)/);
+      const pathMatch = urlObj.pathname.match(URL_PATH_PATTERN);
       return pathMatch ? pathMatch[1] : null;
     } catch {
       return null;
@@ -319,9 +352,17 @@ class ImageUploadService {
   }
 
   /**
-   * Check if bucket exists and is accessible
+   * Method: checkBucketAccess
+   * Description:
+   * - Checks if storage bucket exists and is accessible
+   *
+   * Parameters:
+   * - bucket (string, optional): Bucket name to check (default: quiz-images)
+   *
+   * Returns:
+   * - Promise<boolean>: True if bucket is accessible, false otherwise
    */
-  async checkBucketAccess(bucket: string = this.DEFAULT_BUCKET): Promise<boolean> {
+  async checkBucketAccess(bucket: string = STORAGE_BUCKET_QUIZ_IMAGES): Promise<boolean> {
     try {
       const { data, error } = await supabase.storage.getBucket(bucket);
       return !error && !!data;
@@ -331,9 +372,21 @@ class ImageUploadService {
   }
 
   /**
-   * Get file info from storage
+   * Method: getFileInfo
+   * Description:
+   * - Gets file information from storage
+   *
+   * Parameters:
+   * - path (string): File path in storage
+   * - bucket (string, optional): Storage bucket name (default: quiz-images)
+   *
+   * Returns:
+   * - Promise<unknown | null>: File information or null if not found
    */
-  async getFileInfo(path: string, bucket: string = this.DEFAULT_BUCKET) {
+  async getFileInfo(
+    path: string,
+    bucket: string = STORAGE_BUCKET_QUIZ_IMAGES,
+  ): Promise<unknown | null> {
     try {
       const { data, error } = await supabase.storage
         .from(bucket)
@@ -350,25 +403,181 @@ class ImageUploadService {
       return null;
     }
   }
+
+  //----------------------------------------------------
+  // 5. Helper Functions
+  //----------------------------------------------------
+  /**
+   * Method: validateFile
+   * Description:
+   * - Validates file size and type before upload
+   *
+   * Parameters:
+   * - file (File): File to validate
+   * - options (UploadOptions, optional): Validation options
+   *
+   * Returns:
+   * - ValidationResult: Validation result with error message if invalid
+   */
+  private validateFile(file: File, options: UploadOptions = {}): ValidationResult {
+    const maxSize = options.maxSize || DEFAULT_MAX_SIZE_BYTES;
+    const allowedTypes = options.allowedTypes || [...ALLOWED_MIME_TYPES];
+
+    if (file.size > maxSize) {
+      const maxSizeMB = Math.round(maxSize / BYTES_PER_MB);
+      return {
+        isValid: false,
+        error: `ファイルサイズが大きすぎます。最大${maxSizeMB}MBまでです。`,
+      };
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      const allowedExtensions = allowedTypes.map((type) => type.split('/')[1]).join(', ');
+      return {
+        isValid: false,
+        error: `サポートされていないファイル形式です。使用可能な形式: ${allowedExtensions}`,
+      };
+    }
+
+    return { isValid: true };
+  }
+
+  /**
+   * Method: generateFileName
+   * Description:
+   * - Generates unique filename with timestamp and random string
+   *
+   * Parameters:
+   * - originalFile (File): Original file to generate name for
+   * - folder (string, optional): Folder path prefix
+   *
+   * Returns:
+   * - string: Generated file path
+   */
+  private generateFileName(originalFile: File, folder?: string): string {
+    const timestamp = Date.now();
+    const randomString = Math.random()
+      .toString(RANDOM_STRING_BASE)
+      .substring(RANDOM_STRING_START, RANDOM_STRING_END);
+    const extension = originalFile.name.split('.').pop()?.toLowerCase() || DEFAULT_EXTENSION;
+    const fileName = `${timestamp}-${randomString}.${extension}`;
+
+    return folder ? `${folder}/${fileName}` : fileName;
+  }
+
+  /**
+   * Method: processImage
+   * Description:
+   * - Resizes and compresses image client-side before upload
+   * - Uses canvas API for image processing
+   *
+   * Parameters:
+   * - file (File): Image file to process
+   * - options (object, optional): Processing options (quality, maxWidth, maxHeight)
+   *
+   * Returns:
+   * - Promise<File>: Processed image file
+   *
+   * Throws:
+   * - Error: When image processing fails
+   */
+  private async processImage(
+    file: File,
+    options: Pick<UploadOptions, 'quality' | 'maxWidth' | 'maxHeight'> = {},
+  ): Promise<File> {
+    const quality = options.quality ?? DEFAULT_QUALITY;
+    const maxWidth = options.maxWidth ?? DEFAULT_MAX_WIDTH;
+    const maxHeight = options.maxHeight ?? DEFAULT_MAX_HEIGHT;
+
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        reject(new Error(ERROR_MESSAGE_PROCESS_FAILED));
+        return;
+      }
+
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      const cleanup = () => {
+        URL.revokeObjectURL(objectUrl);
+      };
+
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width *= ratio;
+            height *= ratio;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              cleanup();
+              if (blob) {
+                const processedFile = new File([blob], file.name, {
+                  type: file.type,
+                  lastModified: Date.now(),
+                });
+                resolve(processedFile);
+              } else {
+                reject(new Error(ERROR_MESSAGE_PROCESS_FAILED));
+              }
+            },
+            file.type,
+            quality,
+          );
+        } catch {
+          cleanup();
+          reject(new Error(ERROR_MESSAGE_PROCESS_FAILED));
+        }
+      };
+
+      img.onerror = () => {
+        cleanup();
+        reject(new Error(ERROR_MESSAGE_LOAD_FAILED));
+      };
+
+      img.src = objectUrl;
+    });
+  }
 }
 
-// ============================================================================
-// SINGLETON INSTANCE
-// ============================================================================
-
-export const imageUploadService = new ImageUploadService();
-
-// ============================================================================
-// CONVENIENCE HOOKS
-// ============================================================================
-
 /**
- * Hook for uploading images with loading state
+ * Hook: useImageUpload
+ * Description:
+ * - React hook for uploading images with loading state management
+ * - Provides upload progress tracking and error handling
+ *
+ * Returns:
+ * - { uploadImage, isUploading, uploadProgress, error }: Upload state and function
  */
 export function useImageUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const progressResetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      if (progressResetTimeoutRef.current) {
+        clearTimeout(progressResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const uploadImage = async (file: File, options?: UploadOptions): Promise<UploadResult | null> => {
     try {
@@ -376,26 +585,42 @@ export function useImageUpload() {
       setError(null);
       setUploadProgress(0);
 
-      // Simulate progress for better UX
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev: number) => Math.min(prev + 10, 90));
-      }, 100);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+
+      progressIntervalRef.current = setInterval(() => {
+        setUploadProgress((prev: number) => Math.min(prev + PROGRESS_INCREMENT, PROGRESS_MAX));
+      }, PROGRESS_UPDATE_INTERVAL_MS);
 
       const result = await imageUploadService.uploadImage(file, options);
 
-      clearInterval(progressInterval);
-      setUploadProgress(100);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      setUploadProgress(PROGRESS_COMPLETE);
 
-      toast.success('画像がアップロードされました');
+      toast.success(SUCCESS_MESSAGE_UPLOADED);
       return result;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'アップロードに失敗しました';
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      const message = error instanceof Error ? error.message : ERROR_MESSAGE_UPLOAD_FAILED_GENERIC;
       setError(message);
       toast.error(message);
       return null;
     } finally {
       setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
+      if (progressResetTimeoutRef.current) {
+        clearTimeout(progressResetTimeoutRef.current);
+      }
+      progressResetTimeoutRef.current = setTimeout(
+        () => setUploadProgress(0),
+        PROGRESS_RESET_DELAY_MS,
+      );
     }
   };
 
@@ -408,7 +633,13 @@ export function useImageUpload() {
 }
 
 /**
- * Hook for handling pending thumbnail uploads after quiz creation
+ * Hook: usePendingThumbnailUpload
+ * Description:
+ * - React hook for uploading pending thumbnails after quiz creation
+ * - Manages upload state for thumbnail uploads
+ *
+ * Returns:
+ * - { uploadPendingThumbnail, isUploadingThumbnail }: Thumbnail upload state and function
  */
 export function usePendingThumbnailUpload() {
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
@@ -436,5 +667,7 @@ export function usePendingThumbnailUpload() {
   };
 }
 
-// Re-export for convenience
-export type { UploadResult, UploadOptions };
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------
+export const imageUploadService = new ImageUploadService();
