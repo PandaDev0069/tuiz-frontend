@@ -1,11 +1,28 @@
-// Dashboard Types for Quiz Management System
+// ====================================================
+// File Name   : dashboard.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-24
+// Last Update : 2025-08-31
+//
+// Description:
+// - Dashboard-specific type definitions for quiz management
+// - Defines types for dashboard statistics, filtering, and sorting
+// - Provides type safety for dashboard UI components
+//
+// Notes:
+// - Re-exports common quiz types for convenience
+// - API response types are dashboard-specific variants
+// ====================================================
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import type { QuizSet, QuizStatus, DifficultyLevel } from './quiz';
 
-// ============================================================================
-// DASHBOARD SPECIFIC TYPES
-// ============================================================================
-
+//----------------------------------------------------
+// 2. Types / Interfaces
+//----------------------------------------------------
 export interface DashboardStats {
   total_quizzes: number;
   published_quizzes: number;
@@ -50,10 +67,6 @@ export interface QuizSortOptions {
   direction: 'asc' | 'desc';
 }
 
-// ============================================================================
-// API RESPONSE TYPES
-// ============================================================================
-
 export interface ApiResponse<T> {
   data: T;
   message?: string;
@@ -78,7 +91,6 @@ export interface QuizListResponse extends PaginatedResponse<QuizSet> {
   sort: QuizSortOptions;
 }
 
-// Re-export commonly used quiz types for convenience
 export type {
   QuizSet,
   QuizStatus,
