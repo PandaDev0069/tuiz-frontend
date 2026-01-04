@@ -1,250 +1,32 @@
-/* Mobile-specific CSS to prevent overflow issues */
+/* ====================================================
+   File Name   : mobile.css
+   Project     : TUIZ
+   Author      : PandaDev0069 / Panta Aashish
+   Created     : 2025-08-25
+   Last Update : 2025-10-01
+   
+   Description:
+   - Mobile-specific CSS to prevent overflow issues
+   - Responsive styles for mobile, tablet, and desktop
+   - Platform-specific fixes for iOS Safari and Android Chrome
+   
+   Notes:
+   - Prevents horizontal scrolling on mobile devices
+   - Preserves logo animations and icon containers
+   - Includes safe area insets for notched devices
+   ==================================================== */
 
-/* Base mobile viewport constraints */
-@media (max-width: 768px) {
-  /* Ensure proper box-sizing for all elements */
-  * {
-    box-sizing: border-box;
-  }
+/*----------------------------------------------------
+  1. Imports
+  ----------------------------------------------------*/
 
-  /* Prevent horizontal scroll on main layout elements only */
-  html,
-  body {
-    overflow-x: hidden;
-    max-width: 100vw;
-    width: 100%;
-  }
+/*----------------------------------------------------
+  2. CSS Custom Properties (Design Tokens)
+  ----------------------------------------------------*/
 
-  /* Prevent horizontal scroll on layout containers only */
-  div[class*='container'],
-  section,
-  main,
-  footer,
-  article,
-  aside,
-  nav {
-    overflow-x: hidden;
-    max-width: 100vw;
-    width: 100%;
-  }
-
-  /* Special handling for header to preserve logo animation */
-  header,
-  [class*='header'] {
-    overflow: visible !important;
-    width: 100%;
-    /* Ensure proper spacing for logo animation */
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-  }
-
-  /* Ensure images don't overflow */
-  img {
-    max-width: 100%;
-    height: auto;
-    object-fit: contain;
-  }
-
-  /* Ensure buttons and interactive elements don't overflow */
-  button,
-  a,
-  input,
-  textarea,
-  select,
-  label {
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-
-  /* Ensure cards and containers don't overflow - but preserve icon containers */
-  .card,
-  .container,
-  .wrapper,
-  [class*='card']:not([class*='icon']),
-  [class*='container']:not([class*='icon']) {
-    max-width: 100vw;
-    overflow-x: hidden;
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-  }
-
-  /* Exception for quiz scroll containers - allow horizontal scrolling */
-  .quiz-scroll-container,
-  [class*='quiz-scroll-container'] {
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    max-width: none !important;
-    width: 100% !important;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
-    white-space: nowrap;
-    padding-bottom: 1rem;
-    gap: 1rem;
-  }
-
-  /* Exception for quiz card containers - allow horizontal scrolling */
-  .quiz-card-mobile,
-  .quiz-card-tablet,
-  .quiz-card-desktop {
-    overflow: visible !important;
-    max-width: none !important;
-  }
-
-  /* Exception for cards containing dropdown selectors - prevent clipping of dropdown menus */
-  .card-with-dropdown,
-  [class*='card-with-dropdown'] {
-    overflow: visible !important;
-  }
-
-  /* Preserve icon container styling */
-  /* Removed overly broad width/height override that was breaking podium layout */
-  /* Individual components should handle their own responsive sizing */
-  [class*='icon']:not([class*='podium']) {
-    max-width: none !important;
-    overflow: visible !important;
-  }
-
-  /* Preserve logo animation and ensure it's not clipped */
-  .animate-float,
-  [class*='animate-float'],
-  img[class*='animate-float'] {
-    overflow: visible !important;
-    /* Ensure logo has space to float */
-    margin: 1rem 0;
-  }
-
-  /* Prevent text overflow */
-  p,
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6,
-  span {
-    overflow-wrap: break-word;
-    word-wrap: break-word;
-    word-break: break-word;
-  }
-}
-
-/* Small mobile devices */
-@media (max-width: 480px) {
-  body {
-    min-height: 100vh;
-    height: auto;
-    overflow-x: hidden;
-  }
-
-  /* Allow vertical scroll when needed */
-  body > * {
-    max-width: 100vw;
-    overflow-x: hidden;
-  }
-
-  /* Ensure proper spacing on small screens */
-  .container,
-  .card,
-  .wrapper {
-    padding: 1rem;
-    margin: 0;
-  }
-
-  /* Preserve icon container styling on small screens */
-  /* Removed overly broad width/height override that was breaking podium layout */
-  /* Individual components should handle their own responsive sizing */
-  [class*='icon']:not([class*='podium']) {
-    max-width: none !important;
-    overflow: visible !important;
-  }
-
-  /* Ensure header has proper spacing on small screens */
-  header,
-  [class*='header'] {
-    padding-top: 1.5rem;
-    padding-bottom: 1.5rem;
-    overflow: visible !important;
-  }
-
-  /* Ensure logo animation works on small screens */
-  .animate-float,
-  [class*='animate-float'],
-  img[class*='animate-float'] {
-    margin: 0.75rem 0;
-  }
-}
-
-/* iOS Safari specific fixes */
-@supports (-webkit-touch-callout: none) {
-  body {
-    overflow-x: hidden;
-    position: relative;
-    width: 100vw;
-    max-width: 100vw;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Fix for iOS Safari viewport issues */
-  body > * {
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-  }
-
-  /* Preserve icon styling on iOS */
-  /* Removed overly broad width/height override that was breaking podium layout */
-  [class*='icon']:not([class*='podium']) {
-    max-width: none !important;
-    overflow: visible !important;
-  }
-
-  /* Ensure header and logo animation work on iOS */
-  header,
-  [class*='header'] {
-    overflow: visible !important;
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-  }
-
-  .animate-float,
-  [class*='animate-float'],
-  img[class*='animate-float'] {
-    overflow: visible !important;
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-  }
-}
-
-/* Android Chrome specific fixes */
-@media screen and (-webkit-min-device-pixel-ratio: 0) {
-  body {
-    overflow-x: hidden;
-    position: relative;
-    width: 100vw;
-    max-width: 100vw;
-  }
-
-  /* Preserve icon styling on Android */
-  /* Removed overly broad width/height override that was breaking podium layout */
-  [class*='icon']:not([class*='podium']) {
-    max-width: none !important;
-    overflow: visible !important;
-  }
-
-  /* Ensure header and logo animation work on Android */
-  header,
-  [class*='header'] {
-    overflow: visible !important;
-  }
-
-  .animate-float,
-  [class*='animate-float'],
-  img[class*='animate-float'] {
-    overflow: visible !important;
-  }
-}
-
-/* Prevent horizontal scroll on all devices */
+/*----------------------------------------------------
+  3. Base Styles
+  ----------------------------------------------------*/
 body {
   overflow-x: hidden;
   max-width: 100vw;
@@ -252,20 +34,11 @@ body {
   position: relative;
 }
 
-/* Ensure all content respects viewport boundaries */
 body > * {
   max-width: 100vw;
   overflow-x: hidden;
 }
 
-/* Preserve icon containers globally */
-/* Removed overly broad width/height override that was breaking podium layout */
-[class*='icon']:not([class*='podium']) {
-  max-width: none !important;
-  overflow: visible !important;
-}
-
-/* Preserve header and logo animation globally */
 header,
 [class*='header'] {
   overflow: visible !important;
@@ -277,7 +50,11 @@ img[class*='animate-float'] {
   overflow: visible !important;
 }
 
-/* Comprehensive fix for rounded-full with Next.js Image components - using higher specificity */
+[class*='icon']:not([class*='podium']) {
+  max-width: none !important;
+  overflow: visible !important;
+}
+
 html body .rounded-full,
 html body [class*='rounded-full'],
 body .rounded-full,
@@ -288,7 +65,6 @@ body [class*='rounded-full'] {
   overflow: hidden !important;
 }
 
-/* Ensure images inside rounded containers inherit the border-radius */
 html body .rounded-full img,
 html body [class*='rounded-full'] img,
 body .rounded-full img,
@@ -298,7 +74,6 @@ body [class*='rounded-full'] img {
   -moz-border-radius: inherit !important;
 }
 
-/* Force override for all rounded-full elements */
 .rounded-full,
 [class*='rounded-full'] {
   border-radius: 50% !important;
@@ -307,7 +82,13 @@ body [class*='rounded-full'] img {
   overflow: hidden !important;
 }
 
-/* Utility classes for mobile overflow prevention */
+/*----------------------------------------------------
+  4. Component Styles
+  ----------------------------------------------------*/
+
+/*----------------------------------------------------
+  5. Utility Classes
+  ----------------------------------------------------*/
 .mobile-safe {
   overflow-x: hidden;
   max-width: 100vw;
@@ -329,7 +110,6 @@ body [class*='rounded-full'] img {
   width: 100%;
 }
 
-/* Icon-specific utility class to ensure icons are always visible */
 .icon-safe {
   max-width: none !important;
   overflow: visible !important;
@@ -337,15 +117,124 @@ body [class*='rounded-full'] img {
   height: auto !important;
 }
 
-/* Header-specific utility class to ensure logo animation works */
 .header-safe {
   overflow: visible !important;
   width: 100% !important;
 }
 
-/* Horizontal scrolling quiz cards for mobile */
+/*----------------------------------------------------
+  6. Media Queries
+  ----------------------------------------------------*/
 @media (max-width: 768px) {
-  /* Individual quiz card sizing for mobile */
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100vw;
+    width: 100%;
+  }
+
+  div[class*='container'],
+  section,
+  main,
+  footer,
+  article,
+  aside,
+  nav {
+    overflow-x: hidden;
+    max-width: 100vw;
+    width: 100%;
+  }
+
+  header,
+  [class*='header'] {
+    overflow: visible !important;
+    width: 100%;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+
+  button,
+  a,
+  input,
+  textarea,
+  select,
+  label {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .card,
+  .container,
+  .wrapper,
+  [class*='card']:not([class*='icon']),
+  [class*='container']:not([class*='icon']) {
+    max-width: 100vw;
+    overflow-x: hidden;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .quiz-scroll-container,
+  [class*='quiz-scroll-container'] {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    max-width: none !important;
+    width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    white-space: nowrap;
+    padding-bottom: 1rem;
+    gap: 1rem;
+  }
+
+  .quiz-card-mobile,
+  .quiz-card-tablet,
+  .quiz-card-desktop {
+    overflow: visible !important;
+    max-width: none !important;
+  }
+
+  .card-with-dropdown,
+  [class*='card-with-dropdown'] {
+    overflow: visible !important;
+  }
+
+  [class*='icon']:not([class*='podium']) {
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  .animate-float,
+  [class*='animate-float'],
+  img[class*='animate-float'] {
+    overflow: visible !important;
+    margin: 1rem 0;
+  }
+
+  p,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  span {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+
   .quiz-card-mobile {
     flex-shrink: 0;
     width: 300px;
@@ -353,17 +242,14 @@ body [class*='rounded-full'] img {
     margin-right: 1rem;
   }
 
-  /* Hide scroll indicators on mobile */
   .scroll-indicator {
     display: none !important;
   }
 
-  /* Ensure proper spacing between cards on mobile */
   .quiz-card-gap {
     gap: 1rem;
   }
 
-  /* Optimize touch scrolling */
   .quiz-scroll-container::-webkit-scrollbar {
     display: none;
   }
@@ -373,38 +259,68 @@ body [class*='rounded-full'] img {
     -ms-overflow-style: none;
   }
 
-  /* Mobile-specific card adjustments */
   .quiz-card-mobile .card {
     padding: 1rem;
     margin: 0.5rem;
   }
 
-  /* Better mobile spacing for card content */
   .quiz-card-mobile .card-content {
     padding: 0.75rem 0;
   }
 
-  /* Mobile-optimized button layout */
   .quiz-card-mobile .card-footer {
     padding: 0.75rem 0 0;
     gap: 0.5rem;
   }
 
-  /* Ensure buttons don't get too small on mobile */
   .quiz-card-mobile button {
     min-height: 2.5rem;
     font-size: 0.875rem;
   }
 
-  /* Force horizontal scrolling on mobile */
   .quiz-scroll-container > * {
     flex-shrink: 0;
     min-width: 300px;
   }
 }
 
-/* Small mobile devices */
 @media (max-width: 480px) {
+  body {
+    min-height: 100vh;
+    height: auto;
+    overflow-x: hidden;
+  }
+
+  body > * {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .container,
+  .card,
+  .wrapper {
+    padding: 1rem;
+    margin: 0;
+  }
+
+  [class*='icon']:not([class*='podium']) {
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  header,
+  [class*='header'] {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+    overflow: visible !important;
+  }
+
+  .animate-float,
+  [class*='animate-float'],
+  img[class*='animate-float'] {
+    margin: 0.75rem 0;
+  }
+
   .quiz-card-mobile {
     width: 280px;
   }
@@ -414,7 +330,6 @@ body [class*='rounded-full'] img {
     margin: 0.25rem;
   }
 
-  /* Stack buttons vertically on very small screens */
   .quiz-card-mobile .card-footer {
     flex-direction: column;
     gap: 0.5rem;
@@ -426,7 +341,6 @@ body [class*='rounded-full'] img {
   }
 }
 
-/* Tablet-specific adjustments */
 @media (min-width: 769px) and (max-width: 1024px) {
   .quiz-card-tablet {
     width: 340px;
@@ -437,7 +351,6 @@ body [class*='rounded-full'] img {
   }
 }
 
-/* Large screen optimizations */
 @media (min-width: 1025px) {
   .quiz-card-desktop {
     width: 384px;
@@ -447,3 +360,67 @@ body [class*='rounded-full'] img {
     gap: 2rem;
   }
 }
+
+@supports (-webkit-touch-callout: none) {
+  body {
+    overflow-x: hidden;
+    position: relative;
+    width: 100vw;
+    max-width: 100vw;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body > * {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+
+  [class*='icon']:not([class*='podium']) {
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  header,
+  [class*='header'] {
+    overflow: visible !important;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+
+  .animate-float,
+  [class*='animate-float'],
+  img[class*='animate-float'] {
+    overflow: visible !important;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}
+
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  body {
+    overflow-x: hidden;
+    position: relative;
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  [class*='icon']:not([class*='podium']) {
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  header,
+  [class*='header'] {
+    overflow: visible !important;
+  }
+
+  .animate-float,
+  [class*='animate-float'],
+  img[class*='animate-float'] {
+    overflow: visible !important;
+  }
+}
+
+/*----------------------------------------------------
+  7. Animations
+  ----------------------------------------------------*/
