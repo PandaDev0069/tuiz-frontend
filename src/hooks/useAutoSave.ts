@@ -1,22 +1,73 @@
-// src/hooks/useAutoSave.ts
-// Hook for auto-saving form data with debouncing and error handling
+// ====================================================
+// File Name   : useAutoSave.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-11
+// Last Update : 2025-09-11
+//
+// Description:
+// - Hook for auto-saving form data with debouncing and error handling
+// - Provides form persistence in localStorage with expiry
+// - Includes utility functions for equality comparison
+// - Specialized hook for quiz auto-save with persistence
+//
+// Notes:
+// - Uses debouncing to prevent excessive save operations
+// - Supports custom equality functions for change detection
+// - Provides localStorage persistence with automatic expiry
+// - Includes shallow and deep equality comparison utilities
+// ====================================================
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 
-// ============================================================================
-// AUTO-SAVE HOOK
-// ============================================================================
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const DEFAULT_AUTO_SAVE_DELAY_MS = 30000;
+const DEFAULT_PERSISTENCE_EXPIRY_MS = 24 * 60 * 60 * 1000;
+const QUIZ_PERSISTENCE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+const PERSISTENCE_DEBOUNCE_MS = 1000;
+const TOAST_DURATION_SUCCESS_MS = 2000;
+const TOAST_DURATION_ERROR_MS = 4000;
+const TOAST_POSITION = 'bottom-right';
 
+const TOAST_MESSAGES = {
+  AUTO_SAVE_SUCCESS: '自動保存されました',
+  AUTO_SAVE_ERROR: '自動保存に失敗しました',
+} as const;
+
+const ERROR_MESSAGES = {
+  PERSIST_FAILED: 'Failed to persist form data:',
+  RESTORE_FAILED: 'Failed to restore form data:',
+  CLEAR_FAILED: 'Failed to clear persisted data:',
+  CHECK_FAILED: 'Failed to check persisted data:',
+} as const;
+
+const STORAGE_KEY_PREFIX = 'quiz-draft-';
+const STORAGE_KEY_NEW = 'new';
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+/**
+ * Options for useAutoSave hook
+ */
 interface UseAutoSaveOptions<T> {
-  delay?: number; // Delay in milliseconds (default: 30 seconds)
-  enabled?: boolean; // Whether auto-save is enabled
-  showToast?: boolean; // Whether to show toast notifications
-  onSuccess?: () => void; // Callback on successful save
-  onError?: (error: unknown) => void; // Callback on save error
-  isEqual?: (a: T, b: T) => boolean; // Custom equality function
+  delay?: number;
+  enabled?: boolean;
+  showToast?: boolean;
+  onSuccess?: () => void;
+  onError?: (error: unknown) => void;
+  isEqual?: (a: T, b: T) => boolean;
 }
 
+/**
+ * Auto-save state interface
+ */
 interface AutoSaveState {
   isSaving: boolean;
   lastSaved: Date | null;
@@ -25,11 +76,49 @@ interface AutoSaveState {
 }
 
 /**
- * Hook for auto-saving data with debouncing
- * @param data - The data to save
- * @param saveFunction - Function that saves the data (returns a Promise)
- * @param options - Configuration options
- * @returns AutoSave state and manual save function
+ * Options for useFormPersistence hook
+ */
+interface UseFormPersistenceOptions<T> {
+  key: string;
+  enabled?: boolean;
+  expiry?: number;
+  onRestore?: (data: T) => void;
+  serialize?: (data: T) => string;
+  deserialize?: (data: string) => T;
+}
+
+/**
+ * Persisted data structure in localStorage
+ */
+interface PersistedData<T> {
+  data: T;
+  timestamp: number;
+}
+
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
+/**
+ * Hook: useAutoSave
+ * Description:
+ * - Auto-saves data with debouncing to prevent excessive operations
+ * - Tracks save state, last saved time, and unsaved changes
+ * - Supports custom equality functions for change detection
+ * - Provides manual save function and automatic debounced saving
+ *
+ * Parameters:
+ * - data (T): The data to save
+ * - saveFunction (function): Function that saves the data (returns Promise)
+ * - options (UseAutoSaveOptions, optional): Configuration options
+ *   - delay (number, optional): Delay in milliseconds (default: 30 seconds)
+ *   - enabled (boolean, optional): Whether auto-save is enabled (default: true)
+ *   - showToast (boolean, optional): Whether to show toast notifications (default: false)
+ *   - onSuccess (function, optional): Callback on successful save
+ *   - onError (function, optional): Callback on save error
+ *   - isEqual (function, optional): Custom equality function
+ *
+ * Returns:
+ * - AutoSaveState & { save: () => Promise<void> }: State object with manual save function
  */
 export function useAutoSave<T>(
   data: T,
@@ -37,7 +126,7 @@ export function useAutoSave<T>(
   options: UseAutoSaveOptions<T> = {},
 ): AutoSaveState & { save: () => Promise<void> } {
   const {
-    delay = 30000, // 30 seconds default
+    delay = DEFAULT_AUTO_SAVE_DELAY_MS,
     enabled = true,
     showToast = false,
     onSuccess,
@@ -56,12 +145,10 @@ export function useAutoSave<T>(
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const savingRef = useRef(false);
 
-  // Check if data has changed
   const hasDataChanged = useCallback(() => {
     return !isEqual(data, lastSavedDataRef.current);
   }, [data, isEqual]);
 
-  // Manual save function
   const save = useCallback(async (): Promise<void> => {
     if (savingRef.current || !enabled) {
       return;
@@ -84,9 +171,9 @@ export function useAutoSave<T>(
       }));
 
       if (showToast) {
-        toast.success('自動保存されました', {
-          duration: 2000,
-          position: 'bottom-right',
+        toast.success(TOAST_MESSAGES.AUTO_SAVE_SUCCESS, {
+          duration: TOAST_DURATION_SUCCESS_MS,
+          position: TOAST_POSITION,
         });
       }
 
@@ -99,9 +186,9 @@ export function useAutoSave<T>(
       }));
 
       if (showToast) {
-        toast.error('自動保存に失敗しました', {
-          duration: 4000,
-          position: 'bottom-right',
+        toast.error(TOAST_MESSAGES.AUTO_SAVE_ERROR, {
+          duration: TOAST_DURATION_ERROR_MS,
+          position: TOAST_POSITION,
         });
       }
 
@@ -111,7 +198,6 @@ export function useAutoSave<T>(
     }
   }, [data, saveFunction, enabled, showToast, onSuccess, onError]);
 
-  // Auto-save effect
   useEffect(() => {
     if (!enabled || savingRef.current) {
       return;
@@ -128,17 +214,14 @@ export function useAutoSave<T>(
       return;
     }
 
-    // Clear existing timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
 
-    // Set new timeout for auto-save
     timeoutRef.current = setTimeout(() => {
       save();
     }, delay);
 
-    // Cleanup
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
@@ -146,7 +229,6 @@ export function useAutoSave<T>(
     };
   }, [data, delay, enabled, hasDataChanged, save]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
@@ -161,24 +243,30 @@ export function useAutoSave<T>(
   };
 }
 
-// ============================================================================
-// FORM PERSISTENCE HOOK
-// ============================================================================
-
-interface UseFormPersistenceOptions<T> {
-  key: string; // localStorage key
-  enabled?: boolean; // Whether persistence is enabled
-  expiry?: number; // Expiry in milliseconds (default: 24 hours)
-  onRestore?: (data: T) => void; // Callback when data is restored
-  serialize?: (data: T) => string; // Custom serialization
-  deserialize?: (data: string) => T; // Custom deserialization
-}
-
 /**
- * Hook for persisting form data in localStorage with expiry
- * @param data - The form data to persist
- * @param options - Configuration options
- * @returns Restore function and persistence state
+ * Hook: useFormPersistence
+ * Description:
+ * - Persists form data in localStorage with expiry support
+ * - Automatically saves data with debouncing
+ * - Provides restore and clear functions
+ * - Checks for persisted data on mount
+ *
+ * Parameters:
+ * - data (T): The form data to persist
+ * - options (UseFormPersistenceOptions): Configuration options
+ *   - key (string): localStorage key
+ *   - enabled (boolean, optional): Whether persistence is enabled (default: true)
+ *   - expiry (number, optional): Expiry in milliseconds (default: 24 hours)
+ *   - onRestore (function, optional): Callback when data is restored
+ *   - serialize (function, optional): Custom serialization (default: JSON.stringify)
+ *   - deserialize (function, optional): Custom deserialization (default: JSON.parse)
+ *
+ * Returns:
+ * - Object containing:
+ *   - restore (function): Function to restore persisted data
+ *   - clear (function): Function to clear persisted data
+ *   - hasPersistedData (boolean): Whether persisted data exists
+ *   - isExpired (boolean): Whether persisted data is expired
  */
 export function useFormPersistence<T>(
   data: T,
@@ -192,7 +280,7 @@ export function useFormPersistence<T>(
   const {
     key,
     enabled = true,
-    expiry = 24 * 60 * 60 * 1000, // 24 hours
+    expiry = DEFAULT_PERSISTENCE_EXPIRY_MS,
     onRestore,
     serialize = JSON.stringify,
     deserialize = JSON.parse,
@@ -203,25 +291,23 @@ export function useFormPersistence<T>(
     isExpired: false,
   });
 
-  // Save data to localStorage
   const persistData = useCallback(() => {
     if (!enabled || typeof window === 'undefined') {
       return;
     }
 
     try {
-      const persistedData = {
+      const persistedData: PersistedData<T> = {
         data,
         timestamp: Date.now(),
       };
 
       localStorage.setItem(key, serialize(persistedData));
     } catch (error) {
-      console.error('Failed to persist form data:', error);
+      console.error(ERROR_MESSAGES.PERSIST_FAILED, error);
     }
   }, [data, enabled, key, serialize]);
 
-  // Restore data from localStorage
   const restore = useCallback((): T | null => {
     if (!enabled || typeof window === 'undefined') {
       return null;
@@ -234,7 +320,7 @@ export function useFormPersistence<T>(
         return null;
       }
 
-      const persistedData = deserialize(stored);
+      const persistedData = deserialize(stored) as PersistedData<T>;
       const { data: storedData, timestamp } = persistedData;
 
       const isExpired = Date.now() - timestamp > expiry;
@@ -245,7 +331,6 @@ export function useFormPersistence<T>(
       });
 
       if (isExpired) {
-        // Clear expired data
         localStorage.removeItem(key);
         return null;
       }
@@ -253,14 +338,13 @@ export function useFormPersistence<T>(
       onRestore?.(storedData);
       return storedData;
     } catch (error) {
-      console.error('Failed to restore form data:', error);
+      console.error(ERROR_MESSAGES.RESTORE_FAILED, error);
       localStorage.removeItem(key);
       setPersistenceState({ hasPersistedData: false, isExpired: false });
       return null;
     }
   }, [enabled, key, expiry, onRestore, deserialize]);
 
-  // Clear persisted data
   const clear = useCallback(() => {
     if (typeof window === 'undefined') {
       return;
@@ -270,17 +354,15 @@ export function useFormPersistence<T>(
       localStorage.removeItem(key);
       setPersistenceState({ hasPersistedData: false, isExpired: false });
     } catch (error) {
-      console.error('Failed to clear persisted data:', error);
+      console.error(ERROR_MESSAGES.CLEAR_FAILED, error);
     }
   }, [key]);
 
-  // Auto-persist on data change
   useEffect(() => {
-    const timeoutId = setTimeout(persistData, 1000); // Debounce by 1 second
+    const timeoutId = setTimeout(persistData, PERSISTENCE_DEBOUNCE_MS);
     return () => clearTimeout(timeoutId);
   }, [persistData]);
 
-  // Check for persisted data on mount
   useEffect(() => {
     const initialRestore = () => {
       if (!enabled || typeof window === 'undefined') return;
@@ -292,7 +374,7 @@ export function useFormPersistence<T>(
           return;
         }
 
-        const persistedData = deserialize(stored);
+        const persistedData = deserialize(stored) as PersistedData<T>;
         const { timestamp } = persistedData;
         const isExpired = Date.now() - timestamp > expiry;
 
@@ -305,14 +387,14 @@ export function useFormPersistence<T>(
           localStorage.removeItem(key);
         }
       } catch (error) {
-        console.error('Failed to check persisted data:', error);
+        console.error(ERROR_MESSAGES.CHECK_FAILED, error);
         localStorage.removeItem(key);
         setPersistenceState({ hasPersistedData: false, isExpired: false });
       }
     };
 
     initialRestore();
-  }, [enabled, key, expiry, deserialize]); // Include dependencies
+  }, [enabled, key, expiry, deserialize]);
 
   return {
     restore,
@@ -322,12 +404,60 @@ export function useFormPersistence<T>(
   };
 }
 
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
 /**
- * Default equality function using JSON.stringify
+ * Hook: useQuizAutoSave
+ * Description:
+ * - Specialized hook for auto-saving quiz draft data
+ * - Combines useAutoSave and useFormPersistence
+ * - Uses quiz-specific storage key and expiry (7 days)
+ * - Only enables auto-save when quizId is provided
+ *
+ * Parameters:
+ * - data (T): The quiz data to save
+ * - saveFunction (function): Function that saves the data (returns Promise)
+ * - quizId (string, optional): Quiz ID for storage key and enabling auto-save
+ *
+ * Returns:
+ * - Combined return values from useAutoSave and useFormPersistence
+ */
+export function useQuizAutoSave<T>(
+  data: T,
+  saveFunction: (data: T) => Promise<void>,
+  quizId?: string,
+) {
+  const autoSave = useAutoSave(data, saveFunction, {
+    delay: DEFAULT_AUTO_SAVE_DELAY_MS,
+    enabled: !!quizId,
+    showToast: false,
+  });
+
+  const persistence = useFormPersistence(data, {
+    key: `${STORAGE_KEY_PREFIX}${quizId || STORAGE_KEY_NEW}`,
+    enabled: true,
+    expiry: QUIZ_PERSISTENCE_EXPIRY_MS,
+  });
+
+  return {
+    ...autoSave,
+    ...persistence,
+  };
+}
+
+//----------------------------------------------------
+// 5. Helper Functions
+//----------------------------------------------------
+/**
+ * Function: defaultIsEqual
+ * Description:
+ * - Default equality function using JSON.stringify
+ * - Falls back to strict equality if JSON.stringify fails
+ *
+ * Parameters:
+ * - a (T): First value to compare
+ * - b (T): Second value to compare
+ *
+ * Returns:
+ * - boolean: True if values are equal, false otherwise
  */
 function defaultIsEqual<T>(a: T, b: T): boolean {
   try {
@@ -338,7 +468,17 @@ function defaultIsEqual<T>(a: T, b: T): boolean {
 }
 
 /**
- * Shallow equality function for objects
+ * Function: shallowEqual
+ * Description:
+ * - Shallow equality function for objects
+ * - Compares object keys and values at first level only
+ *
+ * Parameters:
+ * - a (T): First object to compare
+ * - b (T): Second object to compare
+ *
+ * Returns:
+ * - boolean: True if objects are shallowly equal, false otherwise
  */
 export function shallowEqual<T extends Record<string, unknown>>(a: T, b: T): boolean {
   const keysA = Object.keys(a);
@@ -358,7 +498,18 @@ export function shallowEqual<T extends Record<string, unknown>>(a: T, b: T): boo
 }
 
 /**
- * Deep equality function using recursive comparison
+ * Function: deepEqual
+ * Description:
+ * - Deep equality function using recursive comparison
+ * - Handles null, undefined, and type mismatches
+ * - Recursively compares nested objects
+ *
+ * Parameters:
+ * - a (unknown): First value to compare
+ * - b (unknown): Second value to compare
+ *
+ * Returns:
+ * - boolean: True if values are deeply equal, false otherwise
  */
 export function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) {
@@ -396,32 +547,6 @@ export function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
-// ============================================================================
-// SPECIALIZED HOOKS
-// ============================================================================
-
-/**
- * Hook for auto-saving quiz draft data
- */
-export function useQuizAutoSave<T>(
-  data: T,
-  saveFunction: (data: T) => Promise<void>,
-  quizId?: string,
-) {
-  const autoSave = useAutoSave(data, saveFunction, {
-    delay: 30000, // 30 seconds
-    enabled: !!quizId, // Only enable if we have a quiz ID
-    showToast: false, // Don't show toast for auto-saves
-  });
-
-  const persistence = useFormPersistence(data, {
-    key: `quiz-draft-${quizId || 'new'}`,
-    enabled: true,
-    expiry: 7 * 24 * 60 * 60 * 1000, // 7 days
-  });
-
-  return {
-    ...autoSave,
-    ...persistence,
-  };
-}
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------
