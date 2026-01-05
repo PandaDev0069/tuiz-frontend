@@ -1,19 +1,50 @@
-/**
- * useGameLeaderboard Hook
- * Manages real-time leaderboard updates, score tracking, and rank changes
- * Handles score animations and final results display
- */
+// ====================================================
+// File Name   : useGameLeaderboard.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-12-11
+// Last Update : 2025-12-30
+//
+// Description:
+// - Manages real-time leaderboard updates, score tracking, and rank changes
+// - Handles score animations and final results display
+// - Provides WebSocket integration for live leaderboard updates
+//
+// Notes:
+// - Uses WebSocket for real-time updates
+// - Supports polling as fallback for leaderboard refresh
+// - Handles rank change animations with configurable duration
+// ====================================================
 
 'use client';
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import { useState, useEffect, useCallback, useRef } from 'react';
+
 import { useSocket } from '@/components/providers/SocketProvider';
 import { gameApi, type LeaderboardEntry } from '@/services/gameApi';
 
-// ============================================================================
-// TYPES
-// ============================================================================
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const RANK_CHANGE_ANIMATION_DURATION_MS = 3000;
+const DEFAULT_AUTO_REFRESH = true;
+const DEFAULT_ENABLE_ANIMATIONS = true;
 
+const SOCKET_EVENTS = {
+  LEADERBOARD_UPDATE: 'game:leaderboard:update',
+  QUESTION_ENDED: 'game:question:ended',
+} as const;
+
+const ERROR_MESSAGES = {
+  FAILED_TO_FETCH_LEADERBOARD: 'Failed to fetch leaderboard',
+} as const;
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
 export interface ScoreUpdate {
   playerId: string;
   displayName: string;
@@ -41,15 +72,14 @@ export interface GameLeaderboardEvents {
 
 export interface UseGameLeaderboardOptions {
   gameId: string;
-  playerId?: string; // Optional - to highlight current player
-  autoRefresh?: boolean; // Auto-refresh after each question
-  refreshIntervalMs?: number; // Polling interval for real-time updates
-  enableAnimations?: boolean; // Enable rank change animations
+  playerId?: string;
+  autoRefresh?: boolean;
+  refreshIntervalMs?: number;
+  enableAnimations?: boolean;
   events?: GameLeaderboardEvents;
 }
 
 export interface UseGameLeaderboardReturn {
-  // State
   leaderboard: LeaderboardEntry[];
   currentPlayerRank: number | null;
   currentPlayerScore: number | null;
@@ -57,12 +87,8 @@ export interface UseGameLeaderboardReturn {
   recentRankChanges: RankChange[];
   loading: boolean;
   error: string | null;
-
-  // Actions
   refreshLeaderboard: () => Promise<void>;
   clearHistory: () => void;
-
-  // Real-time status
   isConnected: boolean;
   lastUpdateTime: Date | null;
 }
@@ -71,10 +97,26 @@ interface QuestionEndEvent {
   roomId: string;
 }
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
 
+//----------------------------------------------------
+// 5. Helper Functions
+//----------------------------------------------------
+/**
+ * Function: calculateRankChange
+ * Description:
+ * - Compares old and new leaderboard entries to detect rank changes
+ * - Returns array of rank change objects for players whose rank changed
+ *
+ * Parameters:
+ * - oldLeaderboard (LeaderboardEntry[]): Previous leaderboard state
+ * - newLeaderboard (LeaderboardEntry[]): Current leaderboard state
+ *
+ * Returns:
+ * - RankChange[]: Array of rank change objects
+ */
 function calculateRankChange(
   oldLeaderboard: LeaderboardEntry[],
   newLeaderboard: LeaderboardEntry[],
@@ -90,7 +132,7 @@ function calculateRankChange(
         displayName: newEntry.player_name,
         fromRank: oldEntry.rank,
         toRank: newEntry.rank,
-        isMovingUp: newEntry.rank < oldEntry.rank, // Lower rank number = higher position
+        isMovingUp: newEntry.rank < oldEntry.rank,
       });
     }
   });
@@ -98,22 +140,80 @@ function calculateRankChange(
   return changes;
 }
 
-// ============================================================================
-// HOOK IMPLEMENTATION
-// ============================================================================
+/**
+ * Function: parseLeaderboardData
+ * Description:
+ * - Parses leaderboard data from API response
+ * - Handles both array format and object with entries property
+ *
+ * Parameters:
+ * - data (unknown): Raw data from API response
+ *
+ * Returns:
+ * - LeaderboardEntry[]: Parsed leaderboard entries array
+ */
+function parseLeaderboardData(data: unknown): LeaderboardEntry[] {
+  if (Array.isArray(data)) {
+    return data;
+  }
 
+  const dataWithEntries = data as { entries?: LeaderboardEntry[] };
+  return dataWithEntries?.entries || [];
+}
+
+/**
+ * Function: processRankChanges
+ * Description:
+ * - Processes rank changes and emits events
+ * - Sets up animation timeout to clear rank changes
+ *
+ * Parameters:
+ * - rankChanges (RankChange[]): Array of rank changes to process
+ * - setRecentRankChanges (function): State setter for recent rank changes
+ * - events (GameLeaderboardEvents, optional): Event callbacks
+ */
+function processRankChanges(
+  rankChanges: RankChange[],
+  setRecentRankChanges: (changes: RankChange[]) => void,
+  events?: GameLeaderboardEvents,
+): void {
+  if (rankChanges.length === 0) return;
+
+  setRecentRankChanges(rankChanges);
+
+  rankChanges.forEach((change) => {
+    events?.onRankChange?.(change);
+  });
+
+  setTimeout(() => {
+    setRecentRankChanges([]);
+  }, RANK_CHANGE_ANIMATION_DURATION_MS);
+}
+
+/**
+ * Hook: useGameLeaderboard
+ * Description:
+ * - Manages real-time leaderboard updates with WebSocket integration
+ * - Provides score tracking, rank change detection, and animations
+ * - Supports polling as fallback for leaderboard refresh
+ *
+ * Parameters:
+ * - options (UseGameLeaderboardOptions): Configuration options for the hook
+ *
+ * Returns:
+ * - UseGameLeaderboardReturn: Object containing leaderboard state and actions
+ */
 export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameLeaderboardReturn {
   const {
     gameId,
     playerId,
-    autoRefresh = true,
+    autoRefresh = DEFAULT_AUTO_REFRESH,
     refreshIntervalMs,
-    enableAnimations = true,
+    enableAnimations = DEFAULT_ENABLE_ANIMATIONS,
     events,
   } = options;
   const { socket, isConnected, isRegistered, joinRoom, leaveRoom } = useSocket();
 
-  // State
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [recentScoreUpdates, setRecentScoreUpdates] = useState<ScoreUpdate[]>([]);
   const [recentRankChanges, setRecentRankChanges] = useState<RankChange[]>([]);
@@ -121,13 +221,11 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
   const [error, setError] = useState<string | null>(null);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
 
-  // Refs
   const listenersSetupRef = useRef(false);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const previousLeaderboardRef = useRef<LeaderboardEntry[]>([]);
   const refreshLeaderboardRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
-  // Derived state
   const currentPlayerRank =
     playerId && leaderboard.length > 0
       ? leaderboard.find((entry) => entry.player_id === playerId)?.rank || null
@@ -138,13 +236,6 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
       ? leaderboard.find((entry) => entry.player_id === playerId)?.score || null
       : null;
 
-  // ========================================================================
-  // REST API OPERATIONS
-  // ========================================================================
-
-  /**
-   * Refresh leaderboard from API
-   */
   const refreshLeaderboard = useCallback(async () => {
     if (!gameId) return;
 
@@ -155,134 +246,74 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
       const { data, error: apiError } = await gameApi.getLeaderboard(gameId);
 
       if (apiError || !data) {
-        console.error('[useGameLeaderboard] API error:', apiError);
-        throw new Error(apiError?.message || 'Failed to fetch leaderboard');
+        throw new Error(apiError?.message || ERROR_MESSAGES.FAILED_TO_FETCH_LEADERBOARD);
       }
 
-      // Backend returns { entries: LeaderboardEntry[], ... } or LeaderboardEntry[] directly
-      // Handle both cases for compatibility
-      const leaderboardArray = Array.isArray(data)
-        ? data
-        : (data as { entries?: LeaderboardEntry[] })?.entries || [];
-
-      console.log('[useGameLeaderboard] Fetched leaderboard:', {
-        rawData: data,
-        isArray: Array.isArray(data),
-        entriesCount: leaderboardArray.length,
-        gameId,
-      });
-
-      // Store previous leaderboard for rank change detection (use ref to avoid dependency)
+      const leaderboardArray = parseLeaderboardData(data);
       const oldLeaderboard = [...previousLeaderboardRef.current];
 
-      // Update leaderboard
       setLeaderboard(leaderboardArray);
       setLastUpdateTime(new Date());
-
-      // Update previous leaderboard ref for next comparison
       previousLeaderboardRef.current = leaderboardArray;
 
-      // Detect and emit rank changes if animations enabled
       if (enableAnimations && oldLeaderboard.length > 0) {
         const rankChanges = calculateRankChange(oldLeaderboard, leaderboardArray);
-
         if (rankChanges.length > 0) {
-          setRecentRankChanges(rankChanges);
-
-          // Emit events for each rank change
-          rankChanges.forEach((change) => {
-            events?.onRankChange?.(change);
-          });
-
-          // Clear rank changes after animation duration (3 seconds)
-          setTimeout(() => {
-            setRecentRankChanges([]);
-          }, 3000);
+          processRankChanges(rankChanges, setRecentRankChanges, events);
         }
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch leaderboard';
+      const errorMessage =
+        err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_FETCH_LEADERBOARD;
       setError(errorMessage);
-      console.error('useGameLeaderboard: refreshLeaderboard error', err);
       events?.onError?.(errorMessage);
     } finally {
       setLoading(false);
     }
   }, [gameId, enableAnimations, events]);
 
-  // Keep refs in sync with callbacks
   useEffect(() => {
     refreshLeaderboardRef.current = refreshLeaderboard;
   }, [refreshLeaderboard]);
 
-  /**
-   * Clear score update and rank change history
-   */
   const clearHistory = useCallback(() => {
     setRecentScoreUpdates([]);
     setRecentRankChanges([]);
   }, []);
 
-  // ========================================================================
-  // WEBSOCKET EVENT HANDLERS
-  // ========================================================================
-
   useEffect(() => {
     if (!socket || !isConnected || !isRegistered || !gameId) return;
     if (listenersSetupRef.current) return;
 
-    console.log(`useGameLeaderboard: Setting up WebSocket listeners for game ${gameId}`);
     listenersSetupRef.current = true;
-
-    // Join game room (dedup + registration guarded)
     joinRoom(gameId);
 
-    /**
-     * Leaderboard update event - trigger refresh to fetch full data
-     */
     const handleLeaderboardUpdate = () => {
-      console.log('useGameLeaderboard: Leaderboard update received');
       refreshLeaderboardRef.current?.();
       setLastUpdateTime(new Date());
     };
 
-    /**
-     * Question end - refresh leaderboard if auto-refresh enabled
-     */
     const handleQuestionEnd = (data: QuestionEndEvent) => {
       if (data.roomId !== gameId) return;
-
-      console.log('useGameLeaderboard: Question ended, refreshing leaderboard');
 
       if (autoRefresh) {
         refreshLeaderboardRef.current?.();
       }
     };
 
-    // Register listeners
-    socket.on('game:leaderboard:update', handleLeaderboardUpdate);
-    socket.on('game:question:ended', handleQuestionEnd);
+    socket.on(SOCKET_EVENTS.LEADERBOARD_UPDATE, handleLeaderboardUpdate);
+    socket.on(SOCKET_EVENTS.QUESTION_ENDED, handleQuestionEnd);
 
     return () => {
-      console.log(`useGameLeaderboard: Cleaning up listeners for game ${gameId}`);
-
-      socket.off('game:leaderboard:update', handleLeaderboardUpdate);
-      socket.off('game:question:ended', handleQuestionEnd);
-
+      socket.off(SOCKET_EVENTS.LEADERBOARD_UPDATE, handleLeaderboardUpdate);
+      socket.off(SOCKET_EVENTS.QUESTION_ENDED, handleQuestionEnd);
       leaveRoom(gameId);
-
       listenersSetupRef.current = false;
     };
   }, [socket, isConnected, isRegistered, gameId, autoRefresh, joinRoom, leaveRoom]);
 
-  // ========================================================================
-  // POLLING (if interval specified)
-  // ========================================================================
-
   useEffect(() => {
     if (!refreshIntervalMs || refreshIntervalMs <= 0) return;
-
-    console.log(`useGameLeaderboard: Setting up polling every ${refreshIntervalMs}ms`);
 
     refreshIntervalRef.current = setInterval(() => {
       refreshLeaderboardRef.current?.();
@@ -296,25 +327,13 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
     };
   }, [refreshIntervalMs]);
 
-  // ========================================================================
-  // INITIALIZATION
-  // ========================================================================
-
-  /**
-   * Initial leaderboard fetch
-   */
   useEffect(() => {
     if (gameId) {
       refreshLeaderboardRef.current?.();
     }
   }, [gameId]);
 
-  // ========================================================================
-  // RETURN
-  // ========================================================================
-
   return {
-    // State
     leaderboard,
     currentPlayerRank,
     currentPlayerScore,
@@ -322,13 +341,13 @@ export function useGameLeaderboard(options: UseGameLeaderboardOptions): UseGameL
     recentRankChanges,
     loading,
     error,
-
-    // Actions
     refreshLeaderboard,
     clearHistory,
-
-    // Real-time status
     isConnected,
     lastUpdateTime,
   };
 }
+
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------
