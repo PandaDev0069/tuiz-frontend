@@ -1,23 +1,59 @@
+// ====================================================
+// File Name   : GameContext.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-12-11
+// Last Update : 2025-12-11
+//
+// Description:
+// - React context for game state management
+// - Provides game data, role, and loading states
+// - Handles game loading and state clearing
+// - Manages host/player role detection
+//
+// Notes:
+// - Must be used within GameProvider component
+// - Requires authentication for game loading
+// - Auto-detects role based on user ID and game host
+// ====================================================
+
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { useSocket } from '@/components/providers/SocketProvider';
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
+import React, { createContext, useContext, useState, useCallback } from 'react';
+
 import { useAuthStore } from '@/state/useAuthStore';
 import { gameApi, type Game } from '@/services/gameApi';
 
-// Game context type
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const ERROR_MESSAGES = {
+  NOT_AUTHENTICATED: 'Not authenticated',
+  FAILED_TO_LOAD: 'Failed to load game',
+  HOOK_OUTSIDE_PROVIDER: 'useGameContext must be used within a GameProvider',
+} as const;
+
+const GAME_ROLES = {
+  HOST: 'host',
+  PLAYER: 'player',
+} as const;
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+/**
+ * Game context type interface
+ */
 interface GameContextType {
-  // Game state
   gameId: string | null;
   gameCode: string | null;
   game: Game | null;
   role: 'host' | 'player' | null;
-
-  // Loading & error states
   loading: boolean;
   error: string | null;
-
-  // Actions
   setGameId: (id: string | null) => void;
   setGameCode: (code: string | null) => void;
   setRole: (role: 'host' | 'player' | null) => void;
@@ -26,19 +62,44 @@ interface GameContextType {
   setError: (error: string | null) => void;
 }
 
-// Create Game context
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
 const GameContext = createContext<GameContextType | null>(null);
 
-// Hook to access game context
+/**
+ * Hook: useGameContext
+ * Description:
+ * - Accesses the game context
+ * - Throws error if used outside GameProvider
+ *
+ * Returns:
+ * - GameContextType: Game context value
+ *
+ * @throws {Error} If used outside GameProvider
+ */
 export function useGameContext() {
   const context = useContext(GameContext);
   if (!context) {
-    throw new Error('useGameContext must be used within a GameProvider');
+    throw new Error(ERROR_MESSAGES.HOOK_OUTSIDE_PROVIDER);
   }
   return context;
 }
 
-// Game Provider component
+/**
+ * Component: GameProvider
+ * Description:
+ * - Provides game context to child components
+ * - Manages game state, loading, and error states
+ * - Handles game loading from API
+ * - Auto-detects user role (host/player) based on game ownership
+ *
+ * Parameters:
+ * - children (React.ReactNode): Child components to wrap
+ *
+ * Returns:
+ * - JSX.Element: Context provider with game state
+ */
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [gameId, setGameId] = useState<string | null>(null);
   const [gameCode, setGameCode] = useState<string | null>(null);
@@ -47,14 +108,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { isConnected } = useSocket();
   const { session } = useAuthStore();
 
-  // Load game data from API
   const loadGame = useCallback(
     async (id: string) => {
       if (!session?.access_token) {
-        setError('Not authenticated');
+        setError(ERROR_MESSAGES.NOT_AUTHENTICATED);
         return;
       }
 
@@ -65,21 +124,20 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         const { data: gameData, error: apiError } = await gameApi.getGame(id);
 
         if (apiError || !gameData) {
-          throw new Error(apiError?.message || 'Failed to load game');
+          throw new Error(apiError?.message || ERROR_MESSAGES.FAILED_TO_LOAD);
         }
 
         setGame(gameData);
         setGameId(id);
 
-        // Auto-set role based on user ID and game host
         const { user } = useAuthStore.getState();
         if (user && gameData.user_id === user.id) {
-          setRole('host');
+          setRole(GAME_ROLES.HOST);
         } else {
-          setRole('player');
+          setRole(GAME_ROLES.PLAYER);
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load game';
+        const errorMessage = err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_LOAD;
         setError(errorMessage);
         console.error('Failed to load game:', err);
       } finally {
@@ -89,7 +147,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     [session],
   );
 
-  // Clear game state
   const clearGame = useCallback(() => {
     setGameId(null);
     setGameCode(null);
@@ -97,19 +154,6 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setRole(null);
     setError(null);
   }, []);
-
-  // Log connection status for debugging
-  useEffect(() => {
-    if (gameId) {
-      console.log('GameContext:', {
-        gameId,
-        gameCode,
-        role,
-        socketConnected: isConnected,
-        hasGame: !!game,
-      });
-    }
-  }, [gameId, gameCode, role, isConnected, game]);
 
   const value: GameContextType = {
     gameId,
@@ -128,3 +172,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }
+
+//----------------------------------------------------
+// 5. Helper Functions
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------

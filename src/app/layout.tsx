@@ -12,8 +12,8 @@ export const metadata: Metadata = {
   },
   description: SEO_CONFIG.DEFAULT_DESCRIPTION,
   keywords: SEO_CONFIG.KEYWORDS,
-  authors: [{ name: 'TUIZ Team' }],
-  creator: 'TUIZ Team',
+  authors: [{ name: 'Panta Aashish' }],
+  creator: 'PandaDev0069',
   publisher: SITE_CONFIG.SITE_NAME,
   formatDetection: {
     email: false,
@@ -43,13 +43,6 @@ export const metadata: Metadata = {
         alt: `${SITE_CONFIG.SITE_NAME} - ${SITE_CONFIG.SITE_DESCRIPTION}`,
       },
     ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: SEO_CONFIG.DEFAULT_TITLE,
-    description: SEO_CONFIG.DEFAULT_DESCRIPTION,
-    images: [SEO_CONFIG.DEFAULT_IMAGE],
-    creator: SITE_CONFIG.TWITTER_HANDLE,
   },
   robots: {
     index: true,

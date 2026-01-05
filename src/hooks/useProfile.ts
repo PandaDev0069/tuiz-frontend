@@ -1,48 +1,99 @@
-// src/hooks/useProfile.ts
-// Custom hook for profile management with React Query
+// ====================================================
+// File Name   : useProfile.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-16
+// Last Update : 2025-09-16
+//
+// Description:
+// - Custom hooks for profile management with React Query
+// - Provides hooks for fetching and updating user profile data
+// - Handles username, display name, and avatar operations
+// - Includes combined hook for comprehensive profile management
+//
+// Notes:
+// - Uses React Query for data fetching and caching
+// - Implements optimistic cache updates for better UX
+// - Avatar upload includes progress simulation for better UX
+// ====================================================
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
+
 import {
   profileService,
   type ProfileData,
   type UpdateUsernameRequest,
   type UpdateDisplayNameRequest,
 } from '@/lib/profileService';
+
 import type { ApiError } from '@/types/api';
 
-// ============================================================================
-// QUERY KEYS
-// ============================================================================
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const STALE_TIME_PROFILE_MS = 5 * 60 * 1000;
+const RETRY_COUNT_PROFILE = 2;
 
-export const profileKeys = {
-  all: ['profile'] as const,
-  profile: () => [...profileKeys.all, 'current'] as const,
-};
+const QUERY_KEY_PROFILE = 'profile';
+const QUERY_KEY_CURRENT = 'current';
 
-// ============================================================================
-// PROFILE QUERY HOOK
-// ============================================================================
+const PROGRESS_INCREMENT = 10;
+const PROGRESS_MAX_SIMULATED = 90;
+const PROGRESS_INTERVAL_MS = 100;
+const PROGRESS_RESET_DELAY_MS = 1000;
+
+const TOAST_MESSAGES = {
+  USERNAME_UPDATED: 'ユーザー名が更新されました',
+  DISPLAY_NAME_UPDATED: '表示名が更新されました',
+  AVATAR_UPLOADED: 'アバターがアップロードされました',
+  AVATAR_DELETED: 'アバターが削除されました',
+} as const;
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
+export const PROFILE_QUERY_KEYS = {
+  all: [QUERY_KEY_PROFILE] as const,
+  profile: () => [...PROFILE_QUERY_KEYS.all, QUERY_KEY_CURRENT] as const,
+} as const;
 
 /**
- * Hook to fetch current user's profile
+ * Hook: useProfile
+ * Description:
+ * - Fetches the current user's profile data
+ * - Caches results for 5 minutes (stale time)
+ * - Retries up to 2 times on failure
+ *
+ * Returns:
+ * - TanStack Query result object with profile data, loading state, and error
  */
 export function useProfile() {
   return useQuery({
-    queryKey: profileKeys.profile(),
+    queryKey: PROFILE_QUERY_KEYS.profile(),
     queryFn: () => profileService.getProfile(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 2,
+    staleTime: STALE_TIME_PROFILE_MS,
+    retry: RETRY_COUNT_PROFILE,
   });
 }
 
-// ============================================================================
-// PROFILE MUTATION HOOKS
-// ============================================================================
-
 /**
- * Hook to update username
+ * Hook: useUpdateUsername
+ * Description:
+ * - Updates the user's username
+ * - Optimistically updates the profile cache
+ * - Shows success toast notification
+ *
+ * Returns:
+ * - TanStack Query mutation object with updateUsername function and state
  */
 export function useUpdateUsername() {
   const queryClient = useQueryClient();
@@ -50,8 +101,7 @@ export function useUpdateUsername() {
   return useMutation({
     mutationFn: (data: UpdateUsernameRequest) => profileService.updateUsername(data.username),
     onSuccess: (data) => {
-      // Update the profile cache
-      queryClient.setQueryData(profileKeys.profile(), (oldData: ProfileData | undefined) => {
+      queryClient.setQueryData(PROFILE_QUERY_KEYS.profile(), (oldData: ProfileData | undefined) => {
         if (oldData) {
           return {
             ...oldData,
@@ -62,16 +112,20 @@ export function useUpdateUsername() {
         return oldData;
       });
 
-      toast.success('ユーザー名が更新されました');
-    },
-    onError: (error: ApiError) => {
-      console.error('Username update error:', error);
+      toast.success(TOAST_MESSAGES.USERNAME_UPDATED);
     },
   });
 }
 
 /**
- * Hook to update display name
+ * Hook: useUpdateDisplayName
+ * Description:
+ * - Updates the user's display name
+ * - Optimistically updates the profile cache
+ * - Shows success toast notification
+ *
+ * Returns:
+ * - TanStack Query mutation object with updateDisplayName function and state
  */
 export function useUpdateDisplayName() {
   const queryClient = useQueryClient();
@@ -80,8 +134,7 @@ export function useUpdateDisplayName() {
     mutationFn: (data: UpdateDisplayNameRequest) =>
       profileService.updateDisplayName(data.displayName),
     onSuccess: (data) => {
-      // Update the profile cache
-      queryClient.setQueryData(profileKeys.profile(), (oldData: ProfileData | undefined) => {
+      queryClient.setQueryData(PROFILE_QUERY_KEYS.profile(), (oldData: ProfileData | undefined) => {
         if (oldData) {
           return {
             ...oldData,
@@ -92,27 +145,37 @@ export function useUpdateDisplayName() {
         return oldData;
       });
 
-      toast.success('表示名が更新されました');
-    },
-    onError: (error: ApiError) => {
-      console.error('Display name update error:', error);
+      toast.success(TOAST_MESSAGES.DISPLAY_NAME_UPDATED);
     },
   });
 }
 
 /**
- * Hook to upload avatar
+ * Hook: useUploadAvatar
+ * Description:
+ * - Uploads a new avatar image for the user
+ * - Simulates upload progress for better UX
+ * - Optimistically updates the profile cache
+ * - Shows success toast notification
+ *
+ * Returns:
+ * - Object containing:
+ *   - uploadAvatar (function): Function to trigger avatar upload
+ *   - isUploading (boolean): Loading state for upload operation
+ *   - uploadProgress (number): Upload progress percentage (0-100)
+ *   - error (ApiError | null): Error object if upload failed
  */
 export function useUploadAvatar() {
   const queryClient = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const resetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const mutation = useMutation({
     mutationFn: (file: File) => profileService.uploadAvatar(file),
     onSuccess: (data) => {
-      // Update the profile cache
-      queryClient.setQueryData(profileKeys.profile(), (oldData: ProfileData | undefined) => {
+      queryClient.setQueryData(PROFILE_QUERY_KEYS.profile(), (oldData: ProfileData | undefined) => {
         if (oldData) {
           return {
             ...oldData,
@@ -123,34 +186,48 @@ export function useUploadAvatar() {
         return oldData;
       });
 
-      toast.success('アバターがアップロードされました');
-    },
-    onError: (error: ApiError) => {
-      console.error('Avatar upload error:', error);
+      toast.success(TOAST_MESSAGES.AVATAR_UPLOADED);
     },
   });
+
+  useEffect(() => {
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      if (resetTimeoutRef.current) {
+        clearTimeout(resetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const uploadAvatar = async (file: File) => {
     try {
       setIsUploading(true);
       setUploadProgress(0);
 
-      // Simulate progress for better UX
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => Math.min(prev + 10, 90));
-      }, 100);
+      progressIntervalRef.current = setInterval(() => {
+        setUploadProgress((prev) => Math.min(prev + PROGRESS_INCREMENT, PROGRESS_MAX_SIMULATED));
+      }, PROGRESS_INTERVAL_MS);
 
       await mutation.mutateAsync(file);
 
-      clearInterval(progressInterval);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
       setUploadProgress(100);
-    } catch (error) {
-      // Error handling is done in the mutation and service layer
-      // The error will be displayed via toast notifications
-      console.error('Avatar upload failed:', error);
+    } catch {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
     } finally {
       setIsUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
+      resetTimeoutRef.current = setTimeout(() => {
+        setUploadProgress(0);
+        resetTimeoutRef.current = null;
+      }, PROGRESS_RESET_DELAY_MS);
     }
   };
 
@@ -163,7 +240,14 @@ export function useUploadAvatar() {
 }
 
 /**
- * Hook to delete avatar
+ * Hook: useDeleteAvatar
+ * Description:
+ * - Deletes the user's current avatar
+ * - Optimistically updates the profile cache
+ * - Shows success toast notification
+ *
+ * Returns:
+ * - TanStack Query mutation object with deleteAvatar function and state
  */
 export function useDeleteAvatar() {
   const queryClient = useQueryClient();
@@ -171,8 +255,7 @@ export function useDeleteAvatar() {
   return useMutation({
     mutationFn: () => profileService.deleteAvatar(),
     onSuccess: () => {
-      // Update the profile cache
-      queryClient.setQueryData(profileKeys.profile(), (oldData: ProfileData | undefined) => {
+      queryClient.setQueryData(PROFILE_QUERY_KEYS.profile(), (oldData: ProfileData | undefined) => {
         if (oldData) {
           return {
             ...oldData,
@@ -183,20 +266,38 @@ export function useDeleteAvatar() {
         return oldData;
       });
 
-      toast.success('アバターが削除されました');
-    },
-    onError: (error: ApiError) => {
-      console.error('Avatar delete error:', error);
+      toast.success(TOAST_MESSAGES.AVATAR_DELETED);
     },
   });
 }
 
-// ============================================================================
-// COMBINED PROFILE MANAGEMENT HOOK
-// ============================================================================
-
 /**
- * Combined hook for all profile operations
+ * Hook: useProfileManagement
+ * Description:
+ * - Combined hook that provides all profile management operations
+ * - Aggregates profile data, mutations, and loading states
+ * - Convenient single hook for comprehensive profile management
+ *
+ * Returns:
+ * - Object containing:
+ *   - profile (ProfileData | undefined): Current profile data
+ *   - isLoading (boolean): Loading state for profile fetch
+ *   - isError (boolean): Error state for profile fetch
+ *   - error (ApiError | null): Error object if profile fetch failed
+ *   - updateUsername (function): Function to update username
+ *   - isUpdatingUsername (boolean): Loading state for username update
+ *   - usernameError (ApiError | null): Error object if username update failed
+ *   - updateDisplayName (function): Function to update display name
+ *   - isUpdatingDisplayName (boolean): Loading state for display name update
+ *   - displayNameError (ApiError | null): Error object if display name update failed
+ *   - uploadAvatar (function): Function to upload avatar
+ *   - isUploadingAvatar (boolean): Loading state for avatar upload
+ *   - uploadProgress (number): Upload progress percentage
+ *   - uploadError (ApiError | null): Error object if avatar upload failed
+ *   - deleteAvatar (function): Function to delete avatar
+ *   - isDeletingAvatar (boolean): Loading state for avatar deletion
+ *   - deleteError (ApiError | null): Error object if avatar deletion failed
+ *   - refetch (function): Function to manually refetch profile data
  */
 export function useProfileManagement() {
   const profileQuery = useProfile();
@@ -206,23 +307,19 @@ export function useProfileManagement() {
   const deleteAvatarMutation = useDeleteAvatar();
 
   return {
-    // Profile data
     profile: profileQuery.data,
     isLoading: profileQuery.isLoading,
     isError: profileQuery.isError,
     error: profileQuery.error as ApiError | null,
 
-    // Username operations
     updateUsername: updateUsernameMutation.mutate,
     isUpdatingUsername: updateUsernameMutation.isPending,
     usernameError: updateUsernameMutation.error as ApiError | null,
 
-    // Display name operations
     updateDisplayName: updateDisplayNameMutation.mutate,
     isUpdatingDisplayName: updateDisplayNameMutation.isPending,
     displayNameError: updateDisplayNameMutation.error as ApiError | null,
 
-    // Avatar operations
     uploadAvatar: uploadAvatarHook.uploadAvatar,
     isUploadingAvatar: uploadAvatarHook.isUploading,
     uploadProgress: uploadAvatarHook.uploadProgress,
@@ -232,7 +329,14 @@ export function useProfileManagement() {
     isDeletingAvatar: deleteAvatarMutation.isPending,
     deleteError: deleteAvatarMutation.error as ApiError | null,
 
-    // Utility functions
     refetch: profileQuery.refetch,
   };
 }
+
+//----------------------------------------------------
+// 5. Helper Functions
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------

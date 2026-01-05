@@ -1,11 +1,47 @@
+// ====================================================
+// File Name   : constants.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-26
+// Last Update : 2025-08-30
+//
+// Description:
+// - Application-wide constants and configuration
+// - Site configuration, SEO metadata, and page metadata
+// - Centralized constants for consistent usage across the application
+//
+// Notes:
+// - All constants are exported as const for immutability
+// - SEO and page metadata are organized by page type
+// - Constants are used throughout the application for consistency
+// ====================================================
+
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+/**
+ * Site configuration constants
+ * Description:
+ * - Base URL, site name, description, and locale settings
+ * - Used for site-wide configuration and metadata
+ */
 export const SITE_CONFIG = {
   BASE_URL: 'https://tuiz-info-king.vercel.app',
   SITE_NAME: 'TUIZ情報王',
   SITE_DESCRIPTION: 'リアルタイムでクイズを作成・参加できる革新的な学習プラットフォーム',
-  TWITTER_HANDLE: '@tuiz_official',
   LOCALE: 'ja_JP',
 } as const;
 
+/**
+ * SEO configuration constants
+ * Description:
+ * - Default SEO title, description, image, and keywords
+ * - Used for meta tags and SEO optimization
+ */
 export const SEO_CONFIG = {
   DEFAULT_TITLE:
     'TUIZ情報王｜リアルタイムクイズ作成・参加アプリ｜TUIZ参加できる学習プラットフォーム',
@@ -35,6 +71,13 @@ export const SEO_CONFIG = {
   ] as string[],
 } as const;
 
+/**
+ * Page-specific metadata constants
+ * Description:
+ * - SEO metadata for different pages (HOME, LOGIN, REGISTER, JOIN, DASHBOARD)
+ * - Each page has title, description, and keywords
+ * - Used for page-specific meta tags
+ */
 export const PAGE_METADATA = {
   HOME: {
     title: 'TUIZ情報王｜リアルタイムクイズ作成・参加アプリ｜TUIZ参加できる学習プラットフォーム',
@@ -127,3 +170,19 @@ export const PAGE_METADATA = {
     ] as string[],
   },
 } as const;
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 5. Helper Functions
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------
