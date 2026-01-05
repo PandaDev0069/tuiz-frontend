@@ -1,21 +1,75 @@
-/**
- * useGameFlow Hook
- * Manages question progression, timing, and game state transitions
- * Handles real-time synchronization of question flow across all players
- */
+// ====================================================
+// File Name   : useGameFlow.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-12-11
+// Last Update : 2026-01-01
+//
+// Description:
+// - Manages question progression, timing, and game state transitions
+// - Handles real-time synchronization of question flow across all players
+// - Provides host controls for game flow management
+// - Implements timer management with auto-reveal functionality
+//
+// Notes:
+// - Uses WebSocket for real-time synchronization
+// - Timer updates every 100ms for smooth countdown
+// - Supports auto-reveal when timer expires (host only)
+// - Handles pause/resume functionality with timer preservation
+// ====================================================
 
 'use client';
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import { useState, useEffect, useCallback, useRef } from 'react';
+
 import { useSocket } from '@/components/providers/SocketProvider';
 import { gameApi, type GameFlow } from '@/services/gameApi';
 
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
 const DEFAULT_QUESTION_DURATION_MS = 30000;
+const TIMER_UPDATE_INTERVAL_MS = 100;
+const DEFAULT_IS_HOST = false;
+const DEFAULT_AUTO_SYNC = true;
+const DEFAULT_TRIGGER_ON_QUESTION_END_ON_TIMER = true;
 
-// ============================================================================
-// TYPES
-// ============================================================================
+const SOCKET_EVENTS = {
+  QUESTION_STARTED: 'game:question:started',
+  QUESTION_CHANGED: 'game:question:changed',
+  QUESTION_ENDED: 'game:question:ended',
+  PAUSE: 'game:pause',
+  RESUME: 'game:resume',
+  EXPLANATION_SHOW: 'game:explanation:show',
+  EXPLANATION_HIDE: 'game:explanation:hide',
+  ROOM_JOIN: 'room:join',
+  ROOM_LEAVE: 'room:leave',
+  CONNECT: 'connect',
+} as const;
 
+const ERROR_MESSAGES = {
+  ONLY_HOST_CAN_START_QUESTIONS: 'Only the host can start questions',
+  ONLY_HOST_CAN_REVEAL_ANSWERS: 'Only the host can reveal answers',
+  ONLY_HOST_CAN_ADVANCE_QUESTIONS: 'Only the host can advance questions',
+  ONLY_HOST_CAN_PAUSE_GAME: 'Only the host can pause the game',
+  ONLY_HOST_CAN_RESUME_GAME: 'Only the host can resume the game',
+  ONLY_HOST_CAN_END_GAME: 'Only the host can end the game',
+  NO_GAME_ID_PROVIDED: 'No game ID provided',
+  FAILED_TO_FETCH_GAME_FLOW: 'Failed to fetch game flow',
+  FAILED_TO_START_QUESTION: 'Failed to start question',
+  FAILED_TO_REVEAL_ANSWER: 'Failed to reveal answer',
+  FAILED_TO_ADVANCE_TO_NEXT_QUESTION: 'Failed to advance to next question',
+  FAILED_TO_PAUSE_GAME: 'Failed to pause game',
+  FAILED_TO_RESUME_GAME: 'Failed to resume game',
+  FAILED_TO_END_GAME: 'Failed to end game',
+} as const;
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
 export interface QuestionTimerState {
   questionId: string;
   questionIndex: number;
@@ -48,18 +102,12 @@ export interface GameFlowEvents {
 export interface UseGameFlowOptions {
   gameId: string;
   isHost?: boolean;
-  autoSync?: boolean; // Auto-sync with backend state
+  autoSync?: boolean;
   events?: GameFlowEvents;
-  /**
-   * Whether to trigger onQuestionEnd when the local timer hits zero.
-   * Disable for clients that only want to react to server/host-driven
-   * question end events (e.g., to run a separate answering phase after display).
-   */
   triggerOnQuestionEndOnTimer?: boolean;
 }
 
 export interface UseGameFlowReturn {
-  // State
   gameFlow: GameFlow | null;
   currentQuestionIndex: number | null;
   currentQuestionId: string | null;
@@ -67,8 +115,6 @@ export interface UseGameFlowReturn {
   timerState: QuestionTimerState | null;
   loading: boolean;
   error: string | null;
-
-  // Host Actions (only available if isHost=true)
   startQuestion: (questionId: string, questionIndex?: number) => Promise<GameFlow | void>;
   revealAnswer: () => Promise<{
     message: string;
@@ -84,19 +130,15 @@ export interface UseGameFlowReturn {
   pauseGame: () => Promise<void>;
   resumeGame: () => Promise<void>;
   endGame: () => Promise<void>;
-
-  // Player Actions
   refreshFlow: () => Promise<void>;
-
-  // Real-time status
   isConnected: boolean;
 }
 
 interface SocketQuestionStartedEvent {
   roomId: string;
   question: { id: string; index?: number };
-  startsAt?: number; // Server timestamp (milliseconds)
-  endsAt?: number; // Server timestamp (milliseconds)
+  startsAt?: number;
+  endsAt?: number;
 }
 
 interface SocketQuestionChangedEvent {
@@ -134,10 +176,32 @@ interface ExplanationHideEvent {
   questionId: string;
 }
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
+type RevealAnswerResult = {
+  message: string;
+  gameFlow: GameFlow;
+  answerStats?: Record<string, number>;
+} | null;
 
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 5. Helper Functions
+//----------------------------------------------------
+/**
+ * Function: calculateRemainingTime
+ * Description:
+ * - Calculates remaining time for a question based on start time and duration
+ * - Returns 0 if start time is not provided
+ *
+ * Parameters:
+ * - startTime (string | null): ISO string of question start time
+ * - durationMs (number): Total duration in milliseconds
+ *
+ * Returns:
+ * - number: Remaining time in milliseconds (0 or positive)
+ */
 function calculateRemainingTime(startTime: string | null, durationMs: number): number {
   if (!startTime) return 0;
   const start = new Date(startTime).getTime();
@@ -146,28 +210,188 @@ function calculateRemainingTime(startTime: string | null, durationMs: number): n
   return Math.max(0, durationMs - elapsed);
 }
 
-// ============================================================================
-// HOOK IMPLEMENTATION
-// ============================================================================
+/**
+ * Function: calculateDuration
+ * Description:
+ * - Calculates question duration from start and end times
+ * - Falls back to default duration if times are not available
+ *
+ * Parameters:
+ * - startTime (string | null): Question start time ISO string
+ * - endTime (string | null): Question end time ISO string
+ * - defaultDurationMs (number): Default duration to use if times unavailable
+ *
+ * Returns:
+ * - number: Duration in milliseconds
+ */
+function calculateDuration(
+  startTime: string | null,
+  endTime: string | null,
+  defaultDurationMs: number,
+): number {
+  if (endTime && startTime) {
+    return new Date(endTime).getTime() - new Date(startTime).getTime();
+  }
+  return defaultDurationMs;
+}
 
+/**
+ * Function: handleTimerExpiration
+ * Description:
+ * - Handles timer expiration logic including auto-reveal for host
+ * - Fires question end event if enabled
+ *
+ * Parameters:
+ * - questionId (string): ID of the question that expired
+ * - gameFlowRef (React.MutableRefObject<GameFlow | null>): Current game flow ref
+ * - isHostRef (React.MutableRefObject<boolean>): Host status ref
+ * - revealAnswerRef (React.MutableRefObject<(() => Promise<any>) | undefined>): Reveal answer function ref
+ * - triggerOnQuestionEndOnTimerRef (React.MutableRefObject<boolean>): Trigger flag ref
+ * - eventsRef (React.MutableRefObject<GameFlowEvents | undefined>): Events ref
+ * - setTimerState (function): State setter for timer state
+ * - timerIntervalRef (React.MutableRefObject<NodeJS.Timeout | null>): Timer interval ref
+ */
+function handleTimerExpiration(
+  questionId: string,
+  gameFlowRef: React.MutableRefObject<GameFlow | null>,
+  isHostRef: React.MutableRefObject<boolean>,
+  revealAnswerRef: React.MutableRefObject<(() => Promise<RevealAnswerResult>) | undefined>,
+  triggerOnQuestionEndOnTimerRef: React.MutableRefObject<boolean>,
+  eventsRef: React.MutableRefObject<GameFlowEvents | undefined>,
+  setTimerState: (
+    state:
+      | QuestionTimerState
+      | null
+      | ((prev: QuestionTimerState | null) => QuestionTimerState | null),
+  ) => void,
+  timerIntervalRef: React.MutableRefObject<NodeJS.Timeout | null>,
+): void {
+  setTimerState((prev) => (prev ? { ...prev, remainingMs: 0, isActive: false } : null));
+  if (timerIntervalRef.current) {
+    clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = null;
+  }
+
+  const currentFlow = gameFlowRef.current;
+  if (
+    isHostRef.current &&
+    revealAnswerRef.current &&
+    currentFlow?.current_question_id === questionId &&
+    !currentFlow?.current_question_end_time
+  ) {
+    revealAnswerRef.current().catch(() => {
+      eventsRef.current?.onQuestionEnd?.(questionId);
+    });
+  } else {
+    if (triggerOnQuestionEndOnTimerRef.current) {
+      eventsRef.current?.onQuestionEnd?.(questionId);
+    }
+  }
+}
+
+/**
+ * Function: createTimerInterval
+ * Description:
+ * - Creates and manages timer interval for question countdown
+ * - Handles timer expiration and updates remaining time
+ *
+ * Parameters:
+ * - questionId (string): Question ID
+ * - startTime (string): Question start time ISO string
+ * - durationMs (number): Question duration in milliseconds
+ * - gameFlowRef (React.MutableRefObject<GameFlow | null>): Game flow ref
+ * - isHostRef (React.MutableRefObject<boolean>): Host status ref
+ * - revealAnswerRef (React.MutableRefObject<(() => Promise<any>) | undefined>): Reveal answer ref
+ * - triggerOnQuestionEndOnTimerRef (React.MutableRefObject<boolean>): Trigger flag ref
+ * - eventsRef (React.MutableRefObject<GameFlowEvents | undefined>): Events ref
+ * - setTimerState (function): Timer state setter
+ * - timerIntervalRef (React.MutableRefObject<NodeJS.Timeout | null>): Timer interval ref
+ *
+ * Returns:
+ * - NodeJS.Timeout: The created interval
+ */
+function createTimerInterval(
+  questionId: string,
+  startTime: string,
+  durationMs: number,
+  gameFlowRef: React.MutableRefObject<GameFlow | null>,
+  isHostRef: React.MutableRefObject<boolean>,
+  revealAnswerRef: React.MutableRefObject<(() => Promise<RevealAnswerResult>) | undefined>,
+  triggerOnQuestionEndOnTimerRef: React.MutableRefObject<boolean>,
+  eventsRef: React.MutableRefObject<GameFlowEvents | undefined>,
+  setTimerState: (
+    state:
+      | QuestionTimerState
+      | null
+      | ((prev: QuestionTimerState | null) => QuestionTimerState | null),
+  ) => void,
+  timerIntervalRef: React.MutableRefObject<NodeJS.Timeout | null>,
+): NodeJS.Timeout {
+  return setInterval(() => {
+    const remaining = calculateRemainingTime(startTime, durationMs);
+
+    if (remaining <= 0) {
+      handleTimerExpiration(
+        questionId,
+        gameFlowRef,
+        isHostRef,
+        revealAnswerRef,
+        triggerOnQuestionEndOnTimerRef,
+        eventsRef,
+        setTimerState,
+        timerIntervalRef,
+      );
+    } else {
+      setTimerState((prev) => (prev ? { ...prev, remainingMs: remaining } : null));
+    }
+  }, TIMER_UPDATE_INTERVAL_MS);
+}
+
+/**
+ * Function: stopTimer
+ * Description:
+ * - Stops and clears the timer interval
+ *
+ * Parameters:
+ * - timerIntervalRef (React.MutableRefObject<NodeJS.Timeout | null>): Timer interval ref
+ */
+function stopTimer(timerIntervalRef: React.MutableRefObject<NodeJS.Timeout | null>): void {
+  if (timerIntervalRef.current) {
+    clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = null;
+  }
+}
+
+/**
+ * Hook: useGameFlow
+ * Description:
+ * - Manages game flow state, question progression, and timing
+ * - Provides host controls for game management
+ * - Handles real-time synchronization via WebSocket
+ * - Implements timer management with auto-reveal functionality
+ *
+ * Parameters:
+ * - options (UseGameFlowOptions): Configuration options for the hook
+ *
+ * Returns:
+ * - UseGameFlowReturn: Object containing game flow state and control functions
+ */
 export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   const {
     gameId,
-    isHost = false,
-    autoSync = true,
+    isHost = DEFAULT_IS_HOST,
+    autoSync = DEFAULT_AUTO_SYNC,
     events,
-    triggerOnQuestionEndOnTimer = true,
+    triggerOnQuestionEndOnTimer = DEFAULT_TRIGGER_ON_QUESTION_END_ON_TIMER,
   } = options;
   const { socket, isConnected, isRegistered, joinRoom, leaveRoom } = useSocket();
 
-  // State
   const [gameFlow, setGameFlow] = useState<GameFlow | null>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [timerState, setTimerState] = useState<QuestionTimerState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Refs
   const listenersSetupRef = useRef(false);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const gameFlowRef = useRef<GameFlow | null>(null);
@@ -187,7 +411,6 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
   const hasJoinedRoomRef = useRef(false);
   const triggerOnQuestionEndOnTimerRef = useRef(triggerOnQuestionEndOnTimer);
 
-  // Keep refs in sync
   useEffect(() => {
     eventsRef.current = events;
   }, [events]);
@@ -227,64 +450,29 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         isActive: true,
       });
 
-      // Start countdown interval
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
+      stopTimer(timerIntervalRef);
 
-      timerIntervalRef.current = setInterval(() => {
-        const remaining = calculateRemainingTime(startTime, durationMs);
-
-        if (remaining <= 0) {
-          // Timer expired
-          setTimerState((prev) => (prev ? { ...prev, remainingMs: 0, isActive: false } : null));
-          if (timerIntervalRef.current) {
-            clearInterval(timerIntervalRef.current);
-            timerIntervalRef.current = null;
-          }
-
-          // Auto-reveal answer if host hasn't already revealed it
-          // Check if answer hasn't been revealed by checking if current_question_end_time is not set
-          const currentFlow = gameFlowRef.current;
-          if (
-            isHostRef.current &&
-            revealAnswerRef.current &&
-            currentFlow?.current_question_id === questionId &&
-            !currentFlow?.current_question_end_time
-          ) {
-            // Auto-reveal answer when timer expires
-            revealAnswerRef.current().catch((err) => {
-              console.error('Auto-reveal answer failed:', err);
-              // Still fire the event even if reveal fails
-              eventsRef.current?.onQuestionEnd?.(questionId);
-            });
-          } else {
-            // For non-hosts or if already revealed, just fire the event (if enabled)
-            if (triggerOnQuestionEndOnTimerRef.current) {
-              eventsRef.current?.onQuestionEnd?.(questionId);
-            }
-          }
-        } else {
-          setTimerState((prev) => (prev ? { ...prev, remainingMs: remaining } : null));
-        }
-      }, 100); // Update every 100ms for smooth countdown
+      timerIntervalRef.current = createTimerInterval(
+        questionId,
+        startTime,
+        durationMs,
+        gameFlowRef,
+        isHostRef,
+        revealAnswerRef,
+        triggerOnQuestionEndOnTimerRef,
+        eventsRef,
+        setTimerState,
+        timerIntervalRef,
+      );
     },
     [],
   );
 
-  // Store updateTimerState in ref (it's stable, but we need it in the effect)
   const updateTimerStateRef = useRef(updateTimerState);
   useEffect(() => {
     updateTimerStateRef.current = updateTimerState;
   }, [updateTimerState]);
 
-  // ========================================================================
-  // REST API OPERATIONS
-  // ========================================================================
-
-  /**
-   * Refresh game flow from API
-   */
   const refreshFlow = useCallback(async () => {
     if (!gameId) return;
 
@@ -295,19 +483,18 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       const { data, error: apiError } = await gameApi.getGameState(gameId);
 
       if (apiError || !data) {
-        throw new Error(apiError?.message || 'Failed to fetch game flow');
+        throw new Error(apiError?.message || ERROR_MESSAGES.FAILED_TO_FETCH_GAME_FLOW);
       }
 
       setGameFlow(data.gameFlow);
       setIsPaused(data.gameFlow.is_paused);
 
-      // Update timer state if question is active
       if (data.gameFlow.current_question_id && data.gameFlow.current_question_start_time) {
-        const durationMs =
-          data.gameFlow.current_question_end_time && data.gameFlow.current_question_start_time
-            ? new Date(data.gameFlow.current_question_end_time).getTime() -
-              new Date(data.gameFlow.current_question_start_time).getTime()
-            : DEFAULT_QUESTION_DURATION_MS;
+        const durationMs = calculateDuration(
+          data.gameFlow.current_question_start_time,
+          data.gameFlow.current_question_end_time,
+          DEFAULT_QUESTION_DURATION_MS,
+        );
         updateTimerStateRef.current(
           data.gameFlow.current_question_id,
           data.gameFlow.current_question_index || 0,
@@ -316,16 +503,15 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         );
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch game flow';
+      const errorMessage =
+        err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_FETCH_GAME_FLOW;
       setError(errorMessage);
-      console.error('useGameFlow: refreshFlow error', err);
       eventsRef.current?.onError?.(errorMessage);
     } finally {
       setLoading(false);
     }
   }, [gameId]);
 
-  // Keep refs in sync with state and callbacks
   useEffect(() => {
     gameFlowRef.current = gameFlow;
   }, [gameFlow]);
@@ -334,16 +520,13 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     refreshFlowRef.current = refreshFlow;
   }, [refreshFlow]);
 
-  /**
-   * Start a specific question (Host only)
-   */
   const startQuestion = useCallback(
     async (questionId: string, questionIndex?: number) => {
       if (!isHost) {
-        throw new Error('Only the host can start questions');
+        throw new Error(ERROR_MESSAGES.ONLY_HOST_CAN_START_QUESTIONS);
       }
       if (!gameId) {
-        throw new Error('No game ID provided');
+        throw new Error(ERROR_MESSAGES.NO_GAME_ID_PROVIDED);
       }
 
       try {
@@ -357,16 +540,16 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         );
 
         if (apiError || !data) {
-          throw new Error(apiError?.message || 'Failed to start question');
+          throw new Error(apiError?.message || ERROR_MESSAGES.FAILED_TO_START_QUESTION);
         }
 
         setGameFlow(data);
         const startIso = data.current_question_start_time || new Date().toISOString();
-        const durationMs =
-          data.current_question_end_time && data.current_question_start_time
-            ? new Date(data.current_question_end_time).getTime() -
-              new Date(data.current_question_start_time).getTime()
-            : DEFAULT_QUESTION_DURATION_MS;
+        const durationMs = calculateDuration(
+          data.current_question_start_time,
+          data.current_question_end_time,
+          DEFAULT_QUESTION_DURATION_MS,
+        );
 
         updateTimerStateRef.current(
           questionId,
@@ -375,10 +558,9 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
           durationMs,
         );
 
-        // Emit WebSocket event (align with listener: game:question:started)
         if (socketRef.current && isConnectedRef.current) {
           const startsAt = new Date(startIso).getTime();
-          socketRef.current.emit('game:question:started', {
+          socketRef.current.emit(SOCKET_EVENTS.QUESTION_STARTED, {
             roomId: gameId,
             question: { id: questionId, index: data.current_question_index ?? questionIndex ?? 0 },
             startsAt,
@@ -389,9 +571,9 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         eventsRef.current?.onQuestionStart?.(questionId, questionIndex || 0);
         return data;
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to start question';
+        const errorMessage =
+          err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_START_QUESTION;
         setError(errorMessage);
-        console.error('useGameFlow: startQuestion error', err);
         eventsRef.current?.onError?.(errorMessage);
         throw err;
       } finally {
@@ -401,15 +583,12 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     [isHost, gameId],
   );
 
-  /**
-   * Reveal answer for current question (Host only)
-   */
   const revealAnswer = useCallback(async () => {
     if (!isHost) {
-      throw new Error('Only the host can reveal answers');
+      throw new Error(ERROR_MESSAGES.ONLY_HOST_CAN_REVEAL_ANSWERS);
     }
     if (!gameId) {
-      throw new Error('No game ID provided');
+      throw new Error(ERROR_MESSAGES.NO_GAME_ID_PROVIDED);
     }
 
     try {
@@ -419,32 +598,22 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       const { data, error: apiError } = await gameApi.revealAnswer(gameId);
 
       if (apiError) {
-        throw new Error(apiError.message || 'Failed to reveal answer');
+        throw new Error(apiError.message || ERROR_MESSAGES.FAILED_TO_REVEAL_ANSWER);
       }
 
-      // If backend returned updated flow, apply it immediately for snappier UI.
       if (data?.gameFlow) {
         setGameFlow(data.gameFlow);
       }
 
-      // Stop timer
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
-
-      // Backend already emits game:question:ended, game:answer:locked, and game:answer:stats:update
-      // No need to emit from frontend - just refresh flow to get updated state
+      stopTimer(timerIntervalRef);
       refreshFlowRef.current?.();
 
       eventsRef.current?.onAnswerReveal?.(gameFlowRef.current?.current_question_id || '', '');
-
-      // Return data so callers (e.g., host control panel) can use answerStats if the backend includes it.
       return data || null;
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to reveal answer';
+      const errorMessage =
+        err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_REVEAL_ANSWER;
       setError(errorMessage);
-      console.error('useGameFlow: revealAnswer error', err);
       eventsRef.current?.onError?.(errorMessage);
       throw err;
     } finally {
@@ -452,16 +621,16 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     }
   }, [isHost, gameId]);
 
-  /**
-   * Advance to next question (Host only)
-   * Updates game flow to point to the next question and emits phase change event
-   */
+  useEffect(() => {
+    revealAnswerRef.current = revealAnswer;
+  }, [revealAnswer]);
+
   const nextQuestion = useCallback(async () => {
     if (!isHost) {
-      throw new Error('Only the host can advance questions');
+      throw new Error(ERROR_MESSAGES.ONLY_HOST_CAN_ADVANCE_QUESTIONS);
     }
     if (!gameId) {
-      throw new Error('No game ID provided');
+      throw new Error(ERROR_MESSAGES.NO_GAME_ID_PROVIDED);
     }
 
     try {
@@ -471,40 +640,26 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       const { data, error: apiError } = await gameApi.nextQuestion(gameId);
 
       if (apiError || !data) {
-        throw new Error(apiError?.message || 'Failed to advance to next question');
+        throw new Error(apiError?.message || ERROR_MESSAGES.FAILED_TO_ADVANCE_TO_NEXT_QUESTION);
       }
 
-      // Update game flow state
       setGameFlow(data.gameFlow);
 
-      // If game is complete, trigger game end event
       if (data.isComplete) {
-        // Stop timer
-        if (timerIntervalRef.current) {
-          clearInterval(timerIntervalRef.current);
-          timerIntervalRef.current = null;
-        }
+        stopTimer(timerIntervalRef);
         setTimerState(null);
         eventsRef.current?.onGameEnd?.();
       } else if (data.nextQuestion) {
-        // Game flow has been updated to point to next question
-        // The host will need to call startQuestion() to actually start it
-        // Reset timer state since we're moving to a new question
-        if (timerIntervalRef.current) {
-          clearInterval(timerIntervalRef.current);
-          timerIntervalRef.current = null;
-        }
+        stopTimer(timerIntervalRef);
         setTimerState(null);
-        // Refresh flow to get latest state
         refreshFlowRef.current?.();
       }
 
       return data;
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : 'Failed to advance to next question';
+        err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_ADVANCE_TO_NEXT_QUESTION;
       setError(errorMessage);
-      console.error('useGameFlow: nextQuestion error', err);
       eventsRef.current?.onError?.(errorMessage);
       throw err;
     } finally {
@@ -512,15 +667,12 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     }
   }, [isHost, gameId]);
 
-  /**
-   * Pause the game (Host only)
-   */
   const pauseGame = useCallback(async () => {
     if (!isHost) {
-      throw new Error('Only the host can pause the game');
+      throw new Error(ERROR_MESSAGES.ONLY_HOST_CAN_PAUSE_GAME);
     }
     if (!gameId) {
-      throw new Error('No game ID provided');
+      throw new Error(ERROR_MESSAGES.NO_GAME_ID_PROVIDED);
     }
 
     try {
@@ -530,20 +682,14 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       const { error: apiError } = await gameApi.pauseGame(gameId);
 
       if (apiError) {
-        throw new Error(apiError.message || 'Failed to pause game');
+        throw new Error(apiError.message || ERROR_MESSAGES.FAILED_TO_PAUSE_GAME);
       }
 
       setIsPaused(true);
+      stopTimer(timerIntervalRef);
 
-      // Stop timer
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
-
-      // Emit WebSocket event
       if (socketRef.current && isConnectedRef.current) {
-        socketRef.current.emit('game:pause', {
+        socketRef.current.emit(SOCKET_EVENTS.PAUSE, {
           gameId,
           timestamp: new Date().toISOString(),
         });
@@ -551,9 +697,8 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
       eventsRef.current?.onGamePause?.();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to pause game';
+      const errorMessage = err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_PAUSE_GAME;
       setError(errorMessage);
-      console.error('useGameFlow: pauseGame error', err);
       eventsRef.current?.onError?.(errorMessage);
       throw err;
     } finally {
@@ -561,15 +706,12 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     }
   }, [isHost, gameId]);
 
-  /**
-   * Resume the game (Host only)
-   */
   const resumeGame = useCallback(async () => {
     if (!isHost) {
-      throw new Error('Only the host can resume the game');
+      throw new Error(ERROR_MESSAGES.ONLY_HOST_CAN_RESUME_GAME);
     }
     if (!gameId) {
-      throw new Error('No game ID provided');
+      throw new Error(ERROR_MESSAGES.NO_GAME_ID_PROVIDED);
     }
 
     try {
@@ -579,14 +721,13 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       const { error: apiError } = await gameApi.resumeGame(gameId);
 
       if (apiError) {
-        throw new Error(apiError.message || 'Failed to resume game');
+        throw new Error(apiError.message || ERROR_MESSAGES.FAILED_TO_RESUME_GAME);
       }
 
       setIsPaused(false);
 
-      // Emit WebSocket event
       if (socketRef.current && isConnectedRef.current) {
-        socketRef.current.emit('game:resume', {
+        socketRef.current.emit(SOCKET_EVENTS.RESUME, {
           gameId,
           timestamp: new Date().toISOString(),
         });
@@ -594,9 +735,9 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
       eventsRef.current?.onGameResume?.();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to resume game';
+      const errorMessage =
+        err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_RESUME_GAME;
       setError(errorMessage);
-      console.error('useGameFlow: resumeGame error', err);
       eventsRef.current?.onError?.(errorMessage);
       throw err;
     } finally {
@@ -604,15 +745,12 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     }
   }, [isHost, gameId]);
 
-  /**
-   * End the game (Host only)
-   */
   const endGame = useCallback(async () => {
     if (!isHost) {
-      throw new Error('Only the host can end the game');
+      throw new Error(ERROR_MESSAGES.ONLY_HOST_CAN_END_GAME);
     }
     if (!gameId) {
-      throw new Error('No game ID provided');
+      throw new Error(ERROR_MESSAGES.NO_GAME_ID_PROVIDED);
     }
 
     try {
@@ -622,16 +760,11 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       const { error: apiError } = await gameApi.endGame(gameId);
 
       if (apiError) {
-        throw new Error(apiError.message || 'Failed to end game');
+        throw new Error(apiError.message || ERROR_MESSAGES.FAILED_TO_END_GAME);
       }
 
-      // Stop timer
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
+      stopTimer(timerIntervalRef);
 
-      // Emit WebSocket event
       if (socketRef.current && isConnectedRef.current) {
         socketRef.current.emit('game:end', {
           gameId,
@@ -641,9 +774,8 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
       eventsRef.current?.onGameEnd?.();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to end game';
+      const errorMessage = err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_END_GAME;
       setError(errorMessage);
-      console.error('useGameFlow: endGame error', err);
       eventsRef.current?.onError?.(errorMessage);
       throw err;
     } finally {
@@ -655,7 +787,6 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     if (!socketRef.current || !isConnectedRef.current || !isRegistered || !gameId) return;
     if (listenersSetupRef.current) return;
 
-    console.log(`useGameFlow: Setting up WebSocket listeners for game ${gameId}`);
     listenersSetupRef.current = true;
 
     const currentSocket = socketRef.current;
@@ -664,7 +795,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       if (typeof joinRoom === 'function') {
         joinRoom(roomId);
       } else {
-        currentSocket.emit('room:join', { roomId });
+        currentSocket.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId });
       }
     };
     const safeLeave = (roomId: string) => {
@@ -672,7 +803,7 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       if (typeof leaveRoom === 'function') {
         leaveRoom(roomId);
       } else {
-        currentSocket.emit('room:leave', { roomId });
+        currentSocket.emit(SOCKET_EVENTS.ROOM_LEAVE, { roomId });
       }
     };
 
@@ -681,18 +812,13 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       hasJoinedRoomRef.current = true;
     }
 
-    // Question start event
     const handleQuestionStarted = (data: SocketQuestionStartedEvent) => {
       if (data.roomId !== gameId) return;
-      console.log('useGameFlow: Question started', data);
 
-      // Use server timestamps if available (authoritative)
       if (data.startsAt && data.endsAt) {
         const serverStartTime = data.startsAt;
         const serverEndTime = data.endsAt;
         const durationMs = serverEndTime - serverStartTime;
-
-        // Calculate server start time ISO string
         const serverStartIso = new Date(serverStartTime).toISOString();
 
         const idx =
@@ -703,7 +829,6 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         updateTimerStateRef.current(data.question.id, idx, serverStartIso, durationMs);
         eventsRef.current?.onQuestionStart?.(data.question.id, idx);
       } else {
-        // Fallback to client-side calculation if server timestamps not available
         const durationMs = DEFAULT_QUESTION_DURATION_MS;
         const idx =
           typeof data.question?.index === 'number'
@@ -719,7 +844,6 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
     const handleQuestionChanged = (data: SocketQuestionChangedEvent) => {
       if (data.roomId !== gameId) return;
-      console.log('useGameFlow: Question changed', data);
       eventsRef.current?.onQuestionStart?.(
         data.question.id,
         gameFlowRef.current?.current_question_index ?? 0,
@@ -727,58 +851,38 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
       refreshFlowRef.current?.();
     };
 
-    // Question end event
     const handleQuestionEnd = (data: SocketQuestionEndedEvent) => {
       if (data.roomId !== gameId) return;
-      console.log('useGameFlow: Question ended', data);
 
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
+      stopTimer(timerIntervalRef);
       setTimerState((prev) => (prev ? { ...prev, isActive: false, remainingMs: 0 } : null));
       eventsRef.current?.onQuestionEnd?.(gameFlowRef.current?.current_question_id || '');
       refreshFlowRef.current?.();
     };
 
-    // Game pause event
     const handleGamePause = (data: GamePauseEvent) => {
       if (data.gameId !== gameId) return;
-      console.log('useGameFlow: Game paused');
 
       setIsPaused(true);
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-        timerIntervalRef.current = null;
-      }
+      stopTimer(timerIntervalRef);
       eventsRef.current?.onGamePause?.();
     };
 
-    // Game resume event
     const handleGameResume = (data: GameResumeEvent) => {
       if (data.gameId !== gameId) return;
-      console.log('useGameFlow: Game resumed');
 
       setIsPaused(false);
 
-      // Restart timer interval if question is active
       if (
         gameFlowRef.current?.current_question_id &&
         gameFlowRef.current?.current_question_start_time
       ) {
         const startTime = gameFlowRef.current.current_question_start_time;
         const endTime = gameFlowRef.current.current_question_end_time;
-        const durationMs =
-          endTime && startTime
-            ? new Date(endTime).getTime() - new Date(startTime).getTime()
-            : DEFAULT_QUESTION_DURATION_MS;
+        const durationMs = calculateDuration(startTime, endTime, DEFAULT_QUESTION_DURATION_MS);
 
-        // Restart the timer interval
-        if (timerIntervalRef.current) {
-          clearInterval(timerIntervalRef.current);
-        }
+        stopTimer(timerIntervalRef);
 
-        // Update timer state immediately with current remaining time
         const currentRemaining = calculateRemainingTime(startTime, durationMs);
         setTimerState((prev) => {
           if (!prev) return null;
@@ -789,98 +893,61 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
           };
         });
 
-        timerIntervalRef.current = setInterval(() => {
-          const remaining = calculateRemainingTime(startTime, durationMs);
-
-          if (remaining <= 0) {
-            setTimerState((prev) => (prev ? { ...prev, remainingMs: 0, isActive: false } : null));
-            if (timerIntervalRef.current) {
-              clearInterval(timerIntervalRef.current);
-              timerIntervalRef.current = null;
-            }
-
-            // Auto-reveal answer if host hasn't already revealed it
-            const currentQuestionId = gameFlowRef.current?.current_question_id;
-            if (
-              isHostRef.current &&
-              revealAnswerRef.current &&
-              currentQuestionId &&
-              !gameFlowRef.current?.current_question_end_time
-            ) {
-              revealAnswerRef.current().catch((err) => {
-                console.error('Auto-reveal answer failed on resume:', err);
-                eventsRef.current?.onQuestionEnd?.(currentQuestionId);
-              });
-            } else {
-              eventsRef.current?.onQuestionEnd?.(currentQuestionId || '');
-            }
-          } else {
-            setTimerState((prev) =>
-              prev ? { ...prev, remainingMs: remaining, isActive: true } : null,
-            );
-          }
-        }, 100);
+        timerIntervalRef.current = createTimerInterval(
+          gameFlowRef.current.current_question_id,
+          startTime,
+          durationMs,
+          gameFlowRef,
+          isHostRef,
+          revealAnswerRef,
+          triggerOnQuestionEndOnTimerRef,
+          eventsRef,
+          setTimerState,
+          timerIntervalRef,
+        );
       }
 
       eventsRef.current?.onGameResume?.();
     };
 
-    // Explanation show event
     const handleExplanationShow = (data: ExplanationShowEvent) => {
       if (data.roomId !== gameId) return;
-      console.log('useGameFlow: Explanation shown', data);
-
       eventsRef.current?.onExplanationShow?.(data.questionId, data.explanation);
       refreshFlowRef.current?.();
     };
 
-    // Explanation hide event
     const handleExplanationHide = (data: ExplanationHideEvent) => {
       if (data.roomId !== gameId) return;
-      console.log('useGameFlow: Explanation hidden', data);
-
       eventsRef.current?.onExplanationHide?.(data.questionId);
       refreshFlowRef.current?.();
     };
 
-    // Register listeners
-    currentSocket.on('game:question:started', handleQuestionStarted);
-    currentSocket.on('game:question:changed', handleQuestionChanged);
-    currentSocket.on('game:question:ended', handleQuestionEnd);
-    currentSocket.on('game:pause', handleGamePause);
-    currentSocket.on('game:resume', handleGameResume);
-    currentSocket.on('game:explanation:show', handleExplanationShow);
-    currentSocket.on('game:explanation:hide', handleExplanationHide);
+    currentSocket.on(SOCKET_EVENTS.QUESTION_STARTED, handleQuestionStarted);
+    currentSocket.on(SOCKET_EVENTS.QUESTION_CHANGED, handleQuestionChanged);
+    currentSocket.on(SOCKET_EVENTS.QUESTION_ENDED, handleQuestionEnd);
+    currentSocket.on(SOCKET_EVENTS.PAUSE, handleGamePause);
+    currentSocket.on(SOCKET_EVENTS.RESUME, handleGameResume);
+    currentSocket.on(SOCKET_EVENTS.EXPLANATION_SHOW, handleExplanationShow);
+    currentSocket.on(SOCKET_EVENTS.EXPLANATION_HIDE, handleExplanationHide);
 
     return () => {
-      console.log(`useGameFlow: Cleaning up listeners for game ${gameId}`);
-
-      currentSocket.off('game:question:started', handleQuestionStarted);
-      currentSocket.off('game:question:changed', handleQuestionChanged);
-      currentSocket.off('game:question:ended', handleQuestionEnd);
-      currentSocket.off('game:pause', handleGamePause);
-      currentSocket.off('game:resume', handleGameResume);
-      currentSocket.off('game:explanation:show', handleExplanationShow);
-      currentSocket.off('game:explanation:hide', handleExplanationHide);
+      currentSocket.off(SOCKET_EVENTS.QUESTION_STARTED, handleQuestionStarted);
+      currentSocket.off(SOCKET_EVENTS.QUESTION_CHANGED, handleQuestionChanged);
+      currentSocket.off(SOCKET_EVENTS.QUESTION_ENDED, handleQuestionEnd);
+      currentSocket.off(SOCKET_EVENTS.PAUSE, handleGamePause);
+      currentSocket.off(SOCKET_EVENTS.RESUME, handleGameResume);
+      currentSocket.off(SOCKET_EVENTS.EXPLANATION_SHOW, handleExplanationShow);
+      currentSocket.off(SOCKET_EVENTS.EXPLANATION_HIDE, handleExplanationHide);
 
       if (hasJoinedRoomRef.current) {
         safeLeave(gameId);
         hasJoinedRoomRef.current = false;
       }
 
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-
-      // Do not force leave here to avoid leave/rejoin churn on React double-invocation;
-      // room membership will be cleaned up by socket disconnect or other page transitions.
+      stopTimer(timerIntervalRef);
       listenersSetupRef.current = false;
     };
   }, [gameId, isRegistered, joinRoom, leaveRoom]);
-
-  // ========================================================================
-  // INITIALIZATION
-  // ========================================================================
 
   useEffect(() => {
     if (autoSync && gameId) {
@@ -888,7 +955,6 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     }
   }, [autoSync, gameId]);
 
-  // Re-sync on socket reconnect
   useEffect(() => {
     if (!socketRef.current) return;
     const handleReconnect = () => {
@@ -897,24 +963,19 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
         if (typeof joinRoom === 'function') {
           joinRoom(gameId);
         } else {
-          socketRef.current?.emit('room:join', { roomId: gameId });
+          socketRef.current?.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId: gameId });
         }
         hasJoinedRoomRef.current = true;
       }
       refreshFlowRef.current?.();
     };
-    socketRef.current.on('connect', handleReconnect);
+    socketRef.current.on(SOCKET_EVENTS.CONNECT, handleReconnect);
     return () => {
-      socketRef.current?.off('connect', handleReconnect);
+      socketRef.current?.off(SOCKET_EVENTS.CONNECT, handleReconnect);
     };
   }, [gameId, joinRoom]);
 
-  // ========================================================================
-  // RETURN
-  // ========================================================================
-
   return {
-    // State
     gameFlow,
     currentQuestionIndex: gameFlow?.current_question_index || null,
     currentQuestionId: gameFlow?.current_question_id || null,
@@ -922,8 +983,6 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
     timerState,
     loading,
     error,
-
-    // Host Actions
     startQuestion,
     revealAnswer,
     nextQuestion,
@@ -933,8 +992,10 @@ export function useGameFlow(options: UseGameFlowOptions): UseGameFlowReturn {
 
     // Player Actions
     refreshFlow,
-
-    // Real-time status
     isConnected,
   };
 }
+
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------
