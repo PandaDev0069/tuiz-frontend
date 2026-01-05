@@ -2,7 +2,6 @@ export const SITE_CONFIG = {
   BASE_URL: 'https://tuiz-info-king.vercel.app',
   SITE_NAME: 'TUIZ情報王',
   SITE_DESCRIPTION: 'リアルタイムでクイズを作成・参加できる革新的な学習プラットフォーム',
-  TWITTER_HANDLE: '@tuiz_official',
   LOCALE: 'ja_JP',
 } as const;
 
