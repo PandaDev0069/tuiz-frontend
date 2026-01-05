@@ -24,17 +24,9 @@
 //----------------------------------------------------
 // 2. Constants / Configuration
 //----------------------------------------------------
-const APP_NAME = 'TUIZ';
 const NODE_ENV_DEVELOPMENT = 'development';
-const NODE_ENV_PRODUCTION = 'production';
 const LOCAL_API_BASE = 'http://localhost:8080';
 const DEFAULT_PRODUCTION_API_BASE = 'https://tuiz-info-king-backend.onrender.com';
-
-const ENV_VARS = {
-  API_BASE: 'NEXT_PUBLIC_API_BASE',
-  SUPABASE_URL: 'NEXT_PUBLIC_SUPABASE_URL',
-  SUPABASE_ANON_KEY: 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-} as const;
 
 //----------------------------------------------------
 // 3. Types / Interfaces
@@ -76,7 +68,7 @@ function must(key: string, val: string | undefined): string {
 const apiBase =
   process.env.NODE_ENV === NODE_ENV_DEVELOPMENT
     ? LOCAL_API_BASE
-    : (process.env[ENV_VARS.API_BASE] ?? DEFAULT_PRODUCTION_API_BASE);
+    : (process.env.NEXT_PUBLIC_API_BASE ?? DEFAULT_PRODUCTION_API_BASE);
 
 /**
  * Configuration object
@@ -86,11 +78,11 @@ const apiBase =
  * - Validates required environment variables on initialization
  */
 export const cfg: Cfg = Object.freeze({
-  appName: APP_NAME,
+  appName: 'TUIZ',
   apiBase,
-  supabaseUrl: must(ENV_VARS.SUPABASE_URL, process.env[ENV_VARS.SUPABASE_URL]),
-  supabaseAnonKey: must(ENV_VARS.SUPABASE_ANON_KEY, process.env[ENV_VARS.SUPABASE_ANON_KEY]),
-  isDev: process.env.NODE_ENV !== NODE_ENV_PRODUCTION,
+  supabaseUrl: must('NEXT_PUBLIC_SUPABASE_URL', process.env.NEXT_PUBLIC_SUPABASE_URL),
+  supabaseAnonKey: must('NEXT_PUBLIC_SUPABASE_ANON_KEY', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  isDev: process.env.NODE_ENV !== 'production',
 });
 
 //----------------------------------------------------
