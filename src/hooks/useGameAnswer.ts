@@ -1,20 +1,66 @@
-/**
- * useGameAnswer Hook
- * Handles answer submission, validation, and real-time answer feedback
- * Tracks player answer status and manages answer reveal events
- */
+// ====================================================
+// File Name   : useGameAnswer.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-12-11
+// Last Update : 2025-12-28
+//
+// Description:
+// - Handles answer submission, validation, and real-time answer feedback
+// - Tracks player answer status and manages answer reveal events
+// - Calculates points based on correctness, time, and streak bonuses
+// - Manages answer history for streak tracking
+//
+// Notes:
+// - Uses WebSocket for real-time answer confirmation
+// - Implements point calculation with time and streak bonuses
+// - Handles duplicate submission prevention
+// - Supports auto-reveal functionality
+// ====================================================
 
 'use client';
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import { useState, useEffect, useCallback, useRef } from 'react';
+
 import { useSocket } from '@/components/providers/SocketProvider';
 import { gameApi, type Answer } from '@/services/gameApi';
 import { calculatePoints } from '@/lib/pointCalculation';
 
-// ============================================================================
-// TYPES
-// ============================================================================
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const DEFAULT_QUESTION_POINTS = 100;
+const DEFAULT_ANSWERING_TIME_SECONDS = 30;
+const DEFAULT_AUTO_REVEAL = false;
+const TIME_TOLERANCE_MULTIPLIER = 1.1;
+const MILLISECONDS_TO_SECONDS = 1000;
+const MIN_QUESTION_NUMBER = 1;
 
+const SOCKET_EVENTS = {
+  ANSWER_SUBMIT: 'game:answer:submit',
+  ANSWER_ACCEPTED: 'game:answer:accepted',
+  ANSWER_STATS_UPDATE: 'game:answer:stats:update',
+  ANSWER_STATS: 'game:answer:stats',
+  QUESTION_STARTED: 'game:question:started',
+  ROOM_JOIN: 'room:join',
+  ROOM_LEAVE: 'room:leave',
+} as const;
+
+const ERROR_MESSAGES = {
+  MISSING_REQUIRED_PARAMETERS: 'Missing required parameters for answer submission',
+  ANSWER_ALREADY_SUBMITTED: 'Answer already submitted for this question',
+  QUESTION_NUMBER_REQUIRED: 'Question number is required',
+  FAILED_TO_SUBMIT_ANSWER: 'Failed to submit answer',
+  FAILED_TO_FETCH_ANSWERS: 'Failed to fetch answers',
+  ROUTE_NOT_FOUND: 'Route not found',
+} as const;
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
 export interface AnswerSubmission {
   questionId: string;
   selectedOption: string;
@@ -48,32 +94,26 @@ export interface GameAnswerEvents {
 export interface UseGameAnswerOptions {
   gameId: string;
   playerId: string;
-  questionId: string | null; // Current question
-  questionNumber?: number; // Current question number (1-indexed)
-  correctAnswerId?: string | null; // Correct answer ID for validation
-  autoReveal?: boolean; // Auto-reveal after submission
+  questionId: string | null;
+  questionNumber?: number;
+  correctAnswerId?: string | null;
+  autoReveal?: boolean;
   events?: GameAnswerEvents;
-  // Point calculation parameters
-  questionPoints?: number; // Points for this question (from question.points)
-  answeringTime?: number; // Time limit for answering in seconds (from question.answering_time)
-  timeBonusEnabled?: boolean; // Whether time bonus is enabled (from game settings)
-  streakBonusEnabled?: boolean; // Whether streak bonus is enabled (from game settings)
+  questionPoints?: number;
+  answeringTime?: number;
+  timeBonusEnabled?: boolean;
+  streakBonusEnabled?: boolean;
 }
 
 export interface UseGameAnswerReturn {
-  // State
   answerStatus: AnswerStatus;
   answerResult: AnswerResult | null;
   answersHistory: Answer[];
   loading: boolean;
   error: string | null;
-
-  // Actions
   submitAnswer: (selectedOption: string | null, responseTimeMs: number) => Promise<void>;
   clearAnswer: () => void;
   refreshAnswers: () => Promise<void>;
-
-  // Real-time status
   isConnected: boolean;
 }
 
@@ -95,10 +135,166 @@ interface SocketQuestionStartedEvent {
   question: { id: string };
 }
 
-// ============================================================================
-// HOOK IMPLEMENTATION
-// ============================================================================
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
 
+//----------------------------------------------------
+// 5. Helper Functions
+//----------------------------------------------------
+/**
+ * Function: calculateCurrentStreak
+ * Description:
+ * - Calculates the current streak of consecutive correct answers
+ * - Counts backwards from the end of answer history
+ *
+ * Parameters:
+ * - answersHistory (Answer[]): Array of previous answers
+ *
+ * Returns:
+ * - number: Current streak count (0 if no streak)
+ */
+function calculateCurrentStreak(answersHistory: Answer[]): number {
+  if (answersHistory.length === 0) return 0;
+
+  let streak = 0;
+  for (let i = answersHistory.length - 1; i >= 0; i--) {
+    if (answersHistory[i].is_correct) {
+      streak++;
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+/**
+ * Function: validateAnswerTime
+ * Description:
+ * - Validates if answer was submitted within valid time window
+ * - Uses tolerance multiplier for edge cases
+ *
+ * Parameters:
+ * - timeTakenSeconds (number): Time taken to answer in seconds
+ * - answeringTime (number): Allowed answering time in seconds
+ *
+ * Returns:
+ * - Object containing:
+ *   - isValid (boolean): Whether time is within valid window
+ *   - answeredInTime (boolean): Whether answer was submitted in time (for points)
+ */
+function validateAnswerTime(
+  timeTakenSeconds: number,
+  answeringTime: number,
+): { isValid: boolean; answeredInTime: boolean } {
+  const answeringTimeWithTolerance = answeringTime * TIME_TOLERANCE_MULTIPLIER;
+  const isValid = timeTakenSeconds >= 0 && timeTakenSeconds <= answeringTimeWithTolerance;
+  const answeredInTime = timeTakenSeconds <= answeringTime;
+  return { isValid, answeredInTime };
+}
+
+/**
+ * Function: createAnswerFromResponse
+ * Description:
+ * - Creates Answer object from API response and submission data
+ *
+ * Parameters:
+ * - questionId (string): Question ID
+ * - gameId (string): Game ID
+ * - playerId (string): Player ID
+ * - selectedOption (string): Selected answer option
+ * - isCorrect (boolean): Whether answer is correct
+ * - pointsEarned (number): Points earned for this answer
+ * - responseTimeMs (number): Response time in milliseconds
+ *
+ * Returns:
+ * - Answer: Answer object for history
+ */
+function createAnswerFromResponse(
+  questionId: string,
+  gameId: string,
+  playerId: string,
+  selectedOption: string,
+  isCorrect: boolean,
+  pointsEarned: number,
+  responseTimeMs: number,
+): Answer {
+  return {
+    id: `temp-${questionId}-${Date.now()}`,
+    game_id: gameId,
+    player_id: playerId,
+    question_id: questionId,
+    selected_option: selectedOption,
+    is_correct: isCorrect,
+    response_time_ms: responseTimeMs,
+    points_earned: pointsEarned,
+    answered_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Function: createAnswerResult
+ * Description:
+ * - Creates AnswerResult object from submission and response data
+ *
+ * Parameters:
+ * - questionId (string): Question ID
+ * - selectedOption (string): Selected answer option
+ * - isCorrect (boolean): Whether answer is correct
+ * - pointsEarned (number): Points earned
+ * - correctAnswerId (string | null): Correct answer ID
+ * - responseTimeMs (number): Response time in milliseconds
+ *
+ * Returns:
+ * - AnswerResult: Answer result object
+ */
+function createAnswerResult(
+  questionId: string,
+  selectedOption: string,
+  isCorrect: boolean,
+  pointsEarned: number,
+  correctAnswerId: string | null,
+  responseTimeMs: number,
+): AnswerResult {
+  return {
+    questionId,
+    selectedOption,
+    isCorrect,
+    pointsEarned,
+    correctAnswer: correctAnswerId || '',
+    responseTimeMs,
+  };
+}
+
+/**
+ * Function: isAlreadyAnsweredError
+ * Description:
+ * - Checks if error message indicates answer was already submitted
+ *
+ * Parameters:
+ * - errorMessage (string): Error message to check
+ *
+ * Returns:
+ * - boolean: True if error indicates already answered
+ */
+function isAlreadyAnsweredError(errorMessage: string): boolean {
+  return errorMessage.includes('already') || errorMessage.includes('Already');
+}
+
+/**
+ * Hook: useGameAnswer
+ * Description:
+ * - Manages answer submission, validation, and real-time feedback
+ * - Tracks answer status and history for streak calculation
+ * - Handles WebSocket events for answer confirmation
+ * - Calculates points with time and streak bonuses
+ *
+ * Parameters:
+ * - options (UseGameAnswerOptions): Configuration options for the hook
+ *
+ * Returns:
+ * - UseGameAnswerReturn: Object containing answer state and submission functions
+ */
 export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerReturn {
   const {
     gameId,
@@ -106,16 +302,15 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
     questionId,
     questionNumber,
     correctAnswerId,
-    autoReveal = false,
+    autoReveal = DEFAULT_AUTO_REVEAL,
     events,
-    questionPoints = 100, // Default to 100 if not provided
-    answeringTime = 30, // Default to 30 seconds if not provided
+    questionPoints = DEFAULT_QUESTION_POINTS,
+    answeringTime = DEFAULT_ANSWERING_TIME_SECONDS,
     timeBonusEnabled = false,
     streakBonusEnabled = false,
   } = options;
   const { socket, isConnected } = useSocket();
 
-  // State
   const [answerStatus, setAnswerStatus] = useState<AnswerStatus>({
     hasAnswered: false,
     submittedAt: null,
@@ -127,7 +322,6 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Refs
   const listenersSetupRef = useRef(false);
   const currentQuestionIdRef = useRef<string | null>(null);
   const submittedOptionRef = useRef<string | null>(null);
@@ -139,26 +333,18 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
   const isSubmittingRef = useRef(false);
   const hasAnsweredRef = useRef(false);
 
-  // ========================================================================
-  // REST API OPERATIONS
-  // ========================================================================
-
-  /**
-   * Submit answer for current question
-   */
   const submitAnswer = useCallback(
     async (selectedOption: string | null, responseTimeMs: number) => {
       if (!gameId || !playerId || !questionId) {
-        throw new Error('Missing required parameters for answer submission');
+        throw new Error(ERROR_MESSAGES.MISSING_REQUIRED_PARAMETERS);
       }
 
-      // Use ref to check if already answered (prevents race conditions)
       if (hasAnsweredRef.current || isSubmittingRef.current) {
-        throw new Error('Answer already submitted for this question');
+        throw new Error(ERROR_MESSAGES.ANSWER_ALREADY_SUBMITTED);
       }
 
-      if (!questionNumber || questionNumber < 1) {
-        throw new Error('Question number is required');
+      if (!questionNumber || questionNumber < MIN_QUESTION_NUMBER) {
+        throw new Error(ERROR_MESSAGES.QUESTION_NUMBER_REQUIRED);
       }
 
       try {
@@ -166,41 +352,14 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         setAnswerStatus((prev) => ({ ...prev, isProcessing: true }));
         setError(null);
 
-        // Determine if answer is correct
         const isCorrect =
           correctAnswerId && selectedOption ? selectedOption === correctAnswerId : false;
 
-        // Convert milliseconds to seconds
-        const timeTakenSeconds = responseTimeMs / 1000;
+        const timeTakenSeconds = responseTimeMs / MILLISECONDS_TO_SECONDS;
+        const { answeredInTime } = validateAnswerTime(timeTakenSeconds, answeringTime);
 
-        // Time Validation with tolerance (10% as per documentation)
-        const answeringTimeWithTolerance = answeringTime * 1.1;
-        const isValidTime = timeTakenSeconds >= 0 && timeTakenSeconds <= answeringTimeWithTolerance;
+        const currentStreak = calculateCurrentStreak(answersHistory);
 
-        // Check if answer was submitted in time (for points calculation)
-        const answeredInTime = timeTakenSeconds <= answeringTime;
-
-        if (!isValidTime) {
-          console.warn(
-            `useGameAnswer: Answer submitted outside of valid time window (${timeTakenSeconds}s / ${answeringTime}s)`,
-          );
-        }
-
-        // Get current streak from answer history
-        // Streak is the number of consecutive correct answers before this one
-        let currentStreak = 0;
-        if (answersHistory.length > 0) {
-          // Count consecutive correct answers from the end
-          for (let i = answersHistory.length - 1; i >= 0; i--) {
-            if (answersHistory[i].is_correct) {
-              currentStreak++;
-            } else {
-              break; // Streak broken
-            }
-          }
-        }
-
-        // Calculate points using the point calculation utility
         const pointCalculationResult = calculatePoints({
           basePoints: questionPoints,
           answeringTime,
@@ -214,36 +373,26 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
 
         const pointsEarned = pointCalculationResult.points;
 
-        // Submit to API with backend-expected format
         const { data, error: apiError } = await gameApi.submitAnswer(
           gameId,
           playerId,
           questionId,
           questionNumber,
-          selectedOption, // answer_id (nullable)
+          selectedOption,
           isCorrect,
           timeTakenSeconds,
           pointsEarned,
         );
 
         if (apiError || !data) {
-          const errorMsg = apiError?.message || apiError?.error || 'Failed to submit answer';
-          console.error('useGameAnswer: API error details', {
-            apiError,
-            gameId,
-            playerId,
-            questionId,
-            questionNumber,
-            selectedOption,
-          });
+          const errorMsg =
+            apiError?.message || apiError?.error || ERROR_MESSAGES.FAILED_TO_SUBMIT_ANSWER;
           throw new Error(errorMsg);
         }
 
-        // Extract answer info from response (GamePlayerData contains answer_report)
         const answerReport = data.answer_report;
         const lastAnswer = answerReport?.questions?.[answerReport.questions.length - 1];
 
-        // Update local state and refs
         hasAnsweredRef.current = true;
         isSubmittingRef.current = false;
         setAnswerStatus({
@@ -254,41 +403,37 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         });
 
         const safeSelectedOption = selectedOption ?? '';
+        const finalIsCorrect = lastAnswer?.is_correct ?? isCorrect;
+        const finalPointsEarned = lastAnswer?.points_earned ?? pointsEarned;
 
-        // Create answer result from response
-        const answerData: AnswerResult = {
+        const answerData = createAnswerResult(
           questionId,
-          selectedOption: safeSelectedOption,
-          isCorrect: lastAnswer?.is_correct ?? isCorrect,
-          pointsEarned: lastAnswer?.points_earned ?? pointsEarned,
-          correctAnswer: correctAnswerId || '',
+          safeSelectedOption,
+          finalIsCorrect,
+          finalPointsEarned,
+          correctAnswerId ?? null,
           responseTimeMs,
-        };
+        );
 
         setAnswerResult(answerData);
 
-        // Update answer history for streak calculation
-        const newAnswer: Answer = {
-          id: `temp-${questionId}-${Date.now()}`,
-          game_id: gameId,
-          player_id: playerId,
-          question_id: questionId,
-          selected_option: safeSelectedOption,
-          is_correct: lastAnswer?.is_correct ?? isCorrect,
-          response_time_ms: responseTimeMs,
-          points_earned: lastAnswer?.points_earned ?? pointsEarned,
-          answered_at: new Date().toISOString(),
-        };
+        const newAnswer = createAnswerFromResponse(
+          questionId,
+          gameId,
+          playerId,
+          safeSelectedOption,
+          finalIsCorrect,
+          finalPointsEarned,
+          responseTimeMs,
+        );
 
         setAnswersHistory((prev) => {
-          // Prevent duplicates if already in history
           if (prev.some((a) => a.question_id === questionId)) return prev;
           return [...prev, newAnswer];
         });
 
-        // Emit WebSocket event
         if (socketRef.current && isConnectedRef.current) {
-          socketRef.current.emit('game:answer:submit', {
+          socketRef.current.emit(SOCKET_EVENTS.ANSWER_SUBMIT, {
             roomId: gameId,
             playerId,
             questionId,
@@ -302,33 +447,22 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
           responseTimeMs,
         });
 
-        // Auto-reveal if enabled
         if (autoReveal) {
           eventsRef.current?.onAnswerResult?.(answerData);
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to submit answer';
-        // Only reset submitting state if it's not an "already answered" error
-        // (which means submission succeeded elsewhere)
-        const isAlreadyAnswered =
-          errorMessage.includes('already') || errorMessage.includes('Already');
+        const errorMessage =
+          err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_SUBMIT_ANSWER;
+        const isAlreadyAnswered = isAlreadyAnsweredError(errorMessage);
+
         if (!isAlreadyAnswered) {
           isSubmittingRef.current = false;
         } else {
-          // If already answered, mark as answered
           hasAnsweredRef.current = true;
         }
+
         setError(errorMessage);
         setAnswerStatus((prev) => ({ ...prev, isProcessing: false }));
-        console.error('useGameAnswer: submitAnswer error', {
-          error: err,
-          gameId,
-          playerId,
-          questionId,
-          questionNumber,
-          selectedOption,
-          responseTimeMs,
-        });
         eventsRef.current?.onError?.(errorMessage);
         throw err;
       }
@@ -348,9 +482,6 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
     ],
   );
 
-  /**
-   * Clear answer state (for new question)
-   */
   const clearAnswer = useCallback(() => {
     hasAnsweredRef.current = false;
     isSubmittingRef.current = false;
@@ -364,9 +495,6 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
     setError(null);
   }, []);
 
-  /**
-   * Refresh answer history from API
-   */
   const refreshAnswers = useCallback(async () => {
     if (!gameId || !playerId) return;
 
@@ -377,26 +505,23 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
       const { data, error: apiError } = await gameApi.getPlayerAnswers(gameId, playerId);
 
       if (apiError || !data) {
-        // If endpoint not implemented yet, swallow and continue without blocking gameplay
-        if (apiError?.message === 'Route not found') {
-          console.warn('useGameAnswer: getPlayerAnswers route not found; skipping history fetch');
+        if (apiError?.message === ERROR_MESSAGES.ROUTE_NOT_FOUND) {
           return;
         }
-        throw new Error(apiError?.message || 'Failed to fetch answers');
+        throw new Error(apiError?.message || ERROR_MESSAGES.FAILED_TO_FETCH_ANSWERS);
       }
 
       setAnswersHistory(data);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch answers';
+      const errorMessage =
+        err instanceof Error ? err.message : ERROR_MESSAGES.FAILED_TO_FETCH_ANSWERS;
       setError(errorMessage);
-      console.error('useGameAnswer: refreshAnswers error', err);
       eventsRef.current?.onError?.(errorMessage);
     } finally {
       setLoading(false);
     }
   }, [gameId, playerId]);
 
-  // Keep refs in sync
   useEffect(() => {
     submittedOptionRef.current = answerStatus.submittedOption;
   }, [answerStatus.submittedOption]);
@@ -421,78 +546,46 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
     isConnectedRef.current = isConnected;
   }, [isConnected]);
 
-  // ========================================================================
-  // WEBSOCKET EVENT HANDLERS
-  // ========================================================================
-
   useEffect(() => {
     if (!socketRef.current || !isConnectedRef.current || !gameId || !playerId) return;
     if (listenersSetupRef.current) return;
 
-    console.log(`useGameAnswer: Setting up WebSocket listeners for player ${playerId}`);
     listenersSetupRef.current = true;
 
     const currentSocket = socketRef.current;
+    currentSocket.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId: gameId });
 
-    // Join game room
-    currentSocket.emit('room:join', { roomId: gameId });
-
-    /**
-     * Answer confirmation from server
-     */
     const handleAnswerAccepted = (data: AnswerAcceptedEvent) => {
       if (data.roomId !== gameId || data.playerId !== playerId) return;
-
-      console.log('useGameAnswer: Answer accepted', data.questionId);
       eventsRef.current?.onAnswerConfirmed?.(data.questionId);
     };
 
-    /**
-     * Answer stats update from server (aggregate counts)
-     */
     const handleAnswerStatsUpdate = (data: AnswerStatsUpdateEvent) => {
       if (data.roomId !== gameId) return;
-      console.log('useGameAnswer: Answer stats update', data);
     };
 
-    /**
-     * New question started - clear previous answer
-     */
     const handleQuestionStart = (data: SocketQuestionStartedEvent) => {
       if (data.roomId !== gameId) return;
-
-      console.log('useGameAnswer: New question started, clearing answer');
       clearAnswerRef.current?.();
       currentQuestionIdRef.current = data.question.id;
     };
 
-    // Register listeners
-    currentSocket.on('game:answer:accepted', handleAnswerAccepted);
-    currentSocket.on('game:answer:stats:update', handleAnswerStatsUpdate);
-    currentSocket.on('game:answer:stats', handleAnswerStatsUpdate);
-    currentSocket.on('game:question:started', handleQuestionStart);
+    currentSocket.on(SOCKET_EVENTS.ANSWER_ACCEPTED, handleAnswerAccepted);
+    currentSocket.on(SOCKET_EVENTS.ANSWER_STATS_UPDATE, handleAnswerStatsUpdate);
+    currentSocket.on(SOCKET_EVENTS.ANSWER_STATS, handleAnswerStatsUpdate);
+    currentSocket.on(SOCKET_EVENTS.QUESTION_STARTED, handleQuestionStart);
 
     return () => {
-      console.log(`useGameAnswer: Cleaning up listeners for player ${playerId}`);
+      currentSocket.off(SOCKET_EVENTS.ANSWER_ACCEPTED, handleAnswerAccepted);
+      currentSocket.off(SOCKET_EVENTS.ANSWER_STATS_UPDATE, handleAnswerStatsUpdate);
+      currentSocket.off(SOCKET_EVENTS.ANSWER_STATS, handleAnswerStatsUpdate);
+      currentSocket.off(SOCKET_EVENTS.QUESTION_STARTED, handleQuestionStart);
 
-      currentSocket.off('game:answer:accepted', handleAnswerAccepted);
-      currentSocket.off('game:answer:stats:update', handleAnswerStatsUpdate);
-      currentSocket.off('game:answer:stats', handleAnswerStatsUpdate);
-      currentSocket.off('game:question:started', handleQuestionStart);
-
-      currentSocket.emit('room:leave', { roomId: gameId });
-
+      currentSocket.emit(SOCKET_EVENTS.ROOM_LEAVE, { roomId: gameId });
       listenersSetupRef.current = false;
     };
   }, [gameId, playerId]);
 
-  // ========================================================================
-  // QUESTION CHANGE HANDLING
-  // ========================================================================
-
-  /**
-   * Clear answer when question changes
-   */
   useEffect(() => {
     if (questionId !== currentQuestionIdRef.current) {
       currentQuestionIdRef.current = questionId;
@@ -500,37 +593,25 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
     }
   }, [questionId]);
 
-  // ========================================================================
-  // INITIALIZATION
-  // ========================================================================
-
-  /**
-   * Fetch answer history on mount
-   */
   useEffect(() => {
     if (gameId && playerId) {
       refreshAnswersRef.current?.();
     }
   }, [gameId, playerId]);
 
-  // ========================================================================
-  // RETURN
-  // ========================================================================
-
   return {
-    // State
     answerStatus,
     answerResult,
     answersHistory,
     loading,
     error,
-
-    // Actions
     submitAnswer,
     clearAnswer,
     refreshAnswers,
-
-    // Real-time status
     isConnected,
   };
 }
+
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------
