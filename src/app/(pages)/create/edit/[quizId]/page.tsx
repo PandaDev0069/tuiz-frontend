@@ -12,7 +12,6 @@ import {
   AuthGuard,
 } from '@/components/ui';
 import { StructuredData } from '@/components/SEO';
-import { QuizCreationDebug } from '@/components/debug';
 import {
   BasicInfoStep,
   QuestionCreationStep,
@@ -378,9 +377,6 @@ function EditQuizPageContent() {
           </Container>
         </main>
       </PageContainer>
-
-      {/* Debug Panel for Quiz Creation */}
-      <QuizCreationDebug currentStep={currentStep} quizId={quizId} formData={formData} />
     </>
   );
 }

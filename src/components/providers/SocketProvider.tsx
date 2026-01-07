@@ -3,7 +3,6 @@
 import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { cfg } from '@/config/config';
-import { DebugPanel } from '@/components/debug';
 import { getOrCreateDeviceIdScoped } from '@/lib/deviceId';
 
 const HEARTBEAT_INTERVAL_MS = 30000;
@@ -273,8 +272,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         leaveRoom,
       }}
     >
-      {/* Debug Panel - only in development */}
-      <DebugPanel isSocketConnected={isConnected} socketError={connectionError} />
       {children}
     </SocketContext.Provider>
   );

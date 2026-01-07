@@ -16,7 +16,6 @@ import { QuestionNavigation } from './QuestionCreationStep/QuestionNavigation';
 import { QuizOverviewPanel } from './QuestionCreationStep/QuizOverviewPanel';
 import { useBatchSaveQuestions } from '@/hooks/useQuestionMutation';
 import { useFileUpload } from '@/lib/uploadService';
-import { debugLog } from '@/components/debug';
 import { Loader2 } from 'lucide-react';
 
 interface QuestionCreationStepProps {
@@ -265,22 +264,13 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
     if (!file || !quizId) return;
 
     setIsUploading(true);
-    debugLog.info('Starting question image upload', {
-      fileName: file.name,
-      size: file.size,
-      quizId,
-    });
 
     try {
       const imageUrl = await uploadQuestionImage(file, quizId);
       if (imageUrl) {
         handleQuestionFieldChange('image_url', imageUrl);
-        debugLog.success('Question image uploaded successfully', { url: imageUrl });
-      } else {
-        debugLog.warning('Question image upload returned no URL');
       }
     } catch (error) {
-      debugLog.error('Question image upload failed', { error });
       console.error('Upload failed:', error);
     } finally {
       setIsUploading(false);
@@ -292,12 +282,6 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
     if (!file || !quizId) return;
 
     setIsUploading(true);
-    debugLog.info('Starting answer image upload', {
-      fileName: file.name,
-      size: file.size,
-      quizId,
-      answerIndex: index,
-    });
 
     try {
       const imageUrl = await uploadAnswerImage(file, quizId);
@@ -317,12 +301,8 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
 
         setLocalQuestions(updatedQuestions);
         onQuestionsChange(updatedQuestions);
-        debugLog.success('Answer image uploaded successfully', { url: imageUrl });
-      } else {
-        debugLog.warning('Answer image upload returned no URL');
       }
     } catch (error) {
-      debugLog.error('Answer image upload failed', { error });
       console.error('Answer image upload failed:', error);
     } finally {
       setIsUploading(false);
@@ -355,16 +335,11 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
     }
 
     if (!quizId) {
-      debugLog.error('Cannot save questions: No quiz ID provided');
       return;
     }
 
     setShowValidationErrors(false);
     setIsSaving(true);
-    debugLog.info('Starting question save process', {
-      quizId,
-      questionCount: localQuestions.length,
-    });
 
     try {
       // Convert CreateQuestionForm to CreateQuestionRequest format
@@ -394,24 +369,15 @@ export const QuestionCreationStep: React.FC<QuestionCreationStepProps> = ({
       });
 
       // Use batch save to save all questions at once
-      const savedQuestions = await batchSaveMutation.mutateAsync({
+      await batchSaveMutation.mutateAsync({
         quizId,
         questions: questionsToSave,
       });
 
-      debugLog.success('All questions saved successfully', {
-        savedCount: savedQuestions.length,
-      });
-
-      // Update parent component with saved questions
       onQuestionsChange(localQuestions);
 
-      // Proceed to next step
       onNext();
     } catch (error) {
-      debugLog.error('Failed to save questions', {
-        error: error instanceof Error ? error.message : String(error),
-      });
       console.error('Failed to save questions:', error);
       // Don't proceed to next step if saving failed
     } finally {

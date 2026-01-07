@@ -5,7 +5,6 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Label, Textarea } fro
 import { Upload, X, BookOpen, Image as ImageIcon, FileText } from 'lucide-react';
 import Image from 'next/image';
 import { useFileUpload } from '@/lib/uploadService';
-import { debugLog } from '@/components/debug';
 
 interface ExplanationModalProps {
   isOpen: boolean;
@@ -89,22 +88,12 @@ const useImageUpload = (quizId?: string) => {
     const file = e.target.files?.[0];
     if (!file || !quizId) return;
 
-    debugLog.info('Starting explanation image upload', {
-      fileName: file.name,
-      size: file.size,
-      quizId,
-    });
-
     try {
       const imageUrl = await uploadQuestionImage(file, quizId);
       if (imageUrl) {
         onSuccess(imageUrl);
-        debugLog.success('Explanation image uploaded successfully', { url: imageUrl });
-      } else {
-        debugLog.warning('Explanation image upload returned no URL');
       }
     } catch (error) {
-      debugLog.error('Explanation image upload failed', { error });
       console.error('Upload failed:', error);
     }
   };
