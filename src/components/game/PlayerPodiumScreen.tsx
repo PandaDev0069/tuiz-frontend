@@ -1,7 +1,7 @@
 // ====================================================
 // File Name   : PlayerPodiumScreen.tsx
 // Project     : TUIZ
-// Author      : TUIZ Team
+// Author      : PandaDev0069 / Panta Aashish
 // Created     : 2025-10-01
 // Last Update : 2025-10-01
 //

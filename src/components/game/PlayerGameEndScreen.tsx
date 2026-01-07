@@ -1,7 +1,7 @@
 // ====================================================
 // File Name   : PlayerGameEndScreen.tsx
 // Project     : TUIZ
-// Author      : TUIZ Team
+// Author      : PandaDev0069 / Panta Aashish
 // Created     : 2025-12-25
 // Last Update : 2025-12-25
 //

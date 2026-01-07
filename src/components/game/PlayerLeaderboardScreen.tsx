@@ -1,7 +1,7 @@
 // ====================================================
 // File Name   : PlayerLeaderboardScreen.tsx
 // Project     : TUIZ
-// Author      : TUIZ Team
+// Author      : PandaDev0069 / Panta Aashish
 // Created     : 2025-09-27
 // Last Update : 2025-12-30
 //

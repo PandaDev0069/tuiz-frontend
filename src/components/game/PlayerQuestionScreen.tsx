@@ -1,7 +1,7 @@
 // ====================================================
 // File Name   : PlayerQuestionScreen.tsx
 // Project     : TUIZ
-// Author      : TUIZ Team
+// Author      : PandaDev0069 / Panta Aashish
 // Created     : 2025-09-21
 // Last Update : 2025-12-28
 //
