@@ -1,5 +1,25 @@
+// ====================================================
+// File Name   : TagsManager.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-03
+// Last Update : 2025-09-03
+//
+// Description:
+// - Tag management component for quiz creation
+// - Allows users to add and remove tags for quizzes
+// - Supports keyboard input (Enter key) for adding tags
+// - Displays tags as removable badges
+//
+// Notes:
+// - Client component (no 'use client' needed as parent handles it)
+// - Prevents duplicate tags
+// - Trims whitespace from tag input
+// ====================================================
+
 import React, { useState } from 'react';
-import { CreateQuizSetForm } from '@/types/quiz';
+import { Plus, X } from 'lucide-react';
+
 import {
   Card,
   CardContent,
@@ -10,16 +30,54 @@ import {
   Button,
   Badge,
 } from '@/components/ui';
+import { CreateQuizSetForm } from '@/types/quiz';
 import { cn } from '@/lib/utils';
-import { Plus, X } from 'lucide-react';
+
+const DEFAULT_NEW_TAG = '';
+
+const FORM_FIELD_TAGS = 'tags';
+
+const KEY_ENTER = 'Enter';
+
+const BUTTON_TYPE_BUTTON = 'button';
+const BUTTON_SIZE_SM = 'sm';
+const BUTTON_VARIANT_OUTLINE = 'outline';
+const BADGE_VARIANT_SECONDARY = 'secondary';
+
+const ICON_SIZE_SMALL = 'w-4 h-4';
+const ICON_SIZE_XSMALL = 'w-3 h-3';
 
 interface TagsManagerProps {
   formData: Partial<CreateQuizSetForm>;
   onFormDataChange: (data: Partial<CreateQuizSetForm>) => void;
 }
 
+/**
+ * Component: TagsManager
+ * Description:
+ * - Manages tag input and display for quiz creation
+ * - Provides input field with add button for creating new tags
+ * - Displays existing tags as removable badges
+ * - Handles keyboard events (Enter key) for quick tag addition
+ * - Prevents duplicate tags and trims whitespace
+ *
+ * Parameters:
+ * - formData (Partial<CreateQuizSetForm>): Current form data including tags array
+ * - onFormDataChange (function): Callback function when form data changes
+ *
+ * Returns:
+ * - React.ReactElement: The tags manager component
+ *
+ * Example:
+ * ```tsx
+ * <TagsManager
+ *   formData={formData}
+ *   onFormDataChange={(data) => setFormData(data)}
+ * />
+ * ```
+ */
 export const TagsManager: React.FC<TagsManagerProps> = ({ formData, onFormDataChange }) => {
-  const [newTag, setNewTag] = useState('');
+  const [newTag, setNewTag] = useState(DEFAULT_NEW_TAG);
 
   const handleInputChange = (field: keyof CreateQuizSetForm, value: string[]) => {
     onFormDataChange({
@@ -29,18 +87,19 @@ export const TagsManager: React.FC<TagsManagerProps> = ({ formData, onFormDataCh
   };
 
   const handleAddTag = () => {
-    if (newTag.trim() && !formData.tags?.includes(newTag.trim())) {
-      handleInputChange('tags', [...(formData.tags || []), newTag.trim()]);
-      setNewTag('');
+    const trimmedTag = newTag.trim();
+    if (trimmedTag && !formData.tags?.includes(trimmedTag)) {
+      handleInputChange(FORM_FIELD_TAGS, [...(formData.tags || []), trimmedTag]);
+      setNewTag(DEFAULT_NEW_TAG);
     }
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
-    handleInputChange('tags', formData.tags?.filter((tag) => tag !== tagToRemove) || []);
+    handleInputChange(FORM_FIELD_TAGS, formData.tags?.filter((tag) => tag !== tagToRemove) || []);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === KEY_ENTER) {
       e.preventDefault();
       handleAddTag();
     }
@@ -67,13 +126,13 @@ export const TagsManager: React.FC<TagsManagerProps> = ({ formData, onFormDataCh
               )}
             />
             <Button
-              type="button"
+              type={BUTTON_TYPE_BUTTON}
               onClick={handleAddTag}
               disabled={!newTag.trim()}
-              size="sm"
-              variant="outline"
+              size={BUTTON_SIZE_SM}
+              variant={BUTTON_VARIANT_OUTLINE}
             >
-              <Plus className="w-4 h-4" />
+              <Plus className={ICON_SIZE_SMALL} />
             </Button>
           </div>
 
@@ -82,16 +141,16 @@ export const TagsManager: React.FC<TagsManagerProps> = ({ formData, onFormDataCh
               {formData.tags.map((tag, index) => (
                 <Badge
                   key={index}
-                  variant="secondary"
+                  variant={BADGE_VARIANT_SECONDARY}
                   className="flex items-center gap-1 px-2 py-1 text-xs"
                 >
                   {tag}
                   <button
-                    type="button"
+                    type={BUTTON_TYPE_BUTTON}
                     onClick={() => handleRemoveTag(tag)}
                     className="ml-1 hover:text-red-600"
                   >
-                    <X className="w-3 h-3" />
+                    <X className={ICON_SIZE_XSMALL} />
                   </button>
                 </Badge>
               ))}
