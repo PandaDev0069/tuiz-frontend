@@ -2,87 +2,81 @@
 // File Name   : PlayerQuestionScreen.tsx
 // Project     : TUIZ
 // Author      : TUIZ Team
-// Created     : 2024-09-21
-// Last Update : 2024-12-28
+// Created     : 2025-09-21
+// Last Update : 2025-12-28
 //
 // Description:
-// - Displays the question screen for players during a quiz game
-// - Shows question text with optional image
-// - Displays timer bar with question counter
-// - Implements responsive design for mobile and desktop
+// - Displays the question screen for players during the game
+// - Shows question text, optional image, timer bar, and question counter
+// - Implements responsive design for mobile and desktop layouts
+// - Displays time warnings when time is running low
 //
 // Notes:
 // - Client-only component (requires 'use client')
-// - Supports optional question images
-// - Timer warning state activates when time is low
+// - Uses Next.js Image component for optimized image loading
+// - Supports optional question images with overlay for readability
 // ====================================================
 
 'use client';
 
-//----------------------------------------------------
-// 1. Imports / Dependencies
-//----------------------------------------------------
 import React from 'react';
 import Image from 'next/image';
 
 import { PageContainer, Main, QuizBackground } from '@/components/ui';
 import { TimeBar } from './TimeBar';
 
-//----------------------------------------------------
-// 2. Constants / Configuration
-//----------------------------------------------------
-const TIMER_WARNING_THRESHOLD_SECONDS = 3;
-const DEFAULT_IS_MOBILE = true;
+const TIME_WARNING_THRESHOLD = 3;
+const IMAGE_OVERLAY_OPACITY = 'bg-black/10';
 
-//----------------------------------------------------
-// 3. Types / Interfaces
-//----------------------------------------------------
+const MOBILE_IMAGE_MAX_WIDTH = 'max-w-lg';
+const MOBILE_IMAGE_HEIGHT = 'h-48';
+const DESKTOP_IMAGE_MAX_WIDTH = 'max-w-xl';
+const DESKTOP_IMAGE_HEIGHT = 'h-56';
+
+interface QuestionChoice {
+  id: string;
+  text: string;
+  letter: string;
+}
+
+interface Question {
+  id: string;
+  text: string;
+  image?: string;
+  timeLimit: number;
+  choices: QuestionChoice[];
+}
+
 interface PlayerQuestionScreenProps {
-  question: {
-    id: string;
-    text: string;
-    image?: string;
-    timeLimit: number;
-    choices: Array<{
-      id: string;
-      text: string;
-      letter: string;
-    }>;
-  };
+  question: Question;
   currentTime: number;
   questionNumber: number;
   totalQuestions: number;
   isMobile?: boolean;
 }
 
-//----------------------------------------------------
-// 4. Core Logic
-//----------------------------------------------------
 /**
  * Component: PlayerQuestionScreen
  * Description:
- * - Renders the question screen for players during a quiz game
- * - Displays question text with optional image
- * - Shows timer bar with question counter and time remaining
- * - Implements responsive design with separate mobile and desktop layouts
+ * - Renders the question screen for players during the game
+ * - Displays question text, optional image, timer bar, and question counter
+ * - Implements responsive design for mobile and desktop layouts
+ * - Shows time warnings when time is running low
  *
- * Parameters:
- * - question (object): Question data including id, text, optional image, timeLimit, and choices
- * - currentTime (number): Current time remaining in seconds
- * - questionNumber (number): Current question number (1-indexed)
- * - totalQuestions (number): Total number of questions in the quiz
- * - isMobile (boolean, optional): Whether to use mobile layout (default: true)
+ * @param {Question} question - Question data including text, image, time limit, and choices
+ * @param {number} currentTime - Current remaining time in seconds
+ * @param {number} questionNumber - Current question number for display
+ * @param {number} totalQuestions - Total number of questions for display
+ * @param {boolean} [isMobile] - Whether the device is mobile (default: true)
+ * @returns {React.ReactElement} The question screen component
  *
- * Returns:
- * - React.ReactElement: The question screen component
- *
- * Example:
+ * @example
  * ```tsx
  * <PlayerQuestionScreen
  *   question={{
- *     id: '1',
+ *     id: 'q1',
  *     text: 'What is the capital of France?',
- *     image: '/images/france.jpg',
+ *     image: '/path/to/image.jpg',
  *     timeLimit: 30,
  *     choices: [...]
  *   }}
@@ -98,7 +92,7 @@ export const PlayerQuestionScreen: React.FC<PlayerQuestionScreenProps> = ({
   currentTime,
   questionNumber,
   totalQuestions,
-  isMobile = DEFAULT_IS_MOBILE,
+  isMobile = true,
 }) => {
   return (
     <PageContainer className="h-screen">
@@ -108,7 +102,7 @@ export const PlayerQuestionScreen: React.FC<PlayerQuestionScreenProps> = ({
           timeLimit={question.timeLimit}
           questionNumber={questionNumber}
           totalQuestions={totalQuestions}
-          isWarning={currentTime <= TIMER_WARNING_THRESHOLD_SECONDS && currentTime > 0}
+          isWarning={currentTime <= TIME_WARNING_THRESHOLD && currentTime > 0}
           isExpired={false}
         />
 
@@ -122,7 +116,11 @@ export const PlayerQuestionScreen: React.FC<PlayerQuestionScreenProps> = ({
               {question.image && (
                 <div className="mb-6 flex justify-center">
                   <div
-                    className={`relative w-full ${isMobile ? 'max-w-lg h-48' : 'max-w-xl h-56'} rounded-lg overflow-hidden shadow-xl mx-auto`}
+                    className={`relative w-full ${
+                      isMobile
+                        ? `${MOBILE_IMAGE_MAX_WIDTH} ${MOBILE_IMAGE_HEIGHT}`
+                        : `${DESKTOP_IMAGE_MAX_WIDTH} ${DESKTOP_IMAGE_HEIGHT}`
+                    } rounded-lg overflow-hidden shadow-xl mx-auto`}
                   >
                     <Image
                       src={question.image}
@@ -131,13 +129,15 @@ export const PlayerQuestionScreen: React.FC<PlayerQuestionScreenProps> = ({
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       priority
                     />
-                    <div className="absolute inset-0 bg-black/10" />
+                    <div className={`absolute inset-0 ${IMAGE_OVERLAY_OPACITY}`} />
                   </div>
                 </div>
               )}
 
               <h1
-                className={`${isMobile ? 'text-2xl md:text-3xl lg:text-4xl' : 'text-3xl md:text-4xl lg:text-5xl'} font-bold text-white drop-shadow-2xl leading-tight mx-auto`}
+                className={`${
+                  isMobile ? 'text-2xl md:text-3xl lg:text-4xl' : 'text-3xl md:text-4xl lg:text-5xl'
+                } font-bold text-white drop-shadow-2xl leading-tight mx-auto`}
               >
                 {question.text}
               </h1>
