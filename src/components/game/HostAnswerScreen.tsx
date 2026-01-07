@@ -147,7 +147,6 @@ export const HostAnswerScreen: React.FC<HostAnswerScreenProps> = ({
                     <Image
                       src={question.image}
                       alt={IMAGE_ALT_TEXT}
-                      fill
                       className="object-cover"
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
