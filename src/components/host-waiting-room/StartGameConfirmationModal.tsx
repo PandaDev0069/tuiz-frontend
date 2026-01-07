@@ -1,9 +1,46 @@
+// ====================================================
+// File Name   : StartGameConfirmationModal.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-21
+// Last Update : 2025-09-21
+//
+// Description:
+// - Confirmation modal component for starting a quiz game
+// - Displays room code, player count, and warning message
+// - Provides cancel and confirm actions for game start
+// - Shows visual confirmation with gradient styling
+//
+// Notes:
+// - Client-only component (requires 'use client')
+// - Modal overlay with backdrop blur effect
+// - playSettings prop is defined but currently unused
+// ====================================================
+
 'use client';
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { Button } from '@/components/ui';
 import { Play, X, Users, Clock } from 'lucide-react';
+
+import { Card, CardContent, CardHeader, CardTitle, Button } from '@/components/ui';
+
+const MODAL_Z_INDEX = 'z-50';
+const MODAL_CONTENT_Z_INDEX = 'z-10';
+const MODAL_MAX_WIDTH = 'max-w-md';
+const MODAL_MARGIN = 'mx-4';
+
+const ICON_CONTAINER_SIZE = 'w-12 h-12';
+const ICON_SIZE_LARGE = 'w-6 h-6';
+const ICON_SIZE_SMALL = 'w-4 h-4';
+
+interface PlaySettings {
+  show_question_only?: boolean;
+  show_explanation?: boolean;
+  time_bonus?: boolean;
+  streak_bonus?: boolean;
+  show_correct_answer?: boolean;
+  max_players?: number;
+}
 
 interface StartGameConfirmationModalProps {
   isOpen: boolean;
@@ -12,16 +49,43 @@ interface StartGameConfirmationModalProps {
   playerCount: number;
   maxPlayers: number;
   roomCode: string;
-  playSettings: {
-    show_question_only?: boolean;
-    show_explanation?: boolean;
-    time_bonus?: boolean;
-    streak_bonus?: boolean;
-    show_correct_answer?: boolean;
-    max_players?: number;
-  };
+  playSettings: PlaySettings;
 }
 
+/**
+ * Component: StartGameConfirmationModal
+ * Description:
+ * - Renders a confirmation modal before starting a quiz game
+ * - Displays room information including room code and player count
+ * - Shows warning message about player restrictions after game starts
+ * - Provides cancel and confirm buttons for user action
+ * - Uses overlay backdrop with blur effect
+ *
+ * Parameters:
+ * - isOpen (boolean): Whether the modal is currently open
+ * - onClose (function): Callback function when modal is closed
+ * - onConfirm (function): Callback function when game start is confirmed
+ * - playerCount (number): Current number of players in the room
+ * - maxPlayers (number): Maximum number of players allowed
+ * - roomCode (string): The room code to display
+ * - playSettings (PlaySettings): Game play settings (currently unused)
+ *
+ * Returns:
+ * - React.ReactElement | null: The confirmation modal component or null if not open
+ *
+ * Example:
+ * ```tsx
+ * <StartGameConfirmationModal
+ *   isOpen={isModalOpen}
+ *   onClose={() => setIsModalOpen(false)}
+ *   onConfirm={() => handleStartGame()}
+ *   playerCount={5}
+ *   maxPlayers={10}
+ *   roomCode="ABC123"
+ *   playSettings={{}}
+ * />
+ * ```
+ */
 export const StartGameConfirmationModal: React.FC<StartGameConfirmationModalProps> = ({
   isOpen,
   onClose,
@@ -30,7 +94,9 @@ export const StartGameConfirmationModal: React.FC<StartGameConfirmationModalProp
   maxPlayers,
   roomCode,
 }) => {
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
   const handleConfirm = () => {
     onConfirm();
@@ -38,17 +104,19 @@ export const StartGameConfirmationModal: React.FC<StartGameConfirmationModalProp
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
+    <div className={`fixed inset-0 ${MODAL_Z_INDEX} flex items-center justify-center`}>
       <div className="absolute inset-0 bg-white/50 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
-      <div className="relative z-10 w-full max-w-md mx-4">
+      <div
+        className={`relative ${MODAL_CONTENT_Z_INDEX} w-full ${MODAL_MAX_WIDTH} ${MODAL_MARGIN}`}
+      >
         <Card className="bg-white shadow-2xl border-0">
           <CardHeader className="text-center pb-4">
             <div className="flex items-center justify-center gap-3 mb-2">
-              <div className="w-12 h-12 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full flex items-center justify-center">
-                <Play className="w-6 h-6 text-white" />
+              <div
+                className={`${ICON_CONTAINER_SIZE} bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full flex items-center justify-center`}
+              >
+                <Play className={`${ICON_SIZE_LARGE} text-white`} />
               </div>
               <CardTitle className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 bg-clip-text text-transparent">
                 ゲーム開始確認
@@ -58,7 +126,6 @@ export const StartGameConfirmationModal: React.FC<StartGameConfirmationModalProp
           </CardHeader>
 
           <CardContent className="space-y-6">
-            {/* Room Info */}
             <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg p-4 border border-cyan-200">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-gray-700">ルームコード</span>
@@ -67,7 +134,7 @@ export const StartGameConfirmationModal: React.FC<StartGameConfirmationModalProp
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">参加者数</span>
                 <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-cyan-500" />
+                  <Users className={`${ICON_SIZE_SMALL} text-cyan-500`} />
                   <span className="font-semibold text-gray-800">
                     {playerCount} / {maxPlayers}
                   </span>
@@ -75,10 +142,9 @@ export const StartGameConfirmationModal: React.FC<StartGameConfirmationModalProp
               </div>
             </div>
 
-            {/* Warning Message */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
               <div className="flex items-start gap-2">
-                <Clock className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                <Clock className={`${ICON_SIZE_SMALL} text-amber-500 mt-0.5 flex-shrink-0`} />
                 <div>
                   <p className="text-sm font-medium text-amber-800">注意事項</p>
                   <p className="text-xs text-amber-700 mt-1">
@@ -88,21 +154,20 @@ export const StartGameConfirmationModal: React.FC<StartGameConfirmationModalProp
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex gap-3 pt-2">
               <Button
                 variant="gradient2"
                 onClick={onClose}
                 className="flex-1 flex items-center gap-2"
               >
-                <X className="w-4 h-4" />
+                <X className={ICON_SIZE_SMALL} />
                 キャンセル
               </Button>
               <Button
                 onClick={handleConfirm}
                 className="flex-1 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white flex items-center gap-2"
               >
-                <Play className="w-4 h-4" />
+                <Play className={ICON_SIZE_SMALL} />
                 ゲーム開始
               </Button>
             </div>
