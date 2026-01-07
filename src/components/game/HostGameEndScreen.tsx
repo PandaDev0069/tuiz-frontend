@@ -2,8 +2,8 @@
 // File Name   : HostGameEndScreen.tsx
 // Project     : TUIZ
 // Author      : PandaDev0069 / Panta Aashish
-// Created     : 2025-09-27
-// Last Update : 2025-12-12
+// Created     : 2025-09-23
+// Last Update : 2025-09-23
 //
 // Description:
 // - Host screen component displayed at the end of a game
