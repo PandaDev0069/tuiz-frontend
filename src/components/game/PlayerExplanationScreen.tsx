@@ -1,16 +1,68 @@
+// ====================================================
+// File Name   : PlayerExplanationScreen.tsx
+// Project     : TUIZ
+// Author      : TUIZ Team
+// Created     : 2025-09-27
+// Last Update : 2025-10-01
+//
+// Description:
+// - Displays the explanation screen for players after answering a question
+// - Shows question explanation with title, body text, and optional image
+// - Implements countdown timer that triggers callback when expired
+// - Displays question counter and time bar
+//
+// Notes:
+// - Client-only component (requires 'use client')
+// - Uses internal timer for countdown synchronization
+// - Handles timeout navigation separately to avoid race conditions
+// ====================================================
+
 'use client';
 
 import Image from 'next/image';
 import React, { useEffect, useRef, useState } from 'react';
+
 import { PageContainer, Main, QuizBackground } from '@/components/ui';
 import { TimeBar } from './TimeBar';
-import { ExplanationData } from '@/types/game';
+
+import type { ExplanationData } from '@/types/game';
+
+const TIMER_INTERVAL_MS = 1000;
+const NAVIGATION_DELAY_MS = 0;
+const TIME_EXPIRED_THRESHOLD = 1;
 
 interface PlayerExplanationScreenProps {
   explanation: ExplanationData;
   onTimeExpired?: () => void;
 }
 
+/**
+ * Component: PlayerExplanationScreen
+ * Description:
+ * - Renders the explanation screen for players after answering a question
+ * - Displays explanation title, body text, and optional image
+ * - Shows countdown timer and question counter
+ * - Automatically triggers callback when time expires
+ *
+ * @param {ExplanationData} explanation - Explanation data including question number, time limit, title, body, and optional image
+ * @param {() => void} [onTimeExpired] - Callback invoked when the explanation time limit expires
+ * @returns {React.ReactElement} The explanation screen component
+ *
+ * @example
+ * ```tsx
+ * <PlayerExplanationScreen
+ *   explanation={{
+ *     questionNumber: 1,
+ *     totalQuestions: 10,
+ *     timeLimit: 30,
+ *     title: "Explanation Title",
+ *     body: "Explanation body text...",
+ *     image: "/path/to/image.jpg"
+ *   }}
+ *   onTimeExpired={() => console.log('Time expired')}
+ * />
+ * ```
+ */
 export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = ({
   explanation,
   onTimeExpired,
@@ -20,14 +72,12 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
   const [isTimeExpired, setIsTimeExpired] = useState(false);
   const timeoutTriggered = useRef(false);
 
-  // Reset timer when data changes
   useEffect(() => {
     timeoutTriggered.current = false;
     setCurrentTime(timeLimit);
     setIsTimeExpired(false);
   }, [timeLimit, questionNumber]);
 
-  // Internal timer countdown
   useEffect(() => {
     if (!timeLimit || timeLimit <= 0) {
       return;
@@ -35,7 +85,7 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
 
     const timer = setInterval(() => {
       setCurrentTime((prev) => {
-        if (prev <= 1) {
+        if (prev <= TIME_EXPIRED_THRESHOLD) {
           if (!timeoutTriggered.current) {
             timeoutTriggered.current = true;
             setIsTimeExpired(true);
@@ -44,22 +94,21 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
         }
         return prev - 1;
       });
-    }, 1000);
+    }, TIMER_INTERVAL_MS);
 
     return () => clearInterval(timer);
   }, [timeLimit]);
 
-  // Handle timeout navigation in separate effect
   useEffect(() => {
     if (isTimeExpired) {
-      // Use setTimeout to ensure navigation happens after current render cycle
       const timeoutId = setTimeout(() => {
         onTimeExpired?.();
-      }, 0);
+      }, NAVIGATION_DELAY_MS);
 
       return () => clearTimeout(timeoutId);
     }
   }, [isTimeExpired, onTimeExpired]);
+
   return (
     <PageContainer className="h-screen">
       <Main className="h-full relative">
@@ -85,7 +134,7 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
             <div className="mx-auto flex h-full max-w-md flex-col gap-4">
               {image && (
                 <div className="relative h-48 w-full overflow-hidden rounded-2xl border border-white/15 shadow-lg">
-                  <Image src={image} alt="解説" fill className="object-cover" sizes="100vw" />
+                  <Image src={image} alt="解説" className="object-cover" sizes="100vw" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
                 </div>
               )}
