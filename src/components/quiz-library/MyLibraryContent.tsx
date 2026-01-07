@@ -1,3 +1,24 @@
+// ====================================================
+// File Name   : MyLibraryContent.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-17
+// Last Update : 2025-09-17
+//
+// Description:
+// - Content component for my-library tab view
+// - Manages quiz library state and filters
+// - Handles quiz deletion with confirmation
+// - Displays library filters and grid
+// - Syncs props with Zustand store
+//
+// Notes:
+// - Client-only component (requires 'use client')
+// - Uses Zustand store for state management
+// - Uses React Query for data fetching
+// - Provides delete confirmation via useConfirmation hook
+// ====================================================
+
 'use client';
 
 import React, { useEffect } from 'react';
@@ -7,6 +28,18 @@ import { LibraryGrid } from './LibraryGrid';
 import { useMyLibrary, useDeleteQuiz } from '@/hooks/useQuizLibrary';
 import { useMyLibraryState, useQuizLibraryActions } from '@/state/useQuizLibraryStore';
 import { useConfirmation } from '@/hooks/useConfirmation';
+
+const STATUS_UI_DRAFTS = 'drafts';
+const STATUS_UI_PUBLISHED = 'published';
+const STATUS_UI_ALL = 'all';
+const STATUS_API_DRAFT = 'draft';
+const STATUS_API_PUBLISHED = 'published';
+
+const FILTER_TYPE_MY_LIBRARY = 'my-library';
+const EMPTY_STATE_ICON_LIBRARY = 'library';
+
+const MIN_TOTAL_FOR_STORE_PAGINATION = 0;
+const FIRST_PAGE = 1;
 
 type MyLibraryFilters = {
   category?: string;
@@ -26,6 +59,76 @@ interface MyLibraryProps {
   onDeleteQuiz: (id: string) => void;
 }
 
+/**
+ * Function: mapStatusForAPI
+ * Description:
+ * - Maps UI status values to API status values
+ * - Converts 'drafts' to 'draft' and 'published' to 'published'
+ * - Returns undefined for 'all' or unknown statuses
+ *
+ * Parameters:
+ * - uiStatus (string): UI status value ('drafts', 'published', 'all')
+ *
+ * Returns:
+ * - 'draft' | 'published' | undefined: API status value or undefined
+ *
+ * Example:
+ * ```ts
+ * mapStatusForAPI('drafts'); // Returns 'draft'
+ * mapStatusForAPI('published'); // Returns 'published'
+ * mapStatusForAPI('all'); // Returns undefined
+ * ```
+ */
+const mapStatusForAPI = (uiStatus: string): 'draft' | 'published' | undefined => {
+  switch (uiStatus) {
+    case STATUS_UI_DRAFTS:
+      return STATUS_API_DRAFT;
+    case STATUS_UI_PUBLISHED:
+      return STATUS_API_PUBLISHED;
+    default:
+      return undefined;
+  }
+};
+
+/**
+ * Component: MyLibraryContent
+ * Description:
+ * - Main content component for my-library tab
+ * - Manages quiz library state, filters, and pagination
+ * - Handles quiz deletion with confirmation modal
+ * - Displays library filters and quiz grid
+ * - Syncs component props with Zustand store
+ * - Fetches quiz data using React Query
+ *
+ * Parameters:
+ * - searchQuery (string): Current search query
+ * - filters (MyLibraryFilters): Current filter values
+ * - pagination (object): Pagination configuration with page and limit
+ * - onFiltersChange (function): Callback when filters change
+ * - onPageChange (function): Callback when page changes
+ * - onSearchChange (function): Callback when search query changes
+ * - onEditQuiz (function): Callback when quiz edit is requested
+ * - onStartQuiz (function): Callback when quiz start is requested
+ * - onDeleteQuiz (function): Callback when quiz is deleted
+ *
+ * Returns:
+ * - React.ReactElement: The my-library content component
+ *
+ * Example:
+ * ```tsx
+ * <MyLibraryContent
+ *   searchQuery={searchQuery}
+ *   filters={filters}
+ *   pagination={{ page: 1, limit: 12 }}
+ *   onFiltersChange={(filters) => setFilters(filters)}
+ *   onPageChange={(page) => setPage(page)}
+ *   onSearchChange={(query) => setSearchQuery(query)}
+ *   onEditQuiz={(id) => navigateToEdit(id)}
+ *   onStartQuiz={(id) => startQuiz(id)}
+ *   onDeleteQuiz={(id) => handleDelete(id)}
+ * />
+ * ```
+ */
 export const MyLibraryContent: React.FC<MyLibraryProps> = ({
   searchQuery,
   filters,
@@ -37,47 +140,26 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
   onStartQuiz,
   onDeleteQuiz,
 }) => {
-  // Get state from Zustand store
   const { quizzes, pagination: storePagination, loading, error } = useMyLibraryState();
-
-  // Get actions from Zustand store
   const { setMyLibraryFilters, setMyLibraryPagination } = useQuizLibraryActions();
-
-  // Confirmation hook for delete warnings
   const { confirmDelete, WarningModalComponent } = useConfirmation();
 
-  // Map UI status to API status
-  const mapStatusForAPI = (uiStatus: string): 'draft' | 'published' | undefined => {
-    switch (uiStatus) {
-      case 'drafts':
-        return 'draft';
-      case 'published':
-        return 'published';
-      default:
-        return undefined;
-    }
-  };
-
-  // Prepare API request parameters
   const apiParams = {
     page: pagination.page,
     limit: pagination.limit,
     ...(filters.category && { category: filters.category }),
     ...(filters.status &&
-      filters.status !== 'all' && {
+      filters.status !== STATUS_UI_ALL && {
         status: mapStatusForAPI(filters.status),
       }),
     sort: filters.sort,
     ...(searchQuery && { search: searchQuery }),
   };
 
-  // Fetch data using React Query
   useMyLibrary(apiParams);
 
-  // Delete mutation
   const deleteQuizMutation = useDeleteQuiz();
 
-  // Sync props with store when they change
   useEffect(() => {
     setMyLibraryFilters(filters);
   }, [filters, setMyLibraryFilters]);
@@ -86,7 +168,17 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
     setMyLibraryPagination(pagination);
   }, [pagination, setMyLibraryPagination]);
 
-  // Handle delete quiz with confirmation
+  /**
+   * Function: handleDeleteQuiz
+   * Description:
+   * - Handles quiz deletion with confirmation
+   * - Shows confirmation modal before deleting
+   * - Calls parent handler on successful deletion
+   * - Logs errors if deletion fails
+   *
+   * Parameters:
+   * - id (string): ID of quiz to delete
+   */
   const handleDeleteQuiz = (id: string) => {
     const quiz = quizzes?.find((q) => q.id === id);
     if (!quiz) return;
@@ -94,22 +186,19 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
     confirmDelete(quiz.title, async () => {
       try {
         await deleteQuizMutation.mutateAsync(id);
-        onDeleteQuiz(id); // Call parent handler for any additional logic
+        onDeleteQuiz(id);
       } catch (error) {
         console.error('Failed to delete quiz:', error);
-        // Don't call onDeleteQuiz if deletion failed
       }
     });
   };
 
-  // Get available categories from current quizzes
   const availableCategories = Array.from(
     new Set((quizzes || []).map((q) => q.category).filter(Boolean)),
   ) as string[];
 
-  // Use store pagination if available, otherwise fall back to props
   const paginationInfo =
-    storePagination.total > 0
+    storePagination.total > MIN_TOTAL_FOR_STORE_PAGINATION
       ? storePagination
       : {
           page: pagination.page,
@@ -117,13 +206,13 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
           total: (quizzes || []).length,
           total_pages: Math.ceil((quizzes || []).length / pagination.limit),
           has_next: pagination.page < Math.ceil((quizzes || []).length / pagination.limit),
-          has_prev: pagination.page > 1,
+          has_prev: pagination.page > FIRST_PAGE,
         };
 
   return (
     <div>
       <LibraryFilters
-        type="my-library"
+        type={FILTER_TYPE_MY_LIBRARY}
         filters={filters}
         categories={availableCategories}
         onFiltersChange={onFiltersChange}
@@ -148,7 +237,7 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
           />
         )}
         emptyState={{
-          icon: 'library',
+          icon: EMPTY_STATE_ICON_LIBRARY,
           message: searchQuery ? 'クイズが見つかりません' : 'ライブラリにクイズがありません',
           description: searchQuery
             ? '検索条件を変更してもう一度お試しください'
@@ -156,7 +245,6 @@ export const MyLibraryContent: React.FC<MyLibraryProps> = ({
         }}
       />
 
-      {/* Warning Modal for delete confirmation */}
       <WarningModalComponent />
     </div>
   );
