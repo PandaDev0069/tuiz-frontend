@@ -1,5 +1,24 @@
+// ====================================================
+// File Name   : DifficultyCategoryForm.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-03
+// Last Update : 2025-09-04
+//
+// Description:
+// - Form component for selecting quiz difficulty and category
+// - Displays two cards side by side for difficulty and category selection
+// - Handles form validation and error display
+// - Uses Select components with options from constants
+//
+// Notes:
+// - Client component (no 'use client' needed as parent handles it)
+// - Uses responsive grid layout for mobile and desktop
+// - Implements error handling with visual feedback
+// ====================================================
+
 import React from 'react';
-import { CreateQuizSetForm, DifficultyLevel, FormErrors } from '@/types/quiz';
+
 import {
   Card,
   CardContent,
@@ -9,8 +28,19 @@ import {
   Label,
   Select,
 } from '@/components/ui';
+import { CreateQuizSetForm, DifficultyLevel, FormErrors } from '@/types/quiz';
 import { cn } from '@/lib/utils';
 import { DIFFICULTY_OPTIONS, CATEGORY_OPTIONS } from './constants';
+
+const DEFAULT_EMPTY_VALUE = '';
+
+const FORM_FIELD_DIFFICULTY_LEVEL = 'difficulty_level';
+const FORM_FIELD_CATEGORY = 'category';
+
+const SELECT_VARIANT_PRIMARY = 'primary';
+const SELECT_VARIANT_ERROR = 'error';
+
+const DIFFICULTY_LABEL_SEPARATOR = ' - ';
 
 interface DifficultyCategoryFormProps {
   formData: Partial<CreateQuizSetForm>;
@@ -18,6 +48,31 @@ interface DifficultyCategoryFormProps {
   errors?: FormErrors<CreateQuizSetForm>;
 }
 
+/**
+ * Component: DifficultyCategoryForm
+ * Description:
+ * - Renders a form with two cards for difficulty and category selection
+ * - Handles form input changes and displays validation errors
+ * - Maps difficulty options with labels and descriptions
+ * - Maps category options for selection
+ *
+ * Parameters:
+ * - formData (Partial<CreateQuizSetForm>): Current form data values
+ * - onFormDataChange (function): Callback function when form data changes
+ * - errors (FormErrors<CreateQuizSetForm>, optional): Form validation errors
+ *
+ * Returns:
+ * - React.ReactElement: The difficulty and category form component
+ *
+ * Example:
+ * ```tsx
+ * <DifficultyCategoryForm
+ *   formData={formData}
+ *   onFormDataChange={(data) => setFormData(data)}
+ *   errors={errors}
+ * />
+ * ```
+ */
 export const DifficultyCategoryForm: React.FC<DifficultyCategoryFormProps> = ({
   formData,
   onFormDataChange,
@@ -30,9 +85,18 @@ export const DifficultyCategoryForm: React.FC<DifficultyCategoryFormProps> = ({
     });
   };
 
+  const difficultyOptions = DIFFICULTY_OPTIONS.map((option) => ({
+    value: option.value,
+    label: `${option.label}${DIFFICULTY_LABEL_SEPARATOR}${option.description}`,
+  }));
+
+  const categoryOptions = CATEGORY_OPTIONS.map((category) => ({
+    value: category,
+    label: category,
+  }));
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-      {/* Difficulty */}
       <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-lg card-with-dropdown">
         <CardHeader className="pb-3 md:pb-6 px-3 md:px-6">
           <CardTitle className="text-sm md:text-base">難易度</CardTitle>
@@ -41,21 +105,18 @@ export const DifficultyCategoryForm: React.FC<DifficultyCategoryFormProps> = ({
           </CardDescription>
         </CardHeader>
         <CardContent className="px-3 md:px-6">
-          <Label htmlFor="difficulty_level" required variant="primary">
+          <Label htmlFor={FORM_FIELD_DIFFICULTY_LEVEL} required variant={SELECT_VARIANT_PRIMARY}>
             難易度
           </Label>
           <Select
-            id="difficulty_level"
-            value={formData.difficulty_level || ''}
+            id={FORM_FIELD_DIFFICULTY_LEVEL}
+            value={formData.difficulty_level || DEFAULT_EMPTY_VALUE}
             onValueChange={(value) =>
-              handleInputChange('difficulty_level', value as DifficultyLevel)
+              handleInputChange(FORM_FIELD_DIFFICULTY_LEVEL, value as DifficultyLevel)
             }
             placeholder="難易度を選択してください"
-            options={DIFFICULTY_OPTIONS.map((option) => ({
-              value: option.value,
-              label: `${option.label} - ${option.description}`,
-            }))}
-            variant={errors.difficulty_level ? 'error' : 'primary'}
+            options={difficultyOptions}
+            variant={errors.difficulty_level ? SELECT_VARIANT_ERROR : SELECT_VARIANT_PRIMARY}
             className={cn(
               'border-2 border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-300',
               errors.difficulty_level && 'border-red-500',
@@ -67,7 +128,6 @@ export const DifficultyCategoryForm: React.FC<DifficultyCategoryFormProps> = ({
         </CardContent>
       </Card>
 
-      {/* Category */}
       <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-lg card-with-dropdown">
         <CardHeader className="pb-3 md:pb-6 px-3 md:px-6">
           <CardTitle className="text-sm md:text-base">カテゴリ</CardTitle>
@@ -76,19 +136,16 @@ export const DifficultyCategoryForm: React.FC<DifficultyCategoryFormProps> = ({
           </CardDescription>
         </CardHeader>
         <CardContent className="px-3 md:px-6">
-          <Label htmlFor="category" required variant="primary">
+          <Label htmlFor={FORM_FIELD_CATEGORY} required variant={SELECT_VARIANT_PRIMARY}>
             カテゴリ
           </Label>
           <Select
-            id="category"
-            value={formData.category || ''}
-            onValueChange={(value) => handleInputChange('category', value)}
+            id={FORM_FIELD_CATEGORY}
+            value={formData.category || DEFAULT_EMPTY_VALUE}
+            onValueChange={(value) => handleInputChange(FORM_FIELD_CATEGORY, value)}
             placeholder="カテゴリを選択してください"
-            options={CATEGORY_OPTIONS.map((category) => ({
-              value: category,
-              label: category,
-            }))}
-            variant={errors.category ? 'error' : 'primary'}
+            options={categoryOptions}
+            variant={errors.category ? SELECT_VARIANT_ERROR : SELECT_VARIANT_PRIMARY}
             className={cn(
               'border-2 border-blue-500 focus:border-blue-600 focus:ring-2 focus:ring-blue-300',
               errors.category && 'border-red-500',
