@@ -127,7 +127,9 @@ export const PlayerQuestionScreen: React.FC<PlayerQuestionScreenProps> = ({
                     <Image
                       src={question.image}
                       alt="Question"
-                      className="object-cover"
+                      width={800}
+                      height={400}
+                      className="object-contain w-full h-full"
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       priority
                     />

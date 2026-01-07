@@ -147,7 +147,9 @@ export const HostAnswerScreen: React.FC<HostAnswerScreenProps> = ({
                     <Image
                       src={question.image}
                       alt={IMAGE_ALT_TEXT}
-                      className="object-cover"
+                      width={1200}
+                      height={600}
+                      className="object-contain w-full h-full"
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                     <div className={`absolute inset-0 ${OVERLAY_OPACITY}`} />

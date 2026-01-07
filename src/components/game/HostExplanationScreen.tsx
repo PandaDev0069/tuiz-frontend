@@ -173,7 +173,14 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
                     isIntroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
                   }`}
                 >
-                  <Image src={image} alt={IMAGE_ALT_TEXT} className="object-cover" priority />
+                  <Image
+                    src={image}
+                    alt={IMAGE_ALT_TEXT}
+                    width={1000}
+                    height={500}
+                    className="object-contain w-full h-full"
+                    priority
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
                 </div>
               )}

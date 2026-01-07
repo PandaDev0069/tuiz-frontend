@@ -219,7 +219,9 @@ export const PlayerAnswerScreen: React.FC<PlayerAnswerScreenProps> = ({
                     <Image
                       src={question.image}
                       alt={IMAGE_ALT_TEXT}
-                      className="object-cover"
+                      width={800}
+                      height={400}
+                      className="object-contain w-full h-full"
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                     <div className={`absolute inset-0 ${OVERLAY_OPACITY}`} />

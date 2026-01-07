@@ -134,7 +134,14 @@ export const PlayerExplanationScreen: React.FC<PlayerExplanationScreenProps> = (
             <div className="mx-auto flex h-full max-w-md flex-col gap-4">
               {image && (
                 <div className="relative h-48 w-full overflow-hidden rounded-2xl border border-white/15 shadow-lg">
-                  <Image src={image} alt="解説" className="object-cover" sizes="100vw" />
+                  <Image
+                    src={image}
+                    alt="解説"
+                    width={800}
+                    height={400}
+                    className="object-contain w-full h-full"
+                    sizes="100vw"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
                 </div>
               )}
