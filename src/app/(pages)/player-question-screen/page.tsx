@@ -1,30 +1,74 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-21
+// Last Update : 2025-12-29
+//
+// Description:
+// - Player question screen component
+// - Displays questions and handles answer submission
+// - Manages quiz data loading and question transformation
+// - Handles answer reveal screen transitions
+//
+// Notes:
+// - Uses game flow hook for real-time game state
+// - Calculates points based on quiz play settings
+// - Supports mobile and desktop layouts
+// ====================================================
+
 'use client';
 
-import React, { Suspense, useMemo, useState, useEffect } from 'react';
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
+import React, { Suspense, useMemo, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. Component Imports
+//----------------------------------------------------
 import { PlayerAnswerScreen, PlayerAnswerRevealScreen } from '@/components/game';
+
+//----------------------------------------------------
+// 3. Hook Imports
+//----------------------------------------------------
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameAnswer } from '@/hooks/useGameAnswer';
 import { useDeviceId } from '@/hooks/useDeviceId';
-import { Question, AnswerResult } from '@/types/game';
+
+//----------------------------------------------------
+// 4. Service Imports
+//----------------------------------------------------
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
+
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
+import { Question, AnswerResult } from '@/types/game';
 import type { QuestionWithAnswers } from '@/types/quiz';
 
-function PlayerQuestionScreenContent() {
+//----------------------------------------------------
+// 6. Helper Functions
+//----------------------------------------------------
+/**
+ * Extracts URL parameters and device ID
+ */
+const usePlayerQuestionParams = () => {
   const searchParams = useSearchParams();
+  const { deviceId } = useDeviceId();
   const gameId = searchParams.get('gameId') || '';
   const playerParam = searchParams.get('playerId') || '';
-  const { deviceId } = useDeviceId();
   const playerIdentifier = playerParam || deviceId || 'anonymous-player';
 
-  const { gameFlow, timerState } = useGameFlow({
-    gameId,
-    autoSync: true,
-  });
+  return { gameId, playerIdentifier, playerParam, deviceId };
+};
 
-  const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
-  const [isMobile, setIsMobile] = useState(true);
+/**
+ * Loads quiz data from API
+ */
+const useQuizData = (gameId: string) => {
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
   const [quizPlaySettings, setQuizPlaySettings] = useState<{
     time_bonus: boolean;
@@ -32,15 +76,8 @@ function PlayerQuestionScreenContent() {
   } | null>(null);
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // Load quiz data
-  useEffect(() => {
     if (!gameId) return;
+
     const loadQuiz = async () => {
       try {
         const { data: game } = await gameApi.getGame(gameId);
@@ -49,7 +86,6 @@ function PlayerQuestionScreenContent() {
           const quiz = await quizService.getQuizComplete(quizId);
           const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
           setQuestions(sorted);
-          // Store play settings for point calculation
           if (quiz.play_settings) {
             setQuizPlaySettings({
               time_bonus: quiz.play_settings.time_bonus ?? false,
@@ -61,16 +97,141 @@ function PlayerQuestionScreenContent() {
         console.error('Failed to load quiz for game', err);
       }
     };
+
     loadQuiz();
   }, [gameId]);
 
-  // Get current question data for point calculation
+  return { questions, quizPlaySettings };
+};
+
+/**
+ * Detects mobile device
+ */
+const useMobileDetection = () => {
+  const [isMobile, setIsMobile] = useState(true);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  return isMobile;
+};
+
+/**
+ * Transforms question data from database format to component format
+ */
+const transformQuestionData = (questionData: QuestionWithAnswers): Question => {
+  const showQuestionTimeSeconds = questionData.show_question_time || 30;
+
+  return {
+    id: questionData.id,
+    text: questionData.question_text,
+    image: questionData.image_url || undefined,
+    timeLimit: showQuestionTimeSeconds,
+    show_question_time: showQuestionTimeSeconds,
+    answering_time: questionData.answering_time || 30,
+    choices: questionData.answers
+      .sort((a, b) => a.order_index - b.order_index)
+      .map((a, i) => ({
+        id: a.id,
+        text: a.answer_text,
+        letter: ['A', 'B', 'C', 'D'][i] || String.fromCharCode(65 + i),
+      })),
+    correctAnswerId: questionData.answers.find((a) => a.is_correct)?.id || '',
+    explanation: questionData.explanation_text || undefined,
+    type: (questionData.question_type as Question['type']) || 'multiple_choice_4',
+  };
+};
+
+/**
+ * Creates a placeholder question while loading
+ */
+const createPlaceholderQuestion = (
+  questionIndex: number,
+  questionsLength: number,
+  gameFlow: { current_question_id?: string | null } | null,
+  timerState: { remainingMs?: number } | null,
+): Question => {
+  return {
+    id: gameFlow?.current_question_id || 'placeholder-q1',
+    text:
+      questionsLength === 0
+        ? 'クイズデータを読み込み中...'
+        : `問題 ${(questionIndex ?? 0) + 1} を読み込み中...`,
+    image: undefined,
+    timeLimit: Math.max(5, Math.round((timerState?.remainingMs || 10000) / 1000)),
+    show_question_time: 10,
+    answering_time: 30,
+    choices: [
+      { id: 'loading-1', text: '読み込み中...', letter: 'A' },
+      { id: 'loading-2', text: '読み込み中...', letter: 'B' },
+      { id: 'loading-3', text: '読み込み中...', letter: 'C' },
+      { id: 'loading-4', text: '読み込み中...', letter: 'D' },
+    ],
+    correctAnswerId: 'loading-1',
+    explanation: undefined,
+    type: 'multiple_choice_4',
+  };
+};
+
+//----------------------------------------------------
+// 7. Main Component
+//----------------------------------------------------
+/**
+ * Component: PlayerQuestionScreenContent
+ * Description:
+ * - Displays questions and handles answer submission
+ * - Manages quiz data loading and question transformation
+ */
+function PlayerQuestionScreenContent() {
+  //----------------------------------------------------
+  // 7.1. URL Parameters & Setup
+  //----------------------------------------------------
+  const { gameId, playerIdentifier, playerParam, deviceId } = usePlayerQuestionParams();
+  const isMobile = useMobileDetection();
+  const { questions, quizPlaySettings } = useQuizData(gameId);
+
+  //----------------------------------------------------
+  // 7.2. Game Flow & State
+  //----------------------------------------------------
+  const { gameFlow, timerState } = useGameFlow({
+    gameId,
+    autoSync: true,
+  });
+
+  const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
+
+  //----------------------------------------------------
+  // 7.3. Computed Values
+  //----------------------------------------------------
   const currentQuestionForPoints = useMemo(() => {
     if (!gameFlow?.current_question_id || !questions.length) return null;
     const questionIndex = gameFlow.current_question_index ?? 0;
     return questions[questionIndex] || null;
   }, [gameFlow?.current_question_id, gameFlow?.current_question_index, questions]);
 
+  const currentQuestion: Question = useMemo(() => {
+    const idx = gameFlow?.current_question_index ?? 0;
+    const questionData = questions[idx];
+
+    if (questionData) {
+      return transformQuestionData(questionData);
+    }
+
+    return createPlaceholderQuestion(idx, questions.length, gameFlow, timerState);
+  }, [gameFlow, questions, timerState]);
+
+  const currentTimeSeconds = Math.max(
+    0,
+    Math.round((timerState?.remainingMs || currentQuestion.timeLimit * 1000) / 1000),
+  );
+
+  //----------------------------------------------------
+  // 7.4. Answer Handling
+  //----------------------------------------------------
   const { answerStatus, submitAnswer } = useGameAnswer({
     gameId,
     playerId: playerIdentifier,
@@ -80,84 +241,19 @@ function PlayerQuestionScreenContent() {
         ? gameFlow.current_question_index + 1
         : undefined,
     autoReveal: false,
-    // Point calculation parameters
     questionPoints: currentQuestionForPoints?.points ?? 100,
     answeringTime: currentQuestionForPoints?.answering_time ?? 30,
     timeBonusEnabled: quizPlaySettings?.time_bonus ?? false,
     streakBonusEnabled: quizPlaySettings?.streak_bonus ?? false,
   });
 
-  const currentQuestion: Question = useMemo(() => {
-    const idx = gameFlow?.current_question_index ?? 0;
-    const questionData = questions[idx];
-
-    // If we have real question data, use it
-    if (questionData) {
-      // Use show_question_time from database (in seconds), convert to seconds for timeLimit
-      const showQuestionTimeSeconds = questionData.show_question_time || 30;
-
-      return {
-        id: questionData.id,
-        text: questionData.question_text,
-        image: questionData.image_url || undefined,
-        // Use show_question_time from database as the time limit
-        timeLimit: showQuestionTimeSeconds,
-        show_question_time: showQuestionTimeSeconds,
-        answering_time: questionData.answering_time || 30,
-        choices: questionData.answers
-          .sort((a, b) => a.order_index - b.order_index)
-          .map((a, i) => ({
-            id: a.id,
-            text: a.answer_text,
-            letter: ['A', 'B', 'C', 'D'][i] || String.fromCharCode(65 + i),
-          })),
-        correctAnswerId: questionData.answers.find((a) => a.is_correct)?.id || '',
-        explanation: questionData.explanation_text || undefined,
-        type: (questionData.question_type as Question['type']) || 'multiple_choice_4',
-      };
-    }
-
-    // Fallback: Return a minimal question structure while loading
-    return {
-      id: gameFlow?.current_question_id || 'placeholder-q1',
-      text:
-        questions.length === 0
-          ? 'クイズデータを読み込み中...'
-          : `問題 ${(idx ?? 0) + 1} を読み込み中...`,
-      image: undefined,
-      timeLimit: Math.max(5, Math.round((timerState?.remainingMs || 10000) / 1000)),
-      show_question_time: 10,
-      answering_time: 30,
-      choices: [
-        { id: 'loading-1', text: '読み込み中...', letter: 'A' },
-        { id: 'loading-2', text: '読み込み中...', letter: 'B' },
-        { id: 'loading-3', text: '読み込み中...', letter: 'C' },
-        { id: 'loading-4', text: '読み込み中...', letter: 'D' },
-      ],
-      correctAnswerId: 'loading-1',
-      explanation: undefined,
-      type: 'multiple_choice_4',
-    };
-  }, [
-    gameFlow?.current_question_id,
-    gameFlow?.current_question_index,
-    questions,
-    timerState?.remainingMs,
-  ]);
-
-  const currentTimeSeconds = Math.max(
-    0,
-    Math.round((timerState?.remainingMs || currentQuestion.timeLimit * 1000) / 1000),
-  );
-
-  const handleAnswerSelect = (answerId: string) => {
+  const handleAnswerSelect = useCallback((answerId: string) => {
     setSelectedAnswer(answerId);
-  };
+  }, []);
 
-  const handleAnswerSubmit = async () => {
+  const handleAnswerSubmit = useCallback(async () => {
     if (!selectedAnswer || !gameFlow?.current_question_id) return;
     try {
-      // Calculate response time: total time limit - remaining time = elapsed time
       const responseTimeMs = timerState
         ? currentQuestion.timeLimit * 1000 - timerState.remainingMs
         : 0;
@@ -165,9 +261,14 @@ function PlayerQuestionScreenContent() {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [
+    selectedAnswer,
+    gameFlow?.current_question_id,
+    timerState,
+    currentQuestion.timeLimit,
+    submitAnswer,
+  ]);
 
-  // Build reveal payload
   const revealPayload: AnswerResult = useMemo(() => {
     const playerChoice = selectedAnswer
       ? currentQuestion.choices.find((c) => c.id === selectedAnswer)
@@ -177,7 +278,6 @@ function PlayerQuestionScreenContent() {
       correctAnswer: currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId)!,
       playerAnswer: playerChoice,
       isCorrect: playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false,
-      // Generate statistics dynamically based on actual choice IDs
       statistics: currentQuestion.choices.map((choice) => ({
         choiceId: choice.id,
         count: 0,
@@ -188,6 +288,9 @@ function PlayerQuestionScreenContent() {
     };
   }, [currentQuestion, selectedAnswer]);
 
+  //----------------------------------------------------
+  // 7.5. Validation & Rendering
+  //----------------------------------------------------
   const shouldReveal = !timerState?.isActive || answerStatus.hasAnswered;
 
   if (!gameId) {
@@ -223,6 +326,10 @@ function PlayerQuestionScreenContent() {
     />
   );
 }
+
+//----------------------------------------------------
+// 8. Page Wrapper Component
+//----------------------------------------------------
 
 export default function PlayerQuestionScreenPage() {
   return (
