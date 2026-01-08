@@ -1,8 +1,32 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-21
+// Last Update : 2025-12-29
+//
+// Description:
+// - Host control panel for managing game flow
+// - Controls game phases, timers, and player analytics
+// - Real-time synchronization via WebSocket
+//
+// Notes:
+// - Manages phase transitions and game state
+// - Displays player leaderboard and answer statistics
+// - Supports public screen toggle
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { useState, Suspense, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Header, PageContainer, Container, Main } from '@/components/ui';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
 import {
   Users,
   BarChart3,
@@ -15,14 +39,30 @@ import {
   Pause,
   PlayCircle,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
+import { Header, PageContainer, Container, Main } from '@/components/ui';
+
+//----------------------------------------------------
+// 4. Service & Hook Imports
+//----------------------------------------------------
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameLeaderboard } from '@/hooks/useGameLeaderboard';
 import { useSocket } from '@/components/providers/SocketProvider';
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
-import type { QuestionWithAnswers } from '@/types/quiz';
-import toast from 'react-hot-toast';
 
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
+import type { QuestionWithAnswers } from '@/types/quiz';
+
+//----------------------------------------------------
+// 6. Types / Interfaces
+//----------------------------------------------------
 type HostPhase =
   | 'waiting'
   | 'countdown'
@@ -33,12 +73,34 @@ type HostPhase =
   | 'podium'
   | 'ended';
 
+//----------------------------------------------------
+// 7. Main Component
+//----------------------------------------------------
+/**
+ * Component: HostControlPanelContent
+ * Description:
+ * - Main host control panel component
+ * - Manages game flow, phase transitions, and player analytics
+ *
+ * Features:
+ * - Real-time game phase control
+ * - Player leaderboard display
+ * - Answer statistics tracking
+ * - Timer management
+ * - Public screen toggle
+ */
 function HostControlPanelContent() {
+  //----------------------------------------------------
+  // 7.1. URL Parameters & Setup
+  //----------------------------------------------------
   const searchParams = useSearchParams();
   const roomCode = searchParams.get('code') || '';
   const gameIdParam = searchParams.get('gameId') || '';
   const phaseParam = (searchParams.get('phase') as HostPhase) || 'waiting';
 
+  //----------------------------------------------------
+  // 7.2. State Management
+  //----------------------------------------------------
   const [gameId, setGameId] = useState<string>(gameIdParam);
   const [currentPhase, setCurrentPhase] = useState<HostPhase>(phaseParam);
   const [isPublicScreenVisible, setIsPublicScreenVisible] = useState(false);
@@ -46,9 +108,16 @@ function HostControlPanelContent() {
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionWithAnswers | null>(null);
+
+  //----------------------------------------------------
+  // 7.3. Refs
+  //----------------------------------------------------
   const hasJoinedRoomRef = useRef(false);
   const socketIdRef = useRef<string | null>(null);
 
+  //----------------------------------------------------
+  // 7.4. Effects
+  //----------------------------------------------------
   // Get gameId from room code if not provided
   useEffect(() => {
     if (gameId || !roomCode) return;
@@ -95,6 +164,9 @@ function HostControlPanelContent() {
     loadQuiz();
   }, [gameId]);
 
+  //----------------------------------------------------
+  // 7.5. Custom Hooks
+  //----------------------------------------------------
   const {
     gameFlow,
     timerState,
@@ -124,6 +196,9 @@ function HostControlPanelContent() {
 
   const { socket, joinRoom: socketJoinRoom, leaveRoom: socketLeaveRoom } = useSocket();
 
+  //----------------------------------------------------
+  // 7.6. Helper Functions
+  //----------------------------------------------------
   // Fetch players list (for future use if needed)
   const fetchPlayers = useCallback(async () => {
     if (!gameId) return;
@@ -142,6 +217,37 @@ function HostControlPanelContent() {
     }
   }, [gameId]);
 
+  //----------------------------------------------------
+  // 7.7. Computed Values
+  //----------------------------------------------------
+  // Get current question info
+  const currentQuestionIndex = gameFlow?.current_question_index ?? 0;
+  const totalQuestions = questions.length || 0;
+  const gameCode = roomCode;
+
+  // Calculate timer display
+  const currentTimeSeconds = useMemo(() => {
+    if (!timerState?.remainingMs) return 0;
+    return Math.max(0, Math.ceil(timerState.remainingMs / 1000));
+  }, [timerState?.remainingMs]);
+
+  // Calculate analytics
+  const connectedPlayers = useMemo(() => {
+    return Array.isArray(leaderboard) ? leaderboard.length : 0;
+  }, [leaderboard]);
+
+  const totalAnswered = useMemo(() => {
+    return Object.values(answerStats).reduce((sum, count) => sum + count, 0);
+  }, [answerStats]);
+
+  const answerRate = useMemo(() => {
+    if (connectedPlayers === 0) return 0;
+    return Math.round((totalAnswered / connectedPlayers) * 100);
+  }, [connectedPlayers, totalAnswered]);
+
+  //----------------------------------------------------
+  // 7.8. Event Handlers
+  //----------------------------------------------------
   // Update current question when question index changes
   useEffect(() => {
     if (questions.length > 0 && gameFlow && gameFlow.current_question_index !== null) {
@@ -225,32 +331,7 @@ function HostControlPanelContent() {
     [socket, gameId],
   );
 
-  // Get current question info
-  const currentQuestionIndex = gameFlow?.current_question_index ?? 0;
-  const totalQuestions = questions.length || 0;
-  const gameCode = roomCode;
-
-  // Calculate timer display
-  const currentTimeSeconds = useMemo(() => {
-    if (!timerState?.remainingMs) return 0;
-    return Math.max(0, Math.ceil(timerState.remainingMs / 1000));
-  }, [timerState?.remainingMs]);
-
-  // Calculate analytics
-  const connectedPlayers = useMemo(() => {
-    return Array.isArray(leaderboard) ? leaderboard.length : 0;
-  }, [leaderboard]);
-
-  const totalAnswered = useMemo(() => {
-    return Object.values(answerStats).reduce((sum, count) => sum + count, 0);
-  }, [answerStats]);
-
-  const answerRate = useMemo(() => {
-    if (connectedPlayers === 0) return 0;
-    return Math.round((totalAnswered / connectedPlayers) * 100);
-  }, [connectedPlayers, totalAnswered]);
-
-  const handleTogglePublicScreen = () => {
+  const handleTogglePublicScreen = useCallback(() => {
     setIsPublicScreenVisible(!isPublicScreenVisible);
     if (!isPublicScreenVisible) {
       // Open public screen in new window
@@ -261,7 +342,7 @@ function HostControlPanelContent() {
         'width=1200,height=800,scrollbars=yes,resizable=yes',
       );
     }
-  };
+  }, [isPublicScreenVisible, roomCode, gameCode, gameId]);
 
   const handleStartQuestion = useCallback(async () => {
     if (!gameId || !currentQuestion) return;
@@ -289,91 +370,129 @@ function HostControlPanelContent() {
     }
   }, [gameId, revealAnswer, emitPhaseChange]);
 
+  //----------------------------------------------------
+  // Helper Functions for Phase Transitions
+  //----------------------------------------------------
+  /**
+   * Function: transitionToPhase
+   * Description:
+   * - Sets current phase and emits phase change event
+   */
+  const transitionToPhase = useCallback(
+    (phase: HostPhase) => {
+      setCurrentPhase(phase);
+      emitPhaseChange(phase);
+    },
+    [emitPhaseChange],
+  );
+
+  /**
+   * Function: shouldShowExplanation
+   * Description:
+   * - Checks if current question has explanation text
+   */
+  const shouldShowExplanation = useCallback((): boolean => {
+    return Boolean(currentQuestion?.explanation_text);
+  }, [currentQuestion]);
+
+  /**
+   * Function: advanceToNextQuestion
+   * Description:
+   * - Advances to next question via API
+   * - Transitions to appropriate phase based on result
+   */
+  const advanceToNextQuestion = useCallback(async (): Promise<boolean> => {
+    const nextIdx = currentQuestionIndex + 1;
+    if (nextIdx >= totalQuestions) {
+      transitionToPhase('podium');
+      return false;
+    }
+
+    try {
+      const { data, error } = await gameApi.nextQuestion(gameId);
+      if (error || !data) {
+        console.error('Failed to advance to next question:', error);
+        toast.error('次の問題への移動に失敗しました');
+        return false;
+      }
+
+      if (data.isComplete) {
+        transitionToPhase('podium');
+      } else {
+        transitionToPhase('countdown');
+      }
+      return true;
+    } catch (e) {
+      console.error('Error advancing to next question:', e);
+      toast.error('次の問題への移動に失敗しました');
+      return false;
+    }
+  }, [currentQuestionIndex, totalQuestions, gameId, transitionToPhase]);
+
+  /**
+   * Function: handleAnswerRevealNext
+   * Description:
+   * - Handles next phase transition from answer_reveal
+   */
+  const handleAnswerRevealNext = useCallback(
+    (isLastQuestion: boolean) => {
+      if (isLastQuestion) {
+        if (shouldShowExplanation()) {
+          transitionToPhase('explanation');
+        } else {
+          transitionToPhase('podium');
+        }
+      } else {
+        transitionToPhase('leaderboard');
+      }
+    },
+    [shouldShowExplanation, transitionToPhase],
+  );
+
+  /**
+   * Function: handleLeaderboardNext
+   * Description:
+   * - Handles next phase transition from leaderboard
+   */
+  const handleLeaderboardNext = useCallback(async () => {
+    if (shouldShowExplanation()) {
+      transitionToPhase('explanation');
+    } else {
+      await advanceToNextQuestion();
+    }
+  }, [shouldShowExplanation, transitionToPhase, advanceToNextQuestion]);
+
+  /**
+   * Function: handleExplanationNext
+   * Description:
+   * - Handles next phase transition from explanation
+   */
+  const handleExplanationNext = useCallback(async () => {
+    await advanceToNextQuestion();
+  }, [advanceToNextQuestion]);
+
   const handleNextPhase = useCallback(async () => {
     const isLastQuestion = currentQuestionIndex >= totalQuestions - 1;
 
     if (currentPhase === 'answer_reveal') {
-      // Skip leaderboard on last question, go to explanation or podium
-      if (isLastQuestion) {
-        if (currentQuestion?.explanation_text) {
-          setCurrentPhase('explanation');
-          emitPhaseChange('explanation');
-        } else {
-          setCurrentPhase('podium');
-          emitPhaseChange('podium');
-        }
-      } else {
-        setCurrentPhase('leaderboard');
-        emitPhaseChange('leaderboard');
-      }
+      handleAnswerRevealNext(isLastQuestion);
     } else if (currentPhase === 'leaderboard') {
-      if (currentQuestion?.explanation_text) {
-        setCurrentPhase('explanation');
-        emitPhaseChange('explanation');
-      } else {
-        // Move to next question
-        const nextIdx = currentQuestionIndex + 1;
-        if (nextIdx < totalQuestions) {
-          try {
-            const { data, error } = await gameApi.nextQuestion(gameId);
-            if (error || !data) {
-              console.error('Failed to advance to next question:', error);
-              toast.error('次の問題への移動に失敗しました');
-              return;
-            }
-            if (data.isComplete) {
-              setCurrentPhase('podium');
-              emitPhaseChange('podium');
-            } else {
-              setCurrentPhase('countdown');
-              emitPhaseChange('countdown');
-            }
-          } catch (e) {
-            console.error('Error advancing to next question:', e);
-            toast.error('次の問題への移動に失敗しました');
-            return;
-          }
-        } else {
-          setCurrentPhase('podium');
-          emitPhaseChange('podium');
-        }
-      }
+      await handleLeaderboardNext();
     } else if (currentPhase === 'explanation') {
-      // Move to next question or end game
-      const nextIdx = currentQuestionIndex + 1;
-      if (nextIdx < totalQuestions) {
-        try {
-          const { data, error } = await gameApi.nextQuestion(gameId);
-          if (error || !data) {
-            console.error('Failed to advance to next question:', error);
-            toast.error('次の問題への移動に失敗しました');
-            return;
-          }
-          if (data.isComplete) {
-            setCurrentPhase('podium');
-            emitPhaseChange('podium');
-          } else {
-            setCurrentPhase('countdown');
-            emitPhaseChange('countdown');
-          }
-        } catch (e) {
-          console.error('Error advancing to next question:', e);
-          toast.error('次の問題への移動に失敗しました');
-          return;
-        }
-      } else {
-        setCurrentPhase('podium');
-        emitPhaseChange('podium');
-      }
+      await handleExplanationNext();
     }
   }, [
     currentPhase,
     currentQuestionIndex,
     totalQuestions,
-    currentQuestion,
-    gameId,
-    emitPhaseChange,
+    handleAnswerRevealNext,
+    handleLeaderboardNext,
+    handleExplanationNext,
   ]);
+
+  //----------------------------------------------------
+  // 7.9. Loading State
+  //----------------------------------------------------
   if (!gameId) {
     return (
       <PageContainer>
@@ -387,6 +506,9 @@ function HostControlPanelContent() {
     );
   }
 
+  //----------------------------------------------------
+  // 7.10. Main Render
+  //----------------------------------------------------
   return (
     <PageContainer>
       {/* Header */}
@@ -700,6 +822,9 @@ function HostControlPanelContent() {
   );
 }
 
+//----------------------------------------------------
+// 8. Page Wrapper Component
+//----------------------------------------------------
 export default function HostControlPanelPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
