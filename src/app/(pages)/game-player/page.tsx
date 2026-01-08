@@ -438,6 +438,300 @@ const GameEndContent: React.FC<{
 // 10. Custom Hooks
 //----------------------------------------------------
 /**
+ * Hook: usePlayerGameTimer
+ * Description:
+ * - Manages timer calculations and phase transitions for player game
+ */
+function usePlayerGameTimer({
+  currentPhase,
+  gameFlow,
+  timerState,
+  currentQuestion,
+  questionRemainingMs,
+  answerRemainingMs,
+  setQuestionRemainingMs,
+  setAnswerRemainingMs,
+  setAnswerDurationMs,
+  setIsDisplayPhaseDone,
+  setCurrentPhase,
+  questionTimerInitializedRef,
+  previousPhaseRef,
+  answeringPhaseStartTimeRef,
+  gameId,
+  playerId,
+  router,
+}: {
+  currentPhase: PlayerPhase;
+  gameFlow: unknown;
+  timerState: { remainingMs?: number; startTime?: Date } | null;
+  currentQuestion: Question;
+  questionRemainingMs: number | null;
+  answerRemainingMs: number | null;
+  setQuestionRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerDurationMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setIsDisplayPhaseDone: React.Dispatch<React.SetStateAction<boolean>>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  questionTimerInitializedRef: React.MutableRefObject<string | null>;
+  previousPhaseRef: React.MutableRefObject<PlayerPhase | null>;
+  answeringPhaseStartTimeRef: React.MutableRefObject<number | null>;
+  gameId: string;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const derivedRemainingMsFromFlow =
+    (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
+      ?.current_question_start_time &&
+    (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
+      ?.current_question_end_time
+      ? Math.max(
+          0,
+          new Date(
+            (
+              gameFlow as {
+                current_question_start_time?: string;
+                current_question_end_time?: string;
+              }
+            ).current_question_end_time!,
+          ).getTime() - Date.now(),
+        )
+      : null;
+
+  const showQuestionTime = Number.isFinite(currentQuestion.show_question_time)
+    ? currentQuestion.show_question_time
+    : DEFAULT_SHOW_QUESTION_TIME_SECONDS;
+  const answeringTime = Number.isFinite(currentQuestion.answering_time)
+    ? currentQuestion.answering_time
+    : DEFAULT_ANSWERING_TIME_SECONDS;
+
+  const viewingDurationMs = showQuestionTime * MS_PER_SECOND;
+
+  let questionElapsedMs = 0;
+  if (timerState?.startTime && currentPhase === 'question') {
+    questionElapsedMs = Math.max(0, Date.now() - timerState.startTime.getTime());
+  } else if ((gameFlow as { current_question_start_time?: string })?.current_question_start_time) {
+    questionElapsedMs = Math.max(
+      0,
+      Date.now() -
+        new Date(
+          (gameFlow as { current_question_start_time?: string }).current_question_start_time!,
+        ).getTime(),
+    );
+  }
+
+  const viewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+
+  useEffect(() => {
+    const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
+    const previousPhase = previousPhaseRef.current;
+
+    if (previousPhase === 'question' && currentPhase !== 'question') {
+      setQuestionRemainingMs(null);
+      questionTimerInitializedRef.current = null;
+    }
+
+    previousPhaseRef.current = currentPhase;
+
+    if (currentPhase === 'question' && currentQuestionId) {
+      if (questionTimerInitializedRef.current === currentQuestionId) {
+        if (questionRemainingMs === null) {
+          const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+
+          if (currentViewingRemainingMs > 0) {
+            setQuestionRemainingMs(currentViewingRemainingMs);
+          } else {
+            setIsDisplayPhaseDone(true);
+            setAnswerDurationMs(answeringTime * MS_PER_SECOND);
+            setAnswerRemainingMs(answeringTime * MS_PER_SECOND);
+            answeringPhaseStartTimeRef.current = Date.now();
+            setCurrentPhase('answering');
+            router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
+          }
+        }
+        return;
+      }
+
+      questionTimerInitializedRef.current = currentQuestionId;
+
+      const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+      const initialTime =
+        currentViewingRemainingMs > 0 ? currentViewingRemainingMs : viewingDurationMs;
+
+      if (initialTime > 0) {
+        setQuestionRemainingMs(initialTime);
+      } else {
+        setIsDisplayPhaseDone(true);
+        setAnswerDurationMs(answeringTime * MS_PER_SECOND);
+        setAnswerRemainingMs(answeringTime * MS_PER_SECOND);
+        answeringPhaseStartTimeRef.current = Date.now();
+        setCurrentPhase('answering');
+        router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
+      }
+    }
+  }, [
+    currentPhase,
+    gameFlow,
+    viewingDurationMs,
+    questionElapsedMs,
+    showQuestionTime,
+    answeringTime,
+    questionRemainingMs,
+    setQuestionRemainingMs,
+    setAnswerRemainingMs,
+    setAnswerDurationMs,
+    setIsDisplayPhaseDone,
+    setCurrentPhase,
+    questionTimerInitializedRef,
+    previousPhaseRef,
+    answeringPhaseStartTimeRef,
+    gameId,
+    playerId,
+    router,
+  ]);
+
+  const totalRemainingMs =
+    timerState?.remainingMs ??
+    derivedRemainingMsFromFlow ??
+    (currentPhase === 'question' ? viewingRemainingMs : answeringTime * MS_PER_SECOND);
+
+  const answeringRemainingMsDerived = Math.max(
+    0,
+    Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0,
+  );
+
+  const displayRemainingMs =
+    currentPhase === 'question'
+      ? questionRemainingMs !== null
+        ? questionRemainingMs
+        : viewingRemainingMs
+      : answeringRemainingMsDerived;
+
+  const currentTimeSeconds = useMemo(() => {
+    if (currentPhase === 'question') {
+      const time = Number.isFinite(displayRemainingMs) ? displayRemainingMs : 0;
+      return Math.max(0, Math.round(time / MS_PER_SECOND));
+    } else if (currentPhase === 'answering') {
+      const time = Number.isFinite(answerRemainingMs) ? (answerRemainingMs ?? 0) : 0;
+      return Math.max(0, Math.round(time / MS_PER_SECOND));
+    }
+    return 0;
+  }, [currentPhase, displayRemainingMs, answerRemainingMs]);
+
+  return {
+    displayRemainingMs,
+    currentTimeSeconds,
+    viewingRemainingMs,
+  };
+}
+
+/**
+ * Function: computeCurrentQuestion
+ * Description:
+ * - Computes the current question object from various data sources
+ */
+function computeCurrentQuestion({
+  currentQuestionData,
+  gameFlow,
+  questionIdParam,
+  questionIndexParam,
+  questions,
+  timerState,
+}: {
+  currentQuestionData: CurrentQuestionData | null;
+  gameFlow: unknown;
+  questionIdParam: string;
+  questionIndexParam: number;
+  questions: QuestionWithAnswers[];
+  timerState: { remainingMs?: number } | null;
+}): Question {
+  const durationFromFlowSeconds =
+    (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
+      ?.current_question_start_time &&
+    (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
+      ?.current_question_end_time
+      ? Math.max(
+          1,
+          Math.round(
+            (new Date(
+              (
+                gameFlow as {
+                  current_question_start_time?: string;
+                  current_question_end_time?: string;
+                }
+              ).current_question_end_time!,
+            ).getTime() -
+              new Date(
+                (
+                  gameFlow as {
+                    current_question_start_time?: string;
+                    current_question_end_time?: string;
+                  }
+                ).current_question_start_time!,
+              ).getTime()) /
+              MS_PER_SECOND,
+          ),
+        )
+      : null;
+
+  if (currentQuestionData?.question) {
+    return {
+      ...currentQuestionData.question,
+      timeLimit: durationFromFlowSeconds ?? currentQuestionData.question.timeLimit,
+    };
+  }
+
+  const idx =
+    (gameFlow as { current_question_index?: number })?.current_question_index ?? questionIndexParam;
+  const questionData = questions[idx];
+  if (questionData) {
+    const showTimeSeconds = questionData.show_question_time || DEFAULT_SHOW_QUESTION_TIME_SECONDS;
+    const answeringTimeSeconds = questionData.answering_time || DEFAULT_ANSWERING_TIME_SECONDS;
+    return {
+      id: questionData.id,
+      text: questionData.question_text,
+      image: questionData.image_url || undefined,
+      timeLimit: durationFromFlowSeconds ?? showTimeSeconds + answeringTimeSeconds,
+      show_question_time: showTimeSeconds,
+      answering_time: answeringTimeSeconds,
+      choices: questionData.answers
+        .sort((a, b) => a.order_index - b.order_index)
+        .map((a, i) => ({
+          id: a.id,
+          text: a.answer_text,
+          letter: ANSWER_LETTERS[i] || String.fromCharCode(65 + i),
+        })),
+      correctAnswerId: questionData.answers.find((a) => a.is_correct)?.id || '',
+      explanation: questionData.explanation_text || undefined,
+      type: questionData.question_type as Question['type'],
+    };
+  }
+
+  return {
+    id: (gameFlow as { current_question_id?: string })?.current_question_id || questionIdParam,
+    text:
+      questions.length === 0
+        ? 'クイズデータを読み込み中...'
+        : `問題 ${(idx ?? 0) + 1} を読み込み中...`,
+    image: undefined,
+    timeLimit: Math.max(
+      DEFAULT_MIN_TIME_LIMIT_SECONDS,
+      Math.round((timerState?.remainingMs || DEFAULT_FALLBACK_TIME_MS) / MS_PER_SECOND),
+    ),
+    show_question_time: DEFAULT_SHOW_QUESTION_TIME_SECONDS,
+    answering_time: DEFAULT_ANSWERING_TIME_SECONDS,
+    choices: [
+      { id: 'loading-1', text: '読み込み中...', letter: 'A' },
+      { id: 'loading-2', text: '読み込み中...', letter: 'B' },
+      { id: 'loading-3', text: '読み込み中...', letter: 'C' },
+      { id: 'loading-4', text: '読み込み中...', letter: 'D' },
+    ],
+    correctAnswerId: 'loading-1',
+    explanation: undefined,
+    type: 'multiple_choice_4',
+  };
+}
+
+/**
  * Hook: usePlayerGameWebSocket
  * Description:
  * - Manages WebSocket connection and event handlers for player game
@@ -915,85 +1209,18 @@ function PlayerGameContent() {
   const { socket, joinRoom, leaveRoom } = useSocket();
 
   // Compute currentQuestion before it's used in effects
-  const currentQuestion: Question = useMemo(() => {
-    const durationFromFlowSeconds =
-      gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
-        ? Math.max(
-            1,
-            Math.round(
-              (new Date(gameFlow.current_question_end_time).getTime() -
-                new Date(gameFlow.current_question_start_time).getTime()) /
-                MS_PER_SECOND,
-            ),
-          )
-        : null;
-
-    if (currentQuestionData?.question) {
-      return {
-        ...currentQuestionData.question,
-        timeLimit: durationFromFlowSeconds ?? currentQuestionData.question.timeLimit,
-      };
-    }
-
-    const idx = gameFlow?.current_question_index ?? questionIndexParam;
-    const questionData = questions[idx];
-    if (questionData) {
-      const showTimeSeconds = questionData.show_question_time || DEFAULT_SHOW_QUESTION_TIME_SECONDS;
-      const answeringTimeSeconds = questionData.answering_time || DEFAULT_ANSWERING_TIME_SECONDS;
-      return {
-        id: questionData.id,
-        text: questionData.question_text,
-        image: questionData.image_url || undefined,
-        timeLimit: durationFromFlowSeconds ?? showTimeSeconds + answeringTimeSeconds,
-        show_question_time: showTimeSeconds,
-        answering_time: answeringTimeSeconds,
-        choices: questionData.answers
-          .sort((a, b) => a.order_index - b.order_index)
-          .map((a, i) => ({
-            id: a.id,
-            text: a.answer_text,
-            letter: ANSWER_LETTERS[i] || String.fromCharCode(65 + i),
-          })),
-        correctAnswerId: questionData.answers.find((a) => a.is_correct)?.id || '',
-        explanation: questionData.explanation_text || undefined,
-        type: questionData.question_type as Question['type'],
-      };
-    }
-
-    return {
-      id: gameFlow?.current_question_id || questionIdParam,
-      text:
-        questions.length === 0
-          ? 'クイズデータを読み込み中...'
-          : `問題 ${(idx ?? 0) + 1} を読み込み中...`,
-      image: undefined,
-      timeLimit: Math.max(
-        DEFAULT_MIN_TIME_LIMIT_SECONDS,
-        Math.round((timerState?.remainingMs || DEFAULT_FALLBACK_TIME_MS) / MS_PER_SECOND),
-      ),
-      show_question_time: DEFAULT_SHOW_QUESTION_TIME_SECONDS,
-      answering_time: DEFAULT_ANSWERING_TIME_SECONDS,
-      choices: [
-        { id: 'loading-1', text: '読み込み中...', letter: 'A' },
-        { id: 'loading-2', text: '読み込み中...', letter: 'B' },
-        { id: 'loading-3', text: '読み込み中...', letter: 'C' },
-        { id: 'loading-4', text: '読み込み中...', letter: 'D' },
-      ],
-      correctAnswerId: 'loading-1',
-      explanation: undefined,
-      type: 'multiple_choice_4',
-    };
-  }, [
-    currentQuestionData,
-    gameFlow?.current_question_id,
-    gameFlow?.current_question_index,
-    gameFlow?.current_question_start_time,
-    gameFlow?.current_question_end_time,
-    questionIdParam,
-    questionIndexParam,
-    questions,
-    timerState?.remainingMs,
-  ]);
+  const currentQuestion: Question = useMemo(
+    () =>
+      computeCurrentQuestion({
+        currentQuestionData,
+        gameFlow,
+        questionIdParam,
+        questionIndexParam,
+        questions,
+        timerState,
+      }),
+    [currentQuestionData, gameFlow, questionIdParam, questionIndexParam, questions, timerState],
+  );
 
   //----------------------------------------------------
   // 11.5. Refs
@@ -1304,122 +1531,27 @@ function PlayerGameContent() {
   });
 
   //----------------------------------------------------
-  // 11.8. Additional Computed Values
+  // 11.8. Timer Management
   //----------------------------------------------------
-
-  const derivedRemainingMsFromFlow =
-    gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
-      ? Math.max(0, new Date(gameFlow.current_question_end_time).getTime() - Date.now())
-      : null;
-
-  const showQuestionTime = Number.isFinite(currentQuestion.show_question_time)
-    ? currentQuestion.show_question_time
-    : DEFAULT_SHOW_QUESTION_TIME_SECONDS;
-  const answeringTime = Number.isFinite(currentQuestion.answering_time)
-    ? currentQuestion.answering_time
-    : DEFAULT_ANSWERING_TIME_SECONDS;
-
-  const viewingDurationMs = showQuestionTime * MS_PER_SECOND;
-
-  let questionElapsedMs = 0;
-  if (timerState?.startTime && currentPhase === 'question') {
-    questionElapsedMs = Math.max(0, Date.now() - timerState.startTime.getTime());
-  } else if (gameFlow?.current_question_start_time) {
-    questionElapsedMs = Math.max(
-      0,
-      Date.now() - new Date(gameFlow.current_question_start_time).getTime(),
-    );
-  }
-
-  const viewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
-
-  useEffect(() => {
-    const currentQuestionId = gameFlow?.current_question_id;
-    const previousPhase = previousPhaseRef.current;
-
-    if (previousPhase === 'question' && currentPhase !== 'question') {
-      setQuestionRemainingMs(null);
-      questionTimerInitializedRef.current = null;
-    }
-
-    previousPhaseRef.current = currentPhase;
-
-    if (currentPhase === 'question' && currentQuestionId) {
-      if (questionTimerInitializedRef.current === currentQuestionId) {
-        if (questionRemainingMs === null) {
-          const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
-
-          if (currentViewingRemainingMs > 0) {
-            setQuestionRemainingMs(currentViewingRemainingMs);
-          } else {
-            setIsDisplayPhaseDone(true);
-            setAnswerDurationMs(answeringTime * MS_PER_SECOND);
-            setAnswerRemainingMs(answeringTime * MS_PER_SECOND);
-            answeringPhaseStartTimeRef.current = Date.now();
-            setCurrentPhase('answering');
-            router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
-          }
-        }
-        return;
-      }
-
-      questionTimerInitializedRef.current = currentQuestionId;
-
-      const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
-      const initialTime =
-        currentViewingRemainingMs > 0 ? currentViewingRemainingMs : viewingDurationMs;
-
-      if (initialTime > 0) {
-        setQuestionRemainingMs(initialTime);
-      } else {
-        setIsDisplayPhaseDone(true);
-        setAnswerDurationMs(answeringTime * MS_PER_SECOND);
-        setAnswerRemainingMs(answeringTime * MS_PER_SECOND);
-        answeringPhaseStartTimeRef.current = Date.now();
-        setCurrentPhase('answering');
-        router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
-      }
-    }
-  }, [
+  const { displayRemainingMs, currentTimeSeconds, viewingRemainingMs } = usePlayerGameTimer({
     currentPhase,
-    gameFlow?.current_question_id,
-    viewingDurationMs,
-    questionElapsedMs,
-    showQuestionTime,
-    answeringTime,
+    gameFlow,
+    timerState,
+    currentQuestion,
+    questionRemainingMs,
+    answerRemainingMs,
+    setQuestionRemainingMs,
+    setAnswerRemainingMs,
+    setAnswerDurationMs,
+    setIsDisplayPhaseDone,
+    setCurrentPhase,
+    questionTimerInitializedRef,
+    previousPhaseRef,
+    answeringPhaseStartTimeRef,
     gameId,
     playerId,
     router,
-    questionRemainingMs,
-  ]);
-
-  const totalRemainingMs =
-    timerState?.remainingMs ??
-    derivedRemainingMsFromFlow ??
-    (currentPhase === 'question' ? viewingRemainingMs : answeringTime * MS_PER_SECOND);
-
-  const answeringRemainingMsDerived = Math.max(
-    0,
-    Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0,
-  );
-
-  const displayRemainingMs =
-    currentPhase === 'question'
-      ? questionRemainingMs !== null
-        ? questionRemainingMs
-        : viewingRemainingMs
-      : answeringRemainingMsDerived;
-
-  const currentTimeSeconds = useMemo(() => {
-    if (currentPhase === 'question') {
-      const time = Number.isFinite(displayRemainingMs) ? displayRemainingMs : 0;
-      return Math.max(0, Math.round(time / MS_PER_SECOND));
-    } else if (currentPhase === 'answering') {
-      const time = Number.isFinite(answerRemainingMs) ? (answerRemainingMs ?? 0) : 0;
-      return Math.max(0, Math.round(time / MS_PER_SECOND));
-    }
-    return 0;
-  }, [currentPhase, displayRemainingMs, answerRemainingMs]);
+  });
 
   const statisticsMemo = useMemo(() => {
     if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
@@ -1492,7 +1624,14 @@ function PlayerGameContent() {
 
     setCurrentPhase('answering');
     router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
-  }, [currentQuestion.answering_time, gameId, isDisplayPhaseDone, playerId, router]);
+  }, [
+    currentQuestion.answering_time,
+    gameId,
+    isDisplayPhaseDone,
+    playerId,
+    router,
+    answeringPhaseStartTimeRef,
+  ]);
 
   useEffect(() => {
     if (currentPhase !== 'question') return;
@@ -1588,6 +1727,7 @@ function PlayerGameContent() {
       currentQuestionForPoints?.answering_time,
       currentQuestion.answering_time,
       submitAnswer,
+      answeringPhaseStartTimeRef,
     ],
   );
 
