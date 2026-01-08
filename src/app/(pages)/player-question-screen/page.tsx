@@ -177,6 +177,78 @@ const createPlaceholderQuestion = (
   };
 };
 
+/**
+ * Calculates question number from game flow
+ */
+const getQuestionNumber = (
+  gameFlow: { current_question_index?: number | null } | null,
+): number | undefined => {
+  if (
+    !gameFlow ||
+    gameFlow.current_question_index === null ||
+    gameFlow.current_question_index === undefined ||
+    gameFlow.current_question_index < 0
+  ) {
+    return undefined;
+  }
+  return gameFlow.current_question_index + 1;
+};
+
+/**
+ * Calculates response time in milliseconds
+ */
+const calculateResponseTime = (
+  timerState: { remainingMs?: number } | null,
+  timeLimit: number,
+): number => {
+  if (!timerState || timerState.remainingMs === undefined) return 0;
+  return timeLimit * 1000 - timerState.remainingMs;
+};
+
+/**
+ * Builds reveal payload from current question and selected answer
+ */
+const buildRevealPayload = (
+  currentQuestion: Question,
+  selectedAnswer: string | undefined,
+): AnswerResult => {
+  const playerChoice = selectedAnswer
+    ? currentQuestion.choices.find((c) => c.id === selectedAnswer)
+    : undefined;
+
+  return {
+    question: currentQuestion,
+    correctAnswer: currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId)!,
+    playerAnswer: playerChoice,
+    isCorrect: playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false,
+    statistics: currentQuestion.choices.map((choice) => ({
+      choiceId: choice.id,
+      count: 0,
+      percentage: 0,
+    })),
+    totalPlayers: 0,
+    totalAnswered: 0,
+  };
+};
+
+/**
+ * Component: ValidationErrorScreen
+ * Description:
+ * - Displays validation error messages
+ */
+const ValidationErrorScreen: React.FC<{ message: string }> = ({ message }) => (
+  <div className="p-6 text-red-600">{message}</div>
+);
+
+/**
+ * Component: LoadingScreen
+ * Description:
+ * - Displays loading state messages
+ */
+const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
+  <div className="p-6">{message}</div>
+);
+
 //----------------------------------------------------
 // 7. Main Component
 //----------------------------------------------------
@@ -232,14 +304,13 @@ function PlayerQuestionScreenContent() {
   //----------------------------------------------------
   // 7.4. Answer Handling
   //----------------------------------------------------
+  const questionNumber = useMemo(() => getQuestionNumber(gameFlow), [gameFlow]);
+
   const { answerStatus, submitAnswer } = useGameAnswer({
     gameId,
     playerId: playerIdentifier,
     questionId: gameFlow?.current_question_id || null,
-    questionNumber:
-      gameFlow && gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-        ? gameFlow.current_question_index + 1
-        : undefined,
+    questionNumber,
     autoReveal: false,
     questionPoints: currentQuestionForPoints?.points ?? 100,
     answeringTime: currentQuestionForPoints?.answering_time ?? 30,
@@ -254,9 +325,7 @@ function PlayerQuestionScreenContent() {
   const handleAnswerSubmit = useCallback(async () => {
     if (!selectedAnswer || !gameFlow?.current_question_id) return;
     try {
-      const responseTimeMs = timerState
-        ? currentQuestion.timeLimit * 1000 - timerState.remainingMs
-        : 0;
+      const responseTimeMs = calculateResponseTime(timerState, currentQuestion.timeLimit);
       await submitAnswer(selectedAnswer, responseTimeMs);
     } catch (err) {
       console.error(err);
@@ -269,24 +338,10 @@ function PlayerQuestionScreenContent() {
     submitAnswer,
   ]);
 
-  const revealPayload: AnswerResult = useMemo(() => {
-    const playerChoice = selectedAnswer
-      ? currentQuestion.choices.find((c) => c.id === selectedAnswer)
-      : undefined;
-    return {
-      question: currentQuestion,
-      correctAnswer: currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId)!,
-      playerAnswer: playerChoice,
-      isCorrect: playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false,
-      statistics: currentQuestion.choices.map((choice) => ({
-        choiceId: choice.id,
-        count: 0,
-        percentage: 0,
-      })),
-      totalPlayers: 0,
-      totalAnswered: 0,
-    };
-  }, [currentQuestion, selectedAnswer]);
+  const revealPayload: AnswerResult = useMemo(
+    () => buildRevealPayload(currentQuestion, selectedAnswer),
+    [currentQuestion, selectedAnswer],
+  );
 
   //----------------------------------------------------
   // 7.5. Validation & Rendering
@@ -294,19 +349,19 @@ function PlayerQuestionScreenContent() {
   const shouldReveal = !timerState?.isActive || answerStatus.hasAnswered;
 
   if (!gameId) {
-    return <div className="p-6 text-red-600">gameId が指定されていません。</div>;
+    return <ValidationErrorScreen message="gameId が指定されていません。" />;
   }
 
   if (!playerParam && !deviceId) {
-    return <div className="p-6 text-red-600">playerId が指定されていません。</div>;
+    return <ValidationErrorScreen message="playerId が指定されていません。" />;
   }
 
   if (!gameFlow) {
-    return <div className="p-6">ゲーム状態を読み込み中...</div>;
+    return <LoadingScreen message="ゲーム状態を読み込み中..." />;
   }
 
   if (!gameFlow.current_question_id) {
-    return <div className="p-6">次の質問開始を待機しています...</div>;
+    return <LoadingScreen message="次の質問開始を待機しています..." />;
   }
 
   if (shouldReveal) {
