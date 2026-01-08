@@ -695,6 +695,105 @@ function DashboardContent() {
     [router],
   );
 
+  //----------------------------------------------------
+  // Helper Functions for Game Creation
+  //----------------------------------------------------
+  /**
+   * Function: getHostPlayerName
+   * Description:
+   * - Extracts host player name from user data
+   * - Falls back to email username or 'Host' if unavailable
+   */
+  const getHostPlayerName = useCallback((): string => {
+    const { user } = useAuthStore.getState();
+    return user?.username || user?.email?.split('@')[0] || 'Host';
+  }, []);
+
+  /**
+   * Function: buildGameSettings
+   * Description:
+   * - Builds game settings from quiz play settings
+   * - Applies defaults for missing values
+   */
+  const buildGameSettings = useCallback(
+    (playSettings: {
+      show_question_only?: boolean;
+      show_explanation?: boolean;
+      time_bonus?: boolean;
+      streak_bonus?: boolean;
+      show_correct_answer?: boolean;
+      max_players?: number;
+    }) => ({
+      show_question_only: playSettings?.show_question_only ?? true,
+      show_explanation: playSettings?.show_explanation ?? true,
+      time_bonus: playSettings?.time_bonus ?? true,
+      streak_bonus: playSettings?.streak_bonus ?? true,
+      show_correct_answer: playSettings?.show_correct_answer ?? false,
+      max_players: playSettings?.max_players ?? DEFAULT_MAX_PLAYERS,
+    }),
+    [],
+  );
+
+  /**
+   * Function: createGameSession
+   * Description:
+   * - Creates a new game session via API
+   * - Returns game data or error
+   */
+  const createGameSession = useCallback(
+    async (
+      quizId: string,
+      gameSettings: ReturnType<typeof buildGameSettings>,
+      deviceId: string | undefined,
+      hostPlayerName: string,
+    ) => {
+      const { data: newGame, error: createError } = await gameApi.createGame(
+        quizId,
+        gameSettings,
+        deviceId,
+        hostPlayerName,
+      );
+
+      if (createError || !newGame) {
+        return {
+          success: false,
+          error: createError?.message || 'ゲームの作成に失敗しました',
+          game: null,
+        };
+      }
+
+      const gameCode = newGame.game_code || newGame.room_code || '';
+      if (!gameCode) {
+        return {
+          success: false,
+          error: 'Game created but no game_code returned from backend',
+          game: null,
+        };
+      }
+
+      return {
+        success: true,
+        error: null,
+        game: { ...newGame, game_code: gameCode },
+      };
+    },
+    [],
+  );
+
+  /**
+   * Function: navigateToWaitingRoom
+   * Description:
+   * - Stores game session in sessionStorage
+   * - Navigates to host waiting room
+   */
+  const navigateToWaitingRoom = useCallback(
+    (gameCode: string, gameId: string, quizId: string) => {
+      sessionStorage.setItem(`game_${gameCode}`, gameId);
+      router.push(`/host-waiting-room?code=${gameCode}&quizId=${quizId}&gameId=${gameId}`);
+    },
+    [router],
+  );
+
   const handleStartQuiz = useCallback(
     async (id: string) => {
       if (isCreatingGame) {
@@ -706,43 +805,33 @@ function DashboardContent() {
         setCreatingQuizId(id);
         setGameCreationError(null);
 
-        const { user } = useAuthStore.getState();
-        const hostPlayerName = user?.username || user?.email?.split('@')[0] || 'Host';
-
+        const hostPlayerName = getHostPlayerName();
         const quizSet = await quizService.getQuiz(id);
-
         const playSettings = quizSet.play_settings || DEFAULT_PLAY_SETTINGS;
+        const gameSettings = buildGameSettings(
+          playSettings as {
+            show_question_only?: boolean;
+            show_explanation?: boolean;
+            time_bonus?: boolean;
+            streak_bonus?: boolean;
+            show_correct_answer?: boolean;
+            max_players?: number;
+          },
+        );
 
-        const gameSettings = {
-          show_question_only: playSettings.show_question_only ?? true,
-          show_explanation: playSettings.show_explanation ?? true,
-          time_bonus: playSettings.time_bonus ?? true,
-          streak_bonus: playSettings.streak_bonus ?? true,
-          show_correct_answer: playSettings.show_correct_answer ?? false,
-          max_players: playSettings.max_players ?? DEFAULT_MAX_PLAYERS,
-        };
-
-        const { data: newGame, error: createError } = await gameApi.createGame(
+        const result = await createGameSession(
           id,
           gameSettings,
           deviceId || undefined,
           hostPlayerName,
         );
 
-        if (createError || !newGame) {
-          const errorMessage = createError?.message || 'ゲームの作成に失敗しました';
-          setGameCreationError(errorMessage);
+        if (!result.success) {
+          setGameCreationError(result.error || 'ゲームの作成に失敗しました');
           return;
         }
 
-        const gameCode = newGame.game_code || newGame.room_code || '';
-        if (!gameCode) {
-          throw new Error('Game created but no game_code returned from backend');
-        }
-
-        sessionStorage.setItem(`game_${gameCode}`, newGame.id);
-
-        router.push(`/host-waiting-room?code=${gameCode}&quizId=${id}&gameId=${newGame.id}`);
+        navigateToWaitingRoom(result.game!.game_code, result.game!.id, id);
       } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : 'ゲームの作成中にエラーが発生しました';
@@ -752,7 +841,17 @@ function DashboardContent() {
         setCreatingQuizId(null);
       }
     },
-    [isCreatingGame, deviceId, router, setIsCreatingGame, setCreatingQuizId, setGameCreationError],
+    [
+      isCreatingGame,
+      deviceId,
+      setIsCreatingGame,
+      setCreatingQuizId,
+      setGameCreationError,
+      getHostPlayerName,
+      buildGameSettings,
+      createGameSession,
+      navigateToWaitingRoom,
+    ],
   );
 
   const handleDeleteQuiz = useCallback(
