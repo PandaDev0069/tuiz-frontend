@@ -443,6 +443,170 @@ function WaitingRoomContent() {
     [setIsRoomLocked],
   );
 
+  /**
+   * Function: handleGameIdResolution
+   * Description:
+   * - Resolves and validates game ID
+   * - Returns game ID or null with error handling
+   */
+  const handleGameIdResolution = useCallback(
+    async (
+      gameIdParam: string,
+      roomCode: string,
+      isMounted: boolean,
+    ): Promise<{ success: boolean; gameId?: string; error?: string }> => {
+      const currentGameId = await resolveGameId(gameIdParam, roomCode);
+      if (!currentGameId) {
+        if (!isMounted) {
+          return { success: false };
+        }
+        return {
+          success: false,
+          error: 'ゲームが見つかりません。ルームコードを確認してください。',
+        };
+      }
+
+      if (!isMounted) {
+        return { success: false };
+      }
+
+      setGameId(currentGameId);
+      return { success: true, gameId: currentGameId };
+    },
+    [resolveGameId, setGameId],
+  );
+
+  /**
+   * Function: handleExistingPlayerFlow
+   * Description:
+   * - Handles the entire existing player reconnection flow
+   */
+  const handleExistingPlayerFlow = useCallback(
+    async (
+      currentGameId: string,
+      deviceId: string | null,
+      isMounted: boolean,
+    ): Promise<{ handled: boolean }> => {
+      const existingPlayer = await checkExistingPlayer(currentGameId);
+      if (!existingPlayer) {
+        const cachedPlayerId =
+          (typeof window !== 'undefined' &&
+            sessionStorage.getItem(`player_${currentGameId}_${deviceId || 'unknown'}`)) ||
+          null;
+        if (cachedPlayerId) {
+          clearCachedPlayerId(currentGameId, deviceId);
+        }
+        return { handled: false };
+      }
+
+      if (handleExistingPlayerReconnection(existingPlayer, currentGameId, deviceId, isMounted)) {
+        return { handled: true };
+      }
+
+      if (!isMounted) {
+        return { handled: false };
+      }
+
+      return { handled: false };
+    },
+    [checkExistingPlayer, handleExistingPlayerReconnection],
+  );
+
+  /**
+   * Function: handleJoinError
+   * Description:
+   * - Handles join errors consistently
+   */
+  const handleJoinError = useCallback(
+    (error: string, isMounted: boolean, isLocked?: boolean): { shouldReturn: boolean } => {
+      if (!isMounted) {
+        return { shouldReturn: true };
+      }
+
+      setJoinError(error);
+      resetJoinState(setIsJoining, isJoiningRef);
+      toast.error(error);
+
+      if (isLocked) {
+        setIsRoomLocked(true);
+      }
+
+      return { shouldReturn: true };
+    },
+    [setIsJoining, setJoinError, setIsRoomLocked],
+  );
+
+  /**
+   * Function: handleNewPlayerJoinFlow
+   * Description:
+   * - Handles the entire new player join flow
+   */
+  const handleNewPlayerJoinFlow = useCallback(
+    async (
+      currentGameId: string,
+      playerName: string,
+      deviceId: string,
+      isMounted: boolean,
+    ): Promise<{ success: boolean; error?: string }> => {
+      const validation = validateJoinParameters(deviceId, playerName, isMounted);
+      if (!validation.valid) {
+        if (!isMounted) {
+          return { success: false };
+        }
+        if (validation.error) {
+          setJoinError(validation.error);
+        }
+        resetJoinState(setIsJoining, isJoiningRef);
+        return { success: false, error: validation.error };
+      }
+
+      const joinResult = await performGameJoin(currentGameId, playerName, deviceId);
+      if (!joinResult.success) {
+        const isLocked = joinResult.error?.includes('locked');
+        handleJoinError(joinResult.error || 'ゲームへの参加に失敗しました', isMounted, isLocked);
+        return { success: false, error: joinResult.error };
+      }
+
+      if (!joinResult.player?.id) {
+        if (!isMounted) {
+          return { success: false };
+        }
+        setJoinError('プレイヤー情報が不正です');
+        resetJoinState(setIsJoining, isJoiningRef);
+        return { success: false, error: 'プレイヤー情報が不正です' };
+      }
+
+      storePlayerIdInSession(currentGameId, deviceId, joinResult.player.id);
+
+      await initializePlayerGameData(currentGameId, joinResult.player.id, deviceId);
+      await fetchGameLockStatus(currentGameId);
+
+      finalizePlayerJoin(
+        setIsJoining,
+        setJoinError,
+        setPlayerId,
+        setIsInitialized,
+        isJoiningRef,
+        hasInitializedRef,
+        joinResult.player.id,
+      );
+      toast.success('ゲームに参加しました！');
+
+      return { success: true };
+    },
+    [
+      validateJoinParameters,
+      performGameJoin,
+      handleJoinError,
+      initializePlayerGameData,
+      fetchGameLockStatus,
+      setIsJoining,
+      setJoinError,
+      setPlayerId,
+      setIsInitialized,
+    ],
+  );
+
   //----------------------------------------------------
   // 7.7. Initialize Player Join Flow
   //----------------------------------------------------
@@ -470,104 +634,39 @@ function WaitingRoomContent() {
         setIsJoining(true);
         setJoinError(null);
 
-        const currentGameId = await resolveGameId(gameIdParam, roomCode);
-        if (!currentGameId) {
-          if (!isMounted) {
-            resetJoinState(setIsJoining, isJoiningRef);
-            return;
-          }
-          setJoinError('ゲームが見つかりません。ルームコードを確認してください。');
-          resetJoinState(setIsJoining, isJoiningRef);
-          return;
-        }
-
-        if (!isMounted) {
-          resetJoinState(setIsJoining, isJoiningRef);
-          return;
-        }
-        setGameId(currentGameId);
-
-        const existingPlayer = await checkExistingPlayer(currentGameId);
-        if (existingPlayer) {
-          if (
-            handleExistingPlayerReconnection(existingPlayer, currentGameId, deviceId, isMounted)
-          ) {
-            return;
-          }
-          if (!isMounted) {
-            resetJoinState(setIsJoining, isJoiningRef);
-            return;
-          }
-        }
-
-        const cachedPlayerId =
-          (typeof window !== 'undefined' &&
-            sessionStorage.getItem(`player_${currentGameId}_${deviceId || 'unknown'}`)) ||
-          null;
-        if (cachedPlayerId) {
-          clearCachedPlayerId(currentGameId, deviceId);
-        }
-
-        const validation = validateJoinParameters(deviceId, playerName, isMounted);
-        if (!validation.valid) {
-          if (!isMounted) {
-            resetJoinState(setIsJoining, isJoiningRef);
-            return;
-          }
-          if (validation.error) {
-            setJoinError(validation.error);
+        const gameIdResult = await handleGameIdResolution(gameIdParam, roomCode, isMounted);
+        if (!gameIdResult.success) {
+          if (gameIdResult.error) {
+            setJoinError(gameIdResult.error);
           }
           resetJoinState(setIsJoining, isJoiningRef);
           return;
         }
 
-        const joinResult = await performGameJoin(currentGameId, playerName, deviceId!);
-        if (!joinResult.success) {
-          if (!isMounted) {
-            resetJoinState(setIsJoining, isJoiningRef);
-            return;
-          }
-          setJoinError(joinResult.error || 'ゲームへの参加に失敗しました');
-          resetJoinState(setIsJoining, isJoiningRef);
-          toast.error(joinResult.error || 'ゲームへの参加に失敗しました');
+        const currentGameId = gameIdResult.gameId!;
 
-          if (joinResult.error?.includes('locked')) {
-            setIsRoomLocked(true);
-          }
-          return;
-        }
-
-        if (!joinResult.player?.id) {
-          setJoinError('プレイヤー情報が不正です');
-          resetJoinState(setIsJoining, isJoiningRef);
-          return;
-        }
-
-        storePlayerIdInSession(currentGameId, deviceId, joinResult.player.id);
-
-        await initializePlayerGameData(currentGameId, joinResult.player.id, deviceId!);
-        await fetchGameLockStatus(currentGameId);
-
-        finalizePlayerJoin(
-          setIsJoining,
-          setJoinError,
-          setPlayerId,
-          setIsInitialized,
-          isJoiningRef,
-          hasInitializedRef,
-          joinResult.player.id,
+        const existingPlayerResult = await handleExistingPlayerFlow(
+          currentGameId,
+          deviceId,
+          isMounted,
         );
-        toast.success('ゲームに参加しました！');
-      } catch (err) {
-        if (!isMounted) {
-          resetJoinState(setIsJoining, isJoiningRef);
+        if (existingPlayerResult.handled) {
           return;
         }
+
+        const newPlayerResult = await handleNewPlayerJoinFlow(
+          currentGameId,
+          playerName,
+          deviceId!,
+          isMounted,
+        );
+        if (!newPlayerResult.success) {
+          return;
+        }
+      } catch (err) {
         const errorMessage =
           err instanceof Error ? err.message : 'ゲームへの参加中にエラーが発生しました';
-        setJoinError(errorMessage);
-        resetJoinState(setIsJoining, isJoiningRef);
-        toast.error(errorMessage);
+        handleJoinError(errorMessage, isMounted);
         console.error('Failed to join game:', err);
       } finally {
         if (isMounted) {
@@ -587,14 +686,10 @@ function WaitingRoomContent() {
     deviceId,
     gameIdParam,
     isDeviceIdLoading,
-    resolveGameId,
-    checkExistingPlayer,
-    handleExistingPlayerReconnection,
-    validateJoinParameters,
-    performGameJoin,
-    initializePlayerGameData,
-    fetchGameLockStatus,
-    setGameId,
+    handleGameIdResolution,
+    handleExistingPlayerFlow,
+    handleNewPlayerJoinFlow,
+    handleJoinError,
   ]);
 
   //----------------------------------------------------
