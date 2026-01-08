@@ -281,7 +281,6 @@ function EditQuizPageContent() {
   }, [quizId, currentStep, formData, questions, saveQuizData, saveQuestionsData]);
 
   const handleProfileClick = useCallback(() => {
-    // TODO: Implement profile navigation or modal
     router.push('/dashboard');
   }, [router]);
 
