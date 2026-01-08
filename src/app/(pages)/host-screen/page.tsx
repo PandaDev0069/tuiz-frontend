@@ -3,7 +3,7 @@
 // Project     : TUIZ
 // Author      : PandaDev0069 / Panta Aashish
 // Created     : 2025-09-18
-// Last Update : 2026-01-03
+// Last Update : 2026-01-08
 //
 // Description:
 // - Public display screen for live quiz games (host screen)
@@ -29,7 +29,6 @@ import { useSearchParams } from 'next/navigation';
 //----------------------------------------------------
 // 2. External Library Imports
 //----------------------------------------------------
-// (No external libraries needed)
 
 //----------------------------------------------------
 // 3. Internal Component Imports
@@ -100,7 +99,6 @@ const ANSWER_LETTERS = ['A', 'B', 'C', 'D'] as const;
 //----------------------------------------------------
 // 7. Query Client Instance
 //----------------------------------------------------
-// (Not needed - using hooks)
 
 //----------------------------------------------------
 // 8. Types / Interfaces
@@ -868,9 +866,7 @@ function HostScreenContent() {
         }
         setGameId(game.id);
         sessionStorage.setItem(`game_${roomCode}`, game.id);
-      } catch {
-        // Error handled silently
-      }
+      } catch {}
     };
 
     getGameIdFromCode();
@@ -890,9 +886,7 @@ function HostScreenContent() {
           const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
           setQuestions(sorted);
         }
-      } catch {
-        // Error handled silently
-      }
+      } catch {}
     };
     loadQuiz();
   }, [gameId]);
@@ -1018,9 +1012,7 @@ function HostScreenContent() {
         }
         setGameId(game.id);
         sessionStorage.setItem(`game_${roomCode}`, game.id);
-      } catch {
-        // Error handled silently
-      }
+      } catch {}
     };
 
     getGameIdFromCode();
@@ -1040,9 +1032,7 @@ function HostScreenContent() {
           const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
           setQuestions(sorted);
         }
-      } catch {
-        // Error handled silently
-      }
+      } catch {}
     };
     loadQuiz();
   }, [gameId]);
@@ -1099,9 +1089,7 @@ function HostScreenContent() {
           showExplanationTime: data.question.show_explanation_time,
           totalQuestions: data.total_questions,
         });
-      } catch {
-        // Error handled silently
-      }
+      } catch {}
     };
 
     fetchCurrentQuestion();
@@ -1394,9 +1382,7 @@ function HostScreenContent() {
               show_time: data.show_explanation_time || DEFAULT_EXPLANATION_TIME_SECONDS,
             });
           }
-        } catch {
-          // Error handled silently
-        }
+        } catch {}
       };
       fetchExplanation();
     }
