@@ -2,8 +2,8 @@
 // File Name   : page.tsx
 // Project     : TUIZ
 // Author      : PandaDev0069 / Panta Aashish
-// Created     : 2025-09-21
-// Last Update : 2025-12-29
+// Created     : 2025-09-18
+// Last Update : 2026-01-08
 //
 // Description:
 // - Waiting room page for players before game starts
@@ -47,7 +47,6 @@ import { useDeviceId } from '@/hooks/useDeviceId';
 //----------------------------------------------------
 // 5. Types / Interfaces
 //----------------------------------------------------
-// (Types defined inline)
 
 //----------------------------------------------------
 // 6. Helper Functions for Join Flow
@@ -180,24 +179,19 @@ function WaitingRoomContent() {
    * - Checks sessionStorage first, then API
    */
   const getGameIdFromCode = useCallback(async (code: string): Promise<string | null> => {
-    // Priority 1: Check sessionStorage (set when host creates game)
     const storedGameId = sessionStorage.getItem(`game_${code}`);
     if (storedGameId) {
       return storedGameId;
     }
 
-    // Priority 2: Fetch game by code from API
     try {
       const { data: game, error: gameError } = await gameApi.getGameByCode(code);
       if (gameError || !game) {
-        console.warn('Failed to fetch game by code:', gameError);
         return null;
       }
-      // Store in sessionStorage for future use
       sessionStorage.setItem(`game_${code}`, game.id);
       return game.id;
-    } catch (err) {
-      console.error('Error fetching game by code:', err);
+    } catch {
       return null;
     }
   }, []);
@@ -215,11 +209,9 @@ function WaitingRoomContent() {
       }
 
       try {
-        // Get all players for this game
         const { data: playersResponse, error: playersError } =
           await gameApi.getPlayers(gameIdToCheck);
         if (playersError) {
-          console.warn('[WaitingRoom] Error fetching players:', playersError);
           return null;
         }
         if (!playersResponse) {
@@ -227,11 +219,9 @@ function WaitingRoomContent() {
         }
 
         const playersArray = playersResponse.players || [];
-        // Find player with matching device_id
         const existingPlayer = playersArray.find((p) => p.device_id === deviceId);
         return existingPlayer || null;
-      } catch (err) {
-        console.error('[WaitingRoom] Failed to check existing player:', err);
+      } catch {
         return null;
       }
     },
@@ -267,16 +257,13 @@ function WaitingRoomContent() {
         nextPhase = 'countdown';
       }
 
-      // Only navigate if game has actually started (not in waiting state)
       if (nextPhase !== 'waiting') {
         isNavigatingRef.current = true;
         router.replace(
           `/game-player?gameId=${gameId}&phase=${nextPhase}&playerId=${playerId || playerName}`,
         );
       }
-    } catch (err) {
-      console.warn('[WaitingRoom] Failed to sync game state', err);
-    }
+    } catch {}
   }, [gameId, router, playerId, playerName]);
 
   /**
@@ -378,11 +365,6 @@ function WaitingRoomContent() {
 
       if (joinError || !player) {
         const errorMessage = joinError?.message || 'ゲームへの参加に失敗しました';
-        console.error('[WaitingRoom] Join game failed:', {
-          error: joinError,
-          player,
-          errorMessage,
-        });
 
         if (joinError?.error === 'join_game_failed' && joinError.message?.includes('locked')) {
           return { success: false, error: errorMessage, player: undefined };
@@ -414,16 +396,8 @@ function WaitingRoomContent() {
           deviceId,
         );
         if (dataError) {
-          if (dataError.error !== 'conflict' && !dataError.message?.includes('already exists')) {
-            console.warn('[WaitingRoom] Game player data initialization error:', dataError);
-          }
         }
-      } catch (dataError) {
-        const errorMessage = dataError instanceof Error ? dataError.message : String(dataError);
-        if (!errorMessage.includes('409') && !errorMessage.includes('Conflict')) {
-          console.warn('[WaitingRoom] Game player data initialization error:', dataError);
-        }
-      }
+      } catch {}
     },
     [],
   );
@@ -667,7 +641,6 @@ function WaitingRoomContent() {
         const errorMessage =
           err instanceof Error ? err.message : 'ゲームへの参加中にエラーが発生しました';
         handleJoinError(errorMessage, isMounted);
-        console.error('Failed to join game:', err);
       } finally {
         if (isMounted) {
           resetJoinState(setIsJoining, isJoiningRef);
@@ -705,15 +678,12 @@ function WaitingRoomContent() {
   // 7.9. WebSocket Setup
   //----------------------------------------------------
   useEffect(() => {
-    // Wait for socket to be connected AND registered before joining room
     if (!socket || !isConnected || !isRegistered || !gameId || !isInitialized || !playerId) {
       return;
     }
 
     let reconnectAttempted = false;
 
-    // Join the game room via WebSocket
-    // Backend will create room_participants and websocket_connections records
     const joinRoomSafe = () => {
       if (hasJoinedRoomRef.current) {
         return;
@@ -724,7 +694,6 @@ function WaitingRoomContent() {
 
     joinRoomSafe();
 
-    // Listen for game start event
     const handleGameStarted = (data: {
       roomId?: string;
       gameId?: string;
@@ -735,35 +704,29 @@ function WaitingRoomContent() {
       if (isNavigatingRef.current) return;
       if (targetGameId === gameId || data.roomCode === roomCode) {
         isNavigatingRef.current = true;
-        // Persist countdown start timestamp for the player page to sync timers
         if (data.startedAt) {
           sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
         }
-        // Use replace for faster navigation (no history entry)
         router.replace(
           `/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId || playerName}`,
         );
       }
     };
 
-    // Listen for explicit phase changes (fallback if game:started missed)
     const handlePhaseChange = (data: { roomId: string; phase: string; startedAt?: number }) => {
       if (data.roomId === gameId) {
-        // Always store countdown start timestamp so game-player can sync even if navigation is in-flight
         if (data.phase === 'countdown' && data.startedAt) {
           sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
         }
         if (isNavigatingRef.current) return;
 
         isNavigatingRef.current = true;
-        // Use replace for faster navigation (no history entry)
         router.replace(
           `/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId || playerName}`,
         );
       }
     };
 
-    // Listen for room lock status changes
     const handleRoomLocked = (data: { gameId?: string; roomId?: string; locked: boolean }) => {
       const targetGameId = data.gameId || data.roomId;
       if (targetGameId === gameId) {
@@ -771,18 +734,14 @@ function WaitingRoomContent() {
       }
     };
 
-    // Handle WebSocket reconnection
     const handleReconnect = async () => {
       if (reconnectAttempted) return;
       reconnectAttempted = true;
 
-      // Wait a bit for socket to be registered
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Check if player still exists
       const existingPlayer = await checkExistingPlayer();
       if (existingPlayer) {
-        // Player exists, rejoin room (reset flag to allow rejoin)
         hasJoinedRoomRef.current = false;
         setPlayerId(existingPlayer.id);
         if (typeof window !== 'undefined' && gameId) {
@@ -791,25 +750,17 @@ function WaitingRoomContent() {
         if (gameId && isRegistered) {
           joinRoom(gameId);
         }
-        // Re-sync current phase in case we missed events while disconnected
         syncGameState();
         toast.success('再接続しました');
       } else {
-        // Player doesn't exist, need to rejoin game
         toast.error('接続が切断されました。ページを再読み込みしてください。');
       }
     };
 
-    // Listen for player join/leave events (for future use - showing player count)
-    const handlePlayerJoined = () => {
-      // Could update player list here if needed
-    };
+    const handlePlayerJoined = () => {};
 
-    const handlePlayerLeft = () => {
-      // Could update player list here if needed
-    };
+    const handlePlayerLeft = () => {};
 
-    // Handle player kicked event - redirect to join page
     const handlePlayerKicked = (data: {
       player_id: string;
       player_name: string;
@@ -817,15 +768,12 @@ function WaitingRoomContent() {
       kicked_by: string;
       timestamp: string;
     }) => {
-      // Check if the kicked player is the current player
       if (data.player_id === playerId || data.game_id === gameId) {
-        // Show notification
         toast.error('ホストによってBANされました', {
           icon: '🚫',
           duration: 5000,
         });
 
-        // Clear stored game data
         if (roomCode) {
           sessionStorage.removeItem(`game_${roomCode}`);
         }
@@ -833,14 +781,12 @@ function WaitingRoomContent() {
           sessionStorage.removeItem(`player_${gameId}_${deviceId || 'unknown'}`);
         }
 
-        // Redirect to join page after a short delay
         setTimeout(() => {
           router.push('/join');
         }, 2000);
       }
     };
 
-    // Register event listeners
     socket.on('game:started', handleGameStarted);
     socket.on('game:phase:change', handlePhaseChange);
     socket.on('game:room-locked', handleRoomLocked);
