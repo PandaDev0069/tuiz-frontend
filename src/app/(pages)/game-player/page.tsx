@@ -189,10 +189,6 @@ interface PlayerKickedData {
  * Component: LoadingScreen
  * Description:
  * - Displays loading state with animated dots
- *
- * Props:
- * - message (string): Loading message
- * - color (string): Color theme for dots
  */
 const LoadingScreen: React.FC<{ message: string; color: string }> = ({ message, color }) => (
   <div className="flex items-center justify-center h-screen bg-gradient-to-br from-cyan-900 via-blue-900 to-purple-900">
@@ -217,9 +213,6 @@ const LoadingScreen: React.FC<{ message: string; color: string }> = ({ message, 
  * Component: ErrorScreen
  * Description:
  * - Displays error message
- *
- * Props:
- * - message (string): Error message
  */
 const ErrorScreen: React.FC<{ message: string }> = ({ message }) => (
   <div className="flex items-center justify-center h-screen">
@@ -227,10 +220,491 @@ const ErrorScreen: React.FC<{ message: string }> = ({ message }) => (
   </div>
 );
 
+/**
+ * Component: LeaderboardContent
+ * Description:
+ * - Renders leaderboard screen with redirect handling
+ */
+const LeaderboardContent: React.FC<{
+  gameFlow: { current_question_index: number | null };
+  questionIndexParam: number;
+  currentQuestionData: CurrentQuestionData | null;
+  questions: QuestionWithAnswers[];
+  totalQuestions: number;
+  leaderboard: unknown;
+  timerState: { remainingMs?: number } | null;
+}> = ({
+  gameFlow,
+  questionIndexParam,
+  currentQuestionData,
+  questions,
+  totalQuestions,
+  leaderboard,
+  timerState,
+}) => {
+  const currentQuestionNum =
+    gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+      ? gameFlow.current_question_index + 1
+      : questionIndexParam + 1;
+  const totalQuestionsCount =
+    currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+  const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
+
+  if (isLastQuestion) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="p-6 text-white text-xl">リダイレクト中...</div>
+        </div>
+      </div>
+    );
+  }
+
+  const leaderboardEntries = Array.isArray(leaderboard)
+    ? leaderboard.map(
+        (entry: {
+          player_id: string;
+          player_name: string;
+          score: number;
+          rank: number;
+          previous_rank?: number;
+          rank_change?: string;
+          score_change?: number;
+        }) => ({
+          playerId: entry.player_id,
+          playerName: entry.player_name,
+          score: entry.score,
+          rank: entry.rank,
+          previousRank: entry.previous_rank ?? entry.rank,
+          rankChange: (entry.rank_change || 'same') as 'up' | 'down' | 'same',
+          scoreChange: entry.score_change ?? 0,
+        }),
+      )
+    : [];
+
+  return (
+    <PlayerLeaderboardScreen
+      leaderboardData={{
+        entries: leaderboardEntries,
+        questionNumber: currentQuestionNum,
+        totalQuestions: totalQuestionsCount,
+        timeRemaining: Math.max(
+          0,
+          Math.round(
+            (timerState?.remainingMs || LEADERBOARD_TIME_LIMIT_SECONDS * MS_PER_SECOND) /
+              MS_PER_SECOND,
+          ),
+        ),
+        timeLimit: LEADERBOARD_TIME_LIMIT_SECONDS,
+      }}
+      onTimeExpired={() => {}}
+    />
+  );
+};
+
+/**
+ * Component: ExplanationContent
+ * Description:
+ * - Renders explanation screen
+ */
+const ExplanationContent: React.FC<{
+  gameFlow: { current_question_index: number | null };
+  questionIndexParam: number;
+  currentQuestionData: CurrentQuestionData | null;
+  questions: QuestionWithAnswers[];
+  totalQuestions: number;
+  explanationData: ExplanationData | null;
+  currentQuestion: Question;
+}> = ({
+  gameFlow,
+  questionIndexParam,
+  currentQuestionData,
+  questions,
+  totalQuestions,
+  explanationData,
+  currentQuestion,
+}) => {
+  const currentQuestionNum =
+    gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+      ? gameFlow.current_question_index + 1
+      : questionIndexParam + 1;
+  const totalQuestionsCount =
+    currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+
+  return (
+    <PlayerExplanationScreen
+      explanation={{
+        questionNumber: currentQuestionNum,
+        totalQuestions: totalQuestionsCount,
+        timeLimit:
+          currentQuestionData?.showExplanationTime ??
+          explanationData?.show_time ??
+          currentQuestion.show_explanation_time ??
+          DEFAULT_EXPLANATION_TIME_SECONDS,
+        title: explanationData?.title || '解説',
+        body: explanationData?.text || currentQuestion.explanation || '解説は近日追加されます。',
+        image: explanationData?.image_url || undefined,
+      }}
+      onTimeExpired={() => {}}
+    />
+  );
+};
+
+/**
+ * Component: PodiumContent
+ * Description:
+ * - Renders podium screen
+ */
+const PodiumContent: React.FC<{
+  leaderboard: unknown;
+}> = ({ leaderboard }) => {
+  const podiumEntries = Array.isArray(leaderboard)
+    ? leaderboard.map(
+        (entry: { player_id: string; player_name: string; score: number; rank: number }) => ({
+          playerId: entry.player_id,
+          playerName: entry.player_name,
+          score: entry.score,
+          rank: entry.rank,
+          previousRank: entry.rank,
+          rankChange: 'same' as const,
+        }),
+      )
+    : [];
+
+  return <PlayerPodiumScreen entries={podiumEntries} />;
+};
+
+/**
+ * Component: GameEndContent
+ * Description:
+ * - Renders game end screen
+ */
+const GameEndContent: React.FC<{
+  leaderboard: unknown;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+}> = ({ leaderboard, playerId, router }) => {
+  const playerEntry = Array.isArray(leaderboard)
+    ? (
+        leaderboard as Array<{
+          player_id: string;
+          player_name: string;
+          score: number;
+          rank: number;
+        }>
+      ).find((entry) => entry.player_id === playerId)
+    : undefined;
+
+  const leaderboardEntries: LeaderboardEntry[] = Array.isArray(leaderboard)
+    ? (
+        leaderboard as Array<{
+          player_id: string;
+          player_name: string;
+          score: number;
+          rank: number;
+        }>
+      ).map((entry) => ({
+        playerId: entry.player_id,
+        playerName: entry.player_name,
+        score: entry.score,
+        rank: entry.rank,
+        previousRank: entry.rank,
+        rankChange: 'same' as const,
+      }))
+    : [];
+
+  return (
+    <PlayerGameEndScreen
+      playerEntry={
+        playerEntry
+          ? {
+              playerId: playerEntry.player_id,
+              playerName: playerEntry.player_name,
+              score: playerEntry.score,
+              rank: playerEntry.rank,
+              previousRank: playerEntry.rank,
+              rankChange: 'same',
+            }
+          : undefined
+      }
+      entries={leaderboardEntries}
+      onReturnHome={() => router.push('/')}
+      onJoinNewGame={() => router.push('/')}
+    />
+  );
+};
+
 //----------------------------------------------------
 // 10. Custom Hooks
 //----------------------------------------------------
-// (Custom hooks imported from @/hooks)
+/**
+ * Hook: usePlayerGameWebSocket
+ * Description:
+ * - Manages WebSocket connection and event handlers for player game
+ */
+function usePlayerGameWebSocket({
+  gameId,
+  roomCode,
+  playerId,
+  socket,
+  isConnected,
+  joinRoom,
+  leaveRoom,
+  router,
+  gameFlowRef,
+  currentPhaseRef,
+  refreshFlow,
+  setCurrentPhase,
+  setAnswerStats,
+  setCountdownStartedAt,
+  handlePlayerKickedRef,
+}: {
+  gameId: string;
+  roomCode: string;
+  playerId: string;
+  socket: ReturnType<typeof useSocket>['socket'];
+  isConnected: boolean;
+  joinRoom: (roomId: string) => void;
+  leaveRoom: (roomId: string) => void;
+  router: ReturnType<typeof useRouter>;
+  gameFlowRef: React.MutableRefObject<unknown>;
+  currentPhaseRef: React.MutableRefObject<PlayerPhase>;
+  refreshFlow: () => Promise<void>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  setAnswerStats: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  setCountdownStartedAt: React.Dispatch<React.SetStateAction<number | undefined>>;
+  handlePlayerKickedRef: React.MutableRefObject<((data: PlayerKickedData) => void) | undefined>;
+}) {
+  const hasJoinedRoomRef = useRef(false);
+  const socketRef = useRef(socket);
+  const isConnectedRef = useRef(isConnected);
+
+  useEffect(() => {
+    socketRef.current = socket;
+  }, [socket]);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  const handleStatsUpdate = useCallback(
+    (data: StatsUpdateData) => {
+      if (
+        data.roomId === gameId &&
+        data.questionId ===
+          (gameFlowRef.current as { current_question_id?: string })?.current_question_id
+      ) {
+        const currentPhaseValue = currentPhaseRef.current;
+        if (currentPhaseValue === 'answer_reveal' || currentPhaseValue === 'answering') {
+          setAnswerStats((prev) => {
+            const hasChanged =
+              Object.keys(data.counts).some((key) => prev[key] !== data.counts[key]) ||
+              Object.keys(prev).some((key) => !(key in data.counts));
+            return hasChanged ? data.counts : prev;
+          });
+        }
+      }
+    },
+    [gameId, gameFlowRef, currentPhaseRef, setAnswerStats],
+  );
+
+  const handleAnswerLocked = useCallback(
+    (data: AnswerLockedData) => {
+      if (data.roomId !== gameId) return;
+      if (
+        data.counts &&
+        data.questionId ===
+          (gameFlowRef.current as { current_question_id?: string })?.current_question_id
+      ) {
+        setAnswerStats(data.counts);
+      }
+      setCurrentPhase('answer_reveal');
+      router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+    },
+    [gameId, playerId, router, gameFlowRef, setAnswerStats, setCurrentPhase],
+  );
+
+  const handlePhaseChange = useCallback(
+    (data: PhaseChangeData) => {
+      if (data.roomId !== gameId) return;
+
+      const current = currentPhaseRef.current;
+      if (data.phase !== 'waiting') {
+        const currentRank = PHASE_PRIORITY[current];
+        const nextRank = PHASE_PRIORITY[data.phase];
+        if (Number.isFinite(currentRank) && Number.isFinite(nextRank) && nextRank < currentRank) {
+          return;
+        }
+      }
+
+      if (data.phase === 'countdown') {
+        const currentQuestionIndex =
+          (gameFlowRef.current as { current_question_index?: number })?.current_question_index ?? 0;
+        if (currentQuestionIndex > 0) {
+          return;
+        }
+        setCountdownStartedAt(data.startedAt);
+        refreshFlow().catch(() => {});
+      }
+
+      setCurrentPhase(data.phase);
+
+      if (data.phase === 'waiting') {
+        if (roomCode) {
+          router.push(`/join?code=${roomCode}`);
+        } else if (gameId) {
+          router.push(`/join?gameId=${gameId}`);
+        }
+        return;
+      }
+      router.replace(`/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId}`);
+    },
+    [
+      gameId,
+      playerId,
+      router,
+      roomCode,
+      gameFlowRef,
+      currentPhaseRef,
+      refreshFlow,
+      setCurrentPhase,
+      setCountdownStartedAt,
+    ],
+  );
+
+  const handleGameStarted = useCallback(
+    (data: GameEventData) => {
+      const targetGameId = data.gameId || data.roomId;
+      if (targetGameId === gameId) {
+        setCurrentPhase('countdown');
+        router.replace(`/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId}`);
+      }
+    },
+    [gameId, playerId, router, setCurrentPhase],
+  );
+
+  const handleGamePause = useCallback(() => {}, []);
+  const handleGameResume = useCallback(() => {}, []);
+
+  const handleGameEnd = useCallback(
+    (data: GameEventData) => {
+      const targetGameId = data.gameId;
+      if (targetGameId === gameId) {
+        setCurrentPhase('ended');
+        router.replace(`/game-player?gameId=${gameId}&phase=ended&playerId=${playerId}`);
+      }
+    },
+    [gameId, playerId, router, setCurrentPhase],
+  );
+
+  const setupSocketListeners = useCallback(
+    (currentSocket: typeof socket) => {
+      if (!currentSocket) return () => {};
+
+      currentSocket.on('game:answer:stats:update', handleStatsUpdate);
+      currentSocket.on('game:answer:stats', handleStatsUpdate);
+      currentSocket.on('game:answer:locked', handleAnswerLocked);
+      currentSocket.on('game:phase:change', handlePhaseChange);
+      currentSocket.on('game:player-kicked', (data) => handlePlayerKickedRef.current?.(data));
+      currentSocket.on('game:started', handleGameStarted);
+      currentSocket.on('game:pause', handleGamePause);
+      currentSocket.on('game:resume', handleGameResume);
+      currentSocket.on('game:end', handleGameEnd);
+
+      return () => {
+        currentSocket.off('game:answer:stats:update', handleStatsUpdate);
+        currentSocket.off('game:answer:stats', handleStatsUpdate);
+        currentSocket.off('game:answer:locked', handleAnswerLocked);
+        currentSocket.off('game:phase:change', handlePhaseChange);
+        currentSocket.off('game:player-kicked');
+        currentSocket.off('game:started', handleGameStarted);
+        currentSocket.off('game:pause', handleGamePause);
+        currentSocket.off('game:resume', handleGameResume);
+        currentSocket.off('game:end', handleGameEnd);
+      };
+    },
+    [
+      handleStatsUpdate,
+      handleAnswerLocked,
+      handlePhaseChange,
+      handleGameStarted,
+      handleGamePause,
+      handleGameResume,
+      handleGameEnd,
+      handlePlayerKickedRef,
+    ],
+  );
+
+  const joinRoomSafe = useCallback(() => {
+    if (hasJoinedRoomRef.current) {
+      return;
+    }
+    if (isConnectedRef.current) {
+      joinRoom(gameId);
+      hasJoinedRoomRef.current = true;
+    }
+  }, [gameId, joinRoom]);
+
+  useEffect(() => {
+    if (!gameId) return;
+
+    const currentSocket = socketRef.current;
+    if (!currentSocket) {
+      const checkSocket = setInterval(() => {
+        if (socketRef.current) {
+          clearInterval(checkSocket);
+        }
+      }, SOCKET_CHECK_INTERVAL_MS);
+      return () => clearInterval(checkSocket);
+    }
+
+    const cleanupListeners = setupSocketListeners(currentSocket);
+    joinRoomSafe();
+
+    if (!isConnectedRef.current) {
+      const onConnect = () => {
+        joinRoomSafe();
+        currentSocket.off('connect', onConnect);
+      };
+      currentSocket.on('connect', onConnect);
+
+      const checkConnection = setInterval(() => {
+        if (isConnectedRef.current && !hasJoinedRoomRef.current) {
+          joinRoomSafe();
+          clearInterval(checkConnection);
+          currentSocket.off('connect', onConnect);
+        }
+      }, CONNECTION_CHECK_INTERVAL_MS);
+
+      const cleanupTimeout = setTimeout(() => {
+        clearInterval(checkConnection);
+        currentSocket.off('connect', onConnect);
+      }, CONNECTION_CHECK_TIMEOUT_MS);
+
+      return () => {
+        clearInterval(checkConnection);
+        clearTimeout(cleanupTimeout);
+        currentSocket.off('connect', onConnect);
+        cleanupListeners();
+
+        if (gameId && hasJoinedRoomRef.current) {
+          leaveRoom(gameId);
+          hasJoinedRoomRef.current = false;
+        }
+      };
+    }
+
+    return () => {
+      cleanupListeners();
+      currentSocket.off('connect');
+
+      if (gameId && hasJoinedRoomRef.current) {
+        leaveRoom(gameId);
+        hasJoinedRoomRef.current = false;
+      }
+    };
+  }, [gameId, joinRoom, leaveRoom, joinRoomSafe, setupSocketListeners]);
+}
 
 //----------------------------------------------------
 // 11. Main Page Content Component
@@ -524,10 +998,7 @@ function PlayerGameContent() {
   //----------------------------------------------------
   // 11.5. Refs
   //----------------------------------------------------
-  const hasJoinedRoomRef = useRef(false);
   const gameFlowRef = useRef(gameFlow);
-  const socketRef = useRef(socket);
-  const isConnectedRef = useRef(isConnected);
   const handlePlayerKickedRef = useRef<typeof handlePlayerKicked | undefined>(undefined);
   const currentPhaseRef = useRef<PlayerPhase>(phaseParam);
   const lastQuestionStartIdRef = useRef<string | null>(null);
@@ -563,14 +1034,6 @@ function PlayerGameContent() {
   useEffect(() => {
     gameFlowRef.current = gameFlow;
   }, [gameFlow]);
-
-  useEffect(() => {
-    socketRef.current = socket;
-  }, [socket]);
-
-  useEffect(() => {
-    isConnectedRef.current = isConnected;
-  }, [isConnected]);
 
   useEffect(() => {
     currentPhaseRef.current = currentPhase;
@@ -787,7 +1250,7 @@ function PlayerGameContent() {
   }, [currentPhase, gameId, countdownStartedAt]);
 
   //----------------------------------------------------
-  // 11.7. Helper Functions
+  // 11.6. Helper Functions
   //----------------------------------------------------
   /**
    * Function: handlePlayerKicked
@@ -819,265 +1282,26 @@ function PlayerGameContent() {
     handlePlayerKickedRef.current = handlePlayerKicked;
   }, [handlePlayerKicked]);
 
-  /**
-   * Function: handleStatsUpdate
-   * Description:
-   * - Handles WebSocket answer statistics updates
-   * - Only updates stats for current question and relevant phases
-   */
-  const handleStatsUpdate = useCallback(
-    (data: StatsUpdateData) => {
-      if (data.roomId === gameId && data.questionId === gameFlowRef.current?.current_question_id) {
-        const currentPhaseValue = currentPhaseRef.current;
-        if (currentPhaseValue === 'answer_reveal' || currentPhaseValue === 'answering') {
-          setAnswerStats((prev) => {
-            const hasChanged =
-              Object.keys(data.counts).some((key) => prev[key] !== data.counts[key]) ||
-              Object.keys(prev).some((key) => !(key in data.counts));
-            return hasChanged ? data.counts : prev;
-          });
-        }
-      }
-    },
-    [gameId],
-  );
-
-  /**
-   * Function: handleAnswerLocked
-   * Description:
-   * - Handles answer locked event from host
-   * - Transitions to answer reveal phase
-   */
-  const handleAnswerLocked = useCallback(
-    (data: AnswerLockedData) => {
-      if (data.roomId !== gameId) return;
-      if (data.counts && data.questionId === gameFlowRef.current?.current_question_id) {
-        setAnswerStats(data.counts);
-      }
-      setCurrentPhase('answer_reveal');
-      router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
-    },
-    [gameId, playerId, router],
-  );
-
-  /**
-   * Function: handlePhaseChange
-   * Description:
-   * - Handles WebSocket phase change events from host
-   * - Prevents invalid phase downgrades
-   * - Manages countdown for first question only
-   */
-  const handlePhaseChange = useCallback(
-    (data: PhaseChangeData) => {
-      if (data.roomId !== gameId) return;
-
-      const current = currentPhaseRef.current;
-      if (data.phase !== 'waiting') {
-        const currentRank = PHASE_PRIORITY[current];
-        const nextRank = PHASE_PRIORITY[data.phase];
-        if (Number.isFinite(currentRank) && Number.isFinite(nextRank) && nextRank < currentRank) {
-          return;
-        }
-      }
-
-      if (data.phase === 'countdown') {
-        const currentQuestionIndex = gameFlowRef.current?.current_question_index ?? 0;
-        if (currentQuestionIndex > 0) {
-          return;
-        }
-        setCountdownStartedAt(data.startedAt);
-        refreshFlow().catch(() => {
-          // Error handled silently - refresh is best-effort
-        });
-      }
-
-      setCurrentPhase(data.phase);
-
-      if (data.phase === 'waiting') {
-        if (roomCode) {
-          router.push(`/join?code=${roomCode}`);
-        } else if (gameId) {
-          router.push(`/join?gameId=${gameId}`);
-        }
-        return;
-      }
-      router.replace(`/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId}`);
-    },
-    [gameId, playerId, router, roomCode, refreshFlow],
-  );
-
-  /**
-   * Function: handleGameStarted
-   * Description:
-   * - Handles game started event
-   * - Transitions to countdown phase
-   */
-  const handleGameStarted = useCallback(
-    (data: GameEventData) => {
-      const targetGameId = data.gameId || data.roomId;
-      if (targetGameId === gameId) {
-        setCurrentPhase('countdown');
-        router.replace(`/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId}`);
-      }
-    },
-    [gameId, playerId, router],
-  );
-
-  /**
-   * Function: handleGamePause
-   * Description:
-   * - Handles game pause event
-   * - Timer will be paused by useGameFlow hook
-   */
-  const handleGamePause = useCallback((data: GameEventData) => {
-    void data; // Timer pause handled by hook
-  }, []);
-
-  /**
-   * Function: handleGameResume
-   * Description:
-   * - Handles game resume event
-   * - Timer will be resumed by useGameFlow hook
-   */
-  const handleGameResume = useCallback((data: GameEventData) => {
-    void data; // Timer resume handled by hook
-  }, []);
-
-  /**
-   * Function: handleGameEnd
-   * Description:
-   * - Handles game end event
-   * - Transitions to ended phase
-   */
-  const handleGameEnd = useCallback(
-    (data: GameEventData) => {
-      const targetGameId = data.gameId;
-      if (targetGameId === gameId) {
-        setCurrentPhase('ended');
-        router.replace(`/game-player?gameId=${gameId}&phase=ended&playerId=${playerId}`);
-      }
-    },
-    [gameId, playerId, router],
-  );
-
-  /**
-   * Function: setupSocketListeners
-   * Description:
-   * - Sets up all WebSocket event listeners
-   * - Returns cleanup function
-   */
-  const setupSocketListeners = useCallback(
-    (currentSocket: typeof socket) => {
-      if (!currentSocket) return () => {};
-
-      currentSocket.on('game:answer:stats:update', handleStatsUpdate);
-      currentSocket.on('game:answer:stats', handleStatsUpdate);
-      currentSocket.on('game:answer:locked', handleAnswerLocked);
-      currentSocket.on('game:phase:change', handlePhaseChange);
-      currentSocket.on('game:player-kicked', (data) => handlePlayerKickedRef.current?.(data));
-      currentSocket.on('game:started', handleGameStarted);
-      currentSocket.on('game:pause', handleGamePause);
-      currentSocket.on('game:resume', handleGameResume);
-      currentSocket.on('game:end', handleGameEnd);
-
-      return () => {
-        currentSocket.off('game:answer:stats:update', handleStatsUpdate);
-        currentSocket.off('game:answer:stats', handleStatsUpdate);
-        currentSocket.off('game:answer:locked', handleAnswerLocked);
-        currentSocket.off('game:phase:change', handlePhaseChange);
-        currentSocket.off('game:player-kicked');
-        currentSocket.off('game:started', handleGameStarted);
-        currentSocket.off('game:pause', handleGamePause);
-        currentSocket.off('game:resume', handleGameResume);
-        currentSocket.off('game:end', handleGameEnd);
-      };
-    },
-    [
-      handleStatsUpdate,
-      handleAnswerLocked,
-      handlePhaseChange,
-      handleGameStarted,
-      handleGamePause,
-      handleGameResume,
-      handleGameEnd,
-    ],
-  );
-
-  /**
-   * Function: joinRoomSafe
-   * Description:
-   * - Safely joins WebSocket room with deduplication
-   */
-  const joinRoomSafe = useCallback(() => {
-    if (hasJoinedRoomRef.current) {
-      return;
-    }
-    if (isConnectedRef.current) {
-      joinRoom(gameId);
-      hasJoinedRoomRef.current = true;
-    }
-  }, [gameId, joinRoom]);
-
-  useEffect(() => {
-    if (!gameId) return;
-
-    const currentSocket = socketRef.current;
-    if (!currentSocket) {
-      const checkSocket = setInterval(() => {
-        if (socketRef.current) {
-          clearInterval(checkSocket);
-        }
-      }, SOCKET_CHECK_INTERVAL_MS);
-      return () => clearInterval(checkSocket);
-    }
-
-    const cleanupListeners = setupSocketListeners(currentSocket);
-
-    joinRoomSafe();
-
-    if (!isConnectedRef.current) {
-      const onConnect = () => {
-        joinRoomSafe();
-        currentSocket.off('connect', onConnect);
-      };
-      currentSocket.on('connect', onConnect);
-
-      const checkConnection = setInterval(() => {
-        if (isConnectedRef.current && !hasJoinedRoomRef.current) {
-          joinRoomSafe();
-          clearInterval(checkConnection);
-          currentSocket.off('connect', onConnect);
-        }
-      }, CONNECTION_CHECK_INTERVAL_MS);
-
-      const cleanupTimeout = setTimeout(() => {
-        clearInterval(checkConnection);
-        currentSocket.off('connect', onConnect);
-      }, CONNECTION_CHECK_TIMEOUT_MS);
-
-      return () => {
-        clearInterval(checkConnection);
-        clearTimeout(cleanupTimeout);
-        currentSocket.off('connect', onConnect);
-        cleanupListeners();
-
-        if (gameId && hasJoinedRoomRef.current) {
-          leaveRoom(gameId);
-          hasJoinedRoomRef.current = false;
-        }
-      };
-    }
-
-    return () => {
-      cleanupListeners();
-      currentSocket.off('connect');
-
-      if (gameId && hasJoinedRoomRef.current) {
-        leaveRoom(gameId);
-        hasJoinedRoomRef.current = false;
-      }
-    };
-  }, [gameId, joinRoom, leaveRoom, joinRoomSafe, setupSocketListeners]);
+  //----------------------------------------------------
+  // 11.7. WebSocket Setup
+  //----------------------------------------------------
+  usePlayerGameWebSocket({
+    gameId,
+    roomCode,
+    playerId,
+    socket,
+    isConnected,
+    joinRoom,
+    leaveRoom,
+    router,
+    gameFlowRef,
+    currentPhaseRef,
+    refreshFlow,
+    setCurrentPhase,
+    setAnswerStats,
+    setCountdownStartedAt,
+    handlePlayerKickedRef,
+  });
 
   //----------------------------------------------------
   // 11.8. Additional Computed Values
@@ -1514,138 +1738,34 @@ function PlayerGameContent() {
           }}
         />
       );
-    case 'leaderboard': {
-      const currentQuestionNum =
-        gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-          ? gameFlow.current_question_index + 1
-          : questionIndexParam + 1;
-      const totalQuestionsCount =
-        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
-      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
-
-      if (isLastQuestion) {
-        return (
-          <div className="flex items-center justify-center h-screen">
-            <div className="text-center">
-              <div className="p-6 text-white text-xl">リダイレクト中...</div>
-            </div>
-          </div>
-        );
-      }
-
-      const leaderboardEntries = Array.isArray(leaderboard)
-        ? leaderboard.map((entry) => ({
-            playerId: entry.player_id,
-            playerName: entry.player_name,
-            score: entry.score,
-            rank: entry.rank,
-            previousRank: entry.previous_rank ?? entry.rank,
-            rankChange: (entry.rank_change || 'same') as 'up' | 'down' | 'same',
-            scoreChange: entry.score_change ?? 0,
-          }))
-        : [];
-
+    case 'leaderboard':
       return (
-        <PlayerLeaderboardScreen
-          leaderboardData={{
-            entries: leaderboardEntries,
-            questionNumber: currentQuestionNum,
-            totalQuestions: totalQuestionsCount,
-            timeRemaining: Math.max(
-              0,
-              Math.round(
-                (timerState?.remainingMs || LEADERBOARD_TIME_LIMIT_SECONDS * MS_PER_SECOND) /
-                  MS_PER_SECOND,
-              ),
-            ),
-            timeLimit: LEADERBOARD_TIME_LIMIT_SECONDS,
-          }}
-          onTimeExpired={() => {}}
+        <LeaderboardContent
+          gameFlow={gameFlow}
+          questionIndexParam={questionIndexParam}
+          currentQuestionData={currentQuestionData}
+          questions={questions}
+          totalQuestions={totalQuestions}
+          leaderboard={leaderboard}
+          timerState={timerState}
         />
       );
-    }
-    case 'explanation': {
-      const currentQuestionNum =
-        gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-          ? gameFlow.current_question_index + 1
-          : questionIndexParam + 1;
-      const totalQuestionsCount =
-        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
-
+    case 'explanation':
       return (
-        <PlayerExplanationScreen
-          explanation={{
-            questionNumber: currentQuestionNum,
-            totalQuestions: totalQuestionsCount,
-            timeLimit:
-              currentQuestionData?.showExplanationTime ??
-              explanationData?.show_time ??
-              currentQuestion.show_explanation_time ??
-              DEFAULT_EXPLANATION_TIME_SECONDS,
-            title: explanationData?.title || '解説',
-            body:
-              explanationData?.text || currentQuestion.explanation || '解説は近日追加されます。',
-            image: explanationData?.image_url || undefined,
-          }}
-          onTimeExpired={() => {
-            // Explanation timer expired - wait for host to manually advance
-          }}
+        <ExplanationContent
+          gameFlow={gameFlow}
+          questionIndexParam={questionIndexParam}
+          currentQuestionData={currentQuestionData}
+          questions={questions}
+          totalQuestions={totalQuestions}
+          explanationData={explanationData}
+          currentQuestion={currentQuestion}
         />
       );
-    }
     case 'podium':
-      return (
-        <PlayerPodiumScreen
-          entries={
-            Array.isArray(leaderboard)
-              ? leaderboard.map((entry) => ({
-                  playerId: entry.player_id,
-                  playerName: entry.player_name,
-                  score: entry.score,
-                  rank: entry.rank,
-                  previousRank: entry.rank,
-                  rankChange: 'same' as const,
-                }))
-              : []
-          }
-        />
-      );
-    case 'ended': {
-      const playerEntry = Array.isArray(leaderboard)
-        ? leaderboard.find((entry) => entry.player_id === playerId)
-        : undefined;
-
-      const leaderboardEntries: LeaderboardEntry[] = Array.isArray(leaderboard)
-        ? leaderboard.map((entry) => ({
-            playerId: entry.player_id,
-            playerName: entry.player_name,
-            score: entry.score,
-            rank: entry.rank,
-            previousRank: entry.rank,
-            rankChange: 'same' as const,
-          }))
-        : [];
-
-      return (
-        <PlayerGameEndScreen
-          playerEntry={
-            playerEntry
-              ? {
-                  playerId: playerEntry.player_id,
-                  playerName: playerEntry.player_name,
-                  score: playerEntry.score,
-                  rank: playerEntry.rank,
-                  previousRank: playerEntry.rank,
-                  rankChange: 'same',
-                }
-              : undefined
-          }
-          entries={leaderboardEntries}
-          onReturnHome={() => router.push('/')}
-          onJoinNewGame={() => router.push('/')}
-        />
-      );
-    }
+      return <PodiumContent leaderboard={leaderboard} />;
+    case 'ended':
+      return <GameEndContent leaderboard={leaderboard} playerId={playerId} router={router} />;
     default:
       return <div className="p-6">次のステップを待機しています...</div>;
   }
