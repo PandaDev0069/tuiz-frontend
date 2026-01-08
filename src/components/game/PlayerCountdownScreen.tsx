@@ -176,30 +176,62 @@ export const PlayerCountdownScreen: React.FC<PlayerCountdownScreenProps> = ({
     return START_MESSAGE;
   };
 
-  const getCountdownSize = () => {
-    if (isSyncing && startedAt) {
-      if (isMobile) {
-        if (currentTime > COUNTDOWN_THRESHOLD) return 'text-5xl sm:text-6xl';
-        if (currentTime > 0) return 'text-7xl sm:text-8xl';
+  /**
+   * Determines the time state based on current countdown time
+   * @returns 'above-threshold' | 'counting' | 'zero'
+   */
+  const getTimeState = (): 'above-threshold' | 'counting' | 'zero' => {
+    if (currentTime > COUNTDOWN_THRESHOLD) return 'above-threshold';
+    if (currentTime > 0) return 'counting';
+    return 'zero';
+  };
+
+  /**
+   * Returns mobile countdown size class based on time state
+   */
+  const getMobileCountdownSize = (timeState: 'above-threshold' | 'counting' | 'zero'): string => {
+    switch (timeState) {
+      case 'above-threshold':
+        return 'text-5xl sm:text-6xl';
+      case 'counting':
+        return 'text-7xl sm:text-8xl';
+      case 'zero':
         return 'text-6xl sm:text-7xl';
-      } else {
-        if (currentTime > COUNTDOWN_THRESHOLD) return 'text-5xl md:text-6xl lg:text-7xl';
-        if (currentTime > 0) return 'text-7xl md:text-8xl lg:text-9xl';
-        return 'text-6xl md:text-7xl lg:text-8xl';
-      }
     }
+  };
+
+  /**
+   * Returns desktop countdown size class based on time state
+   */
+  const getDesktopCountdownSize = (timeState: 'above-threshold' | 'counting' | 'zero'): string => {
+    switch (timeState) {
+      case 'above-threshold':
+        return 'text-5xl md:text-6xl lg:text-7xl';
+      case 'counting':
+        return 'text-7xl md:text-8xl lg:text-9xl';
+      case 'zero':
+        return 'text-6xl md:text-7xl lg:text-8xl';
+    }
+  };
+
+  /**
+   * Returns the appropriate countdown size class based on sync state and device type
+   */
+  const getCountdownSize = (): string => {
+    const timeState = getTimeState();
+    const sizeForDevice = isMobile
+      ? getMobileCountdownSize(timeState)
+      : getDesktopCountdownSize(timeState);
+
+    if (isSyncing && startedAt) {
+      return sizeForDevice;
+    }
+
     if (isSyncing) {
       return isMobile ? 'text-5xl sm:text-6xl' : 'text-6xl md:text-7xl lg:text-8xl';
     }
-    if (isMobile) {
-      if (currentTime > COUNTDOWN_THRESHOLD) return 'text-5xl sm:text-6xl';
-      if (currentTime > 0) return 'text-7xl sm:text-8xl';
-      return 'text-6xl sm:text-7xl';
-    } else {
-      if (currentTime > COUNTDOWN_THRESHOLD) return 'text-5xl md:text-6xl lg:text-7xl';
-      if (currentTime > 0) return 'text-7xl md:text-8xl lg:text-9xl';
-      return 'text-6xl md:text-7xl lg:text-8xl';
-    }
+
+    return sizeForDevice;
   };
 
   const getCountdownColor = () => {
