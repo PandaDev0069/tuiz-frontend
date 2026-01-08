@@ -1156,7 +1156,7 @@ function HostScreenContent() {
   }, [gameFlow, gameFlow?.current_question_id, timerState?.isActive, currentPhase]);
 
   //----------------------------------------------------
-  // 11.7. Computed Values
+  // 11.7. Additional Computed Values
   //----------------------------------------------------
   const currentQuestion: Question = useMemo(() => {
     const durationFromFlowSeconds =

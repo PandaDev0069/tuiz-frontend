@@ -1208,6 +1208,9 @@ function PlayerGameContent() {
 
   const { socket, joinRoom, leaveRoom } = useSocket();
 
+  //----------------------------------------------------
+  // 11.4. Computed Values
+  //----------------------------------------------------
   // Compute currentQuestion before it's used in effects
   const currentQuestion: Question = useMemo(
     () =>
@@ -1477,7 +1480,7 @@ function PlayerGameContent() {
   }, [currentPhase, gameId, countdownStartedAt]);
 
   //----------------------------------------------------
-  // 11.6. Helper Functions
+  // 11.7. Helper Functions
   //----------------------------------------------------
   /**
    * Function: handlePlayerKicked
@@ -1510,7 +1513,7 @@ function PlayerGameContent() {
   }, [handlePlayerKicked]);
 
   //----------------------------------------------------
-  // 11.7. WebSocket Setup
+  // 11.8. WebSocket Setup
   //----------------------------------------------------
   usePlayerGameWebSocket({
     gameId,
@@ -1531,7 +1534,7 @@ function PlayerGameContent() {
   });
 
   //----------------------------------------------------
-  // 11.8. Timer Management
+  // 11.9. Timer Management
   //----------------------------------------------------
   const { displayRemainingMs, currentTimeSeconds, viewingRemainingMs } = usePlayerGameTimer({
     currentPhase,
@@ -1553,6 +1556,9 @@ function PlayerGameContent() {
     router,
   });
 
+  //----------------------------------------------------
+  // 11.10. Additional Computed Values
+  //----------------------------------------------------
   const statisticsMemo = useMemo(() => {
     if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
       return [];
@@ -1609,7 +1615,7 @@ function PlayerGameContent() {
   }, [answerResult, currentQuestion, selectedAnswer, statisticsMemo, leaderboard]);
 
   //----------------------------------------------------
-  // 11.9. Event Handlers
+  // 11.11. Event Handlers
   //----------------------------------------------------
   const startAnsweringPhase = useCallback(() => {
     if (isDisplayPhaseDone) return;
@@ -1773,7 +1779,7 @@ function PlayerGameContent() {
   }, [currentPhase, answerRemainingMs, gameId, playerId, router]);
 
   //----------------------------------------------------
-  // 11.10. Loading State
+  // 11.12. Loading State
   //----------------------------------------------------
   if (!gameId) {
     return <ErrorScreen message="gameId が指定されていません。" />;
@@ -1788,12 +1794,12 @@ function PlayerGameContent() {
   }
 
   //----------------------------------------------------
-  // 11.11. Error State
+  // 11.13. Error State
   //----------------------------------------------------
   // (Errors handled via toast notifications)
 
   //----------------------------------------------------
-  // 11.12. Main Render
+  // 11.14. Main Render
   //----------------------------------------------------
   switch (currentPhase) {
     case 'countdown':
