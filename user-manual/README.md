@@ -4,17 +4,24 @@ Welcome to the comprehensive documentation for the TUIZ Frontend application. Th
 
 ## 📚 Documentation Index
 
-### 1. [User Manual](./01-USER-MANUAL.md)
+### 1. [User Manual](./01-USER-MANUAL.md) / [ユーザーマニュアル（日本語）](./01-USER-MANUAL-JA.md)
 
 Complete guide for end users on how to use TUIZ as both a host and a player. Includes step-by-step instructions, features overview, troubleshooting, and best practices.
+
+**Available Languages:**
+
+- English: [User Manual](./01-USER-MANUAL.md)
+- Japanese: [ユーザーマニュアル](./01-USER-MANUAL-JA.md)
 
 **Sections:**
 
 - Getting Started
 - Host Guide (Creating quizzes, managing games)
 - Player Guide (Joining games, playing quizzes)
+- Game Flow & Phases (Detailed phase-by-phase documentation)
 - Features Overview
 - Troubleshooting
+- Best Practices
 
 ---
 
@@ -190,7 +197,8 @@ Each document is self-contained but cross-referenced:
 
 **End User:**
 
-- [User Manual](./01-USER-MANUAL.md) - Complete usage guide
+- [User Manual](./01-USER-MANUAL.md) - Complete usage guide (English)
+- [ユーザーマニュアル](./01-USER-MANUAL-JA.md) - 完全な使用ガイド（日本語）
 
 **Frontend Developer:**
 
