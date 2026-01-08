@@ -3,7 +3,7 @@
 // Project     : TUIZ
 // Author      : PandaDev0069 / Panta Aashish
 // Created     : 2025-09-21
-// Last Update : 2025-12-29
+// Last Update : 2026-01-08
 //
 // Description:
 // - Host question screen component
@@ -47,7 +47,12 @@ import { Question } from '@/types/game';
 import type { QuestionWithAnswers } from '@/types/quiz';
 
 //----------------------------------------------------
-// 6. Helper Functions
+// 6. Utility Imports
+//----------------------------------------------------
+import toast from 'react-hot-toast';
+
+//----------------------------------------------------
+// 7. Helper Functions
 //----------------------------------------------------
 /**
  * Calculates server duration from start and end times
@@ -160,7 +165,7 @@ const useQuizData = (gameId: string) => {
 };
 
 //----------------------------------------------------
-// 7. Main Component
+// 8. Main Component
 //----------------------------------------------------
 /**
  * Component: HostQuestionScreenContent
@@ -170,7 +175,7 @@ const useQuizData = (gameId: string) => {
  */
 function HostQuestionScreenContent() {
   //----------------------------------------------------
-  // 7.1. URL Parameters & Setup
+  // 8.1. URL Parameters & Setup
   //----------------------------------------------------
   const searchParams = useSearchParams();
   const gameId = searchParams.get('gameId') || '';
@@ -178,7 +183,7 @@ function HostQuestionScreenContent() {
   const questionIndexParam = Number(searchParams.get('questionIndex') || '0');
 
   //----------------------------------------------------
-  // 7.2. Game Flow & State
+  // 8.2. Game Flow & State
   //----------------------------------------------------
   const { timerState, startQuestion, revealAnswer, gameFlow } = useGameFlow({
     gameId,
@@ -190,7 +195,7 @@ function HostQuestionScreenContent() {
   const [currentTime, setCurrentTime] = useState(Date.now());
 
   //----------------------------------------------------
-  // 7.3. Effects
+  // 8.3. Effects
   //----------------------------------------------------
   useEffect(() => {
     const interval = setInterval(() => {
@@ -200,7 +205,7 @@ function HostQuestionScreenContent() {
   }, []);
 
   //----------------------------------------------------
-  // 7.4. Computed Values
+  // 8.4. Computed Values
   //----------------------------------------------------
   const currentQuestion: Question = useMemo(() => {
     const idx = gameFlow?.current_question_index ?? questionIndexParam;
@@ -250,18 +255,18 @@ function HostQuestionScreenContent() {
   const currentQuestionIndex = gameFlow?.current_question_index ?? questionIndexParam;
 
   //----------------------------------------------------
-  // 7.5. Event Handlers
+  // 8.5. Event Handlers
   //----------------------------------------------------
   const handleStartQuestion = async () => {
     try {
       await startQuestion(currentQuestionId, currentQuestionIndex);
-    } catch (e) {
-      console.error('Failed to start question:', e);
+    } catch {
+      toast.error('問題の開始に失敗しました');
     }
   };
 
   //----------------------------------------------------
-  // 7.6. Main Render
+  // 8.6. Main Render
   //----------------------------------------------------
 
   return (
@@ -294,7 +299,7 @@ function HostQuestionScreenContent() {
 }
 
 //----------------------------------------------------
-// 8. Page Wrapper Component
+// 9. Page Wrapper Component
 //----------------------------------------------------
 export default function HostQuestionScreenPage() {
   return (
