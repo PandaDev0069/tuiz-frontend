@@ -3,7 +3,7 @@
 // Project     : TUIZ
 // Author      : PandaDev0069 / Panta Aashish
 // Created     : 2025-09-21
-// Last Update : 2025-12-29
+// Last Update : 2026-01-08
 //
 // Description:
 // - Host control panel for managing game flow
@@ -143,13 +143,13 @@ function useHostControlEffects({
 
         const { data: game, error } = await gameApi.getGameByCode(roomCode);
         if (error || !game) {
-          console.error('Failed to get game by code:', error);
+          toast.error('ゲーム情報の取得に失敗しました');
           return;
         }
         setGameId(game.id);
         sessionStorage.setItem(`game_${roomCode}`, game.id);
-      } catch (err) {
-        console.error('Failed to get game ID:', err);
+      } catch {
+        toast.error('ゲームIDの取得に失敗しました');
       }
     };
 
@@ -213,17 +213,14 @@ function useHostControlWebSocket({
     const currentSocketId = socket.id || null;
     if (socketIdRef.current !== currentSocketId) {
       if (socketIdRef.current) {
-        console.log('[HostControlPanel] Socket ID changed, resetting room state');
         hasJoinedRoomRef.current = false;
       }
       socketIdRef.current = currentSocketId;
     }
 
     if (hasJoinedRoomRef.current) {
-      console.log('[HostControlPanel] Already joined room, skipping duplicate join');
       return;
     }
-    console.log('[HostControlPanel] Joining room:', gameId);
     hasJoinedRoomRef.current = true;
     socketJoinRoom(gameId);
 
@@ -250,13 +247,12 @@ function useHostControlWebSocket({
       socket.off('game:answer:stats:update', handleStatsUpdate);
       socket.off('game:phase:change', handlePhaseChange);
       if (gameId && hasJoinedRoomRef.current && socket) {
-        console.log('[HostControlPanel] Leaving room on unmount');
         socketLeaveRoom(gameId);
         hasJoinedRoomRef.current = false;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    socket,
     socket?.id,
     socket?.connected,
     gameId,
@@ -823,18 +819,15 @@ function HostControlPanelContent() {
     socketLeaveRoom,
   });
 
-  // Fetch players periodically
   const fetchPlayers = useCallback(async () => {
     if (!gameId) return;
     try {
       setIsLoadingPlayers(true);
       const { data, error } = await gameApi.getPlayers(gameId);
       if (error || !data) {
-        console.error('Failed to fetch players:', error);
         return;
       }
-    } catch (err) {
-      console.error('Error fetching players:', err);
+    } catch {
     } finally {
       setIsLoadingPlayers(false);
     }
@@ -873,10 +866,8 @@ function HostControlPanelContent() {
   const emitPhaseChange = useCallback(
     (phase: HostPhase) => {
       if (!socket || !gameId) {
-        console.warn('[HostControlPanel] Cannot emit phase change: socket or gameId missing');
         return;
       }
-      console.log('[HostControlPanel] Emitting phase change:', phase, 'for room:', gameId);
       socket.emit('game:phase:change', { roomId: gameId, phase });
     },
     [socket, gameId],
@@ -901,8 +892,7 @@ function HostControlPanelContent() {
       setCurrentPhase('question');
       emitPhaseChange('question');
       toast.success('問題を開始しました');
-    } catch (e) {
-      console.error('Failed to start question:', e);
+    } catch {
       toast.error('問題の開始に失敗しました');
     }
   }, [
@@ -921,8 +911,7 @@ function HostControlPanelContent() {
       setCurrentPhase('answer_reveal');
       emitPhaseChange('answer_reveal');
       toast.success('答えを表示しました');
-    } catch (e) {
-      console.error('Failed to reveal answer:', e);
+    } catch {
       toast.error('答えの表示に失敗しました');
     }
   }, [gameId, revealAnswer, emitPhaseChange, setCurrentPhase]);
@@ -968,7 +957,6 @@ function HostControlPanelContent() {
     try {
       const { data, error } = await gameApi.nextQuestion(gameId);
       if (error || !data) {
-        console.error('Failed to advance to next question:', error);
         toast.error('次の問題への移動に失敗しました');
         return false;
       }
@@ -979,8 +967,7 @@ function HostControlPanelContent() {
         transitionToPhase('countdown');
       }
       return true;
-    } catch (e) {
-      console.error('Error advancing to next question:', e);
+    } catch {
       toast.error('次の問題への移動に失敗しました');
       return false;
     }
