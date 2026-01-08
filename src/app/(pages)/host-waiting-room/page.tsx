@@ -1,7 +1,38 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-21
+// Last Update : 2025-12-29
+//
+// Description:
+// - Host waiting room page before game starts
+// - Manages player list, room settings, and game initialization
+// - Handles WebSocket events for real-time player updates
+//
+// Notes:
+// - Polls player list every 3 seconds
+// - Manages room lock/unlock functionality
+// - Handles game start flow with confirmation modal
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { useState, Suspense, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
+import { Settings } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { HostSettingsModal } from '@/components/ui/overlays/host-settings-modal';
 import {
@@ -10,14 +41,32 @@ import {
   RightPanel,
   StartGameConfirmationModal,
 } from '@/components/host-waiting-room';
-import { Settings } from 'lucide-react';
-import { QuizPlaySettings } from '@/types/quiz';
+
+//----------------------------------------------------
+// 4. Service & Hook Imports
+//----------------------------------------------------
 import { gameApi, type PlayersResponse } from '@/services/gameApi';
 import { useSocket } from '@/components/providers/SocketProvider';
 import { quizService } from '@/lib/quizService';
-import toast from 'react-hot-toast';
 
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
+import { QuizPlaySettings } from '@/types/quiz';
+
+//----------------------------------------------------
+// 6. Main Component
+//----------------------------------------------------
+/**
+ * Component: HostWaitingRoomContent
+ * Description:
+ * - Host waiting room component
+ * - Manages player list, room settings, and game initialization
+ */
 function HostWaitingRoomContent() {
+  //----------------------------------------------------
+  // 6.1. URL Parameters & Setup
+  //----------------------------------------------------
   const router = useRouter();
   const searchParams = useSearchParams();
   const roomCode = searchParams.get('code') || '';
@@ -25,12 +74,13 @@ function HostWaitingRoomContent() {
   const gameIdParam = searchParams.get('gameId') || '';
   const { socket, joinRoom: socketJoinRoom, leaveRoom: socketLeaveRoom } = useSocket();
 
+  //----------------------------------------------------
+  // 6.2. State Management
+  //----------------------------------------------------
   const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
   const [gameCode, setGameCode] = useState<string | null>(roomCode || null);
   const [gameIdError, setGameIdError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
-
-  // Settings modal state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [playSettings, setPlaySettings] = useState<Partial<QuizPlaySettings>>({
     show_question_only: true,
@@ -40,14 +90,8 @@ function HostWaitingRoomContent() {
     show_correct_answer: false,
     max_players: 400,
   });
-
-  // Room lock state
   const [isRoomLocked, setIsRoomLocked] = useState(false);
-
-  // Start game confirmation modal state
   const [isStartConfirmOpen, setIsStartConfirmOpen] = useState(false);
-
-  // Player data from backend
   const [players, setPlayers] = useState<
     Array<{
       id: string;
@@ -59,19 +103,24 @@ function HostWaitingRoomContent() {
   >([]);
   const [isLoadingPlayers, setIsLoadingPlayers] = useState(false);
 
-  // Ref to track if component is navigating away
+  //----------------------------------------------------
+  // 6.3. Refs
+  //----------------------------------------------------
   const isNavigatingRef = useRef(false);
-  // Ref to store latest fetchPlayers function to avoid dependency issues
   const fetchPlayersRef = useRef<(() => Promise<void>) | undefined>(undefined);
-  // Ref to track room join state to prevent duplicate joins/leaves
   const hasJoinedRoomRef = useRef(false);
-  // Ref to track the current gameId we're in the room for
   const currentRoomGameIdRef = useRef<string | null>(null);
-  // Ref to track socket connection state to prevent re-runs on socket object changes
   const socketConnectedRef = useRef(false);
   const socketIdRef = useRef<string | null>(null);
 
-  // Fetch players from backend
+  //----------------------------------------------------
+  // 6.4. Helper Functions
+  //----------------------------------------------------
+  /**
+   * Function: fetchPlayers
+   * Description:
+   * - Fetches players from backend and maps to frontend format
+   */
   const fetchPlayers = useCallback(async () => {
     if (!gameId) return;
 
@@ -125,12 +174,74 @@ function HostWaitingRoomContent() {
     }
   }, [gameId]);
 
-  // Update ref whenever fetchPlayers changes
+  //----------------------------------------------------
+  // 6.5. Effects
+  //----------------------------------------------------
   useEffect(() => {
     fetchPlayersRef.current = fetchPlayers;
   }, [fetchPlayers]);
 
-  // Fetch game data, quiz settings, and players when gameId is available
+  /**
+   * Function: fetchAndSyncGameData
+   * Description:
+   * - Fetches game data and syncs lock status and game code
+   */
+  const fetchAndSyncGameData = useCallback(
+    async (
+      gameId: string,
+      isMounted: boolean,
+    ): Promise<{ success: boolean; gameCode?: string; error?: string }> => {
+      const { data: game, error: gameError } = await gameApi.getGame(gameId);
+      if (!isMounted) {
+        return { success: false };
+      }
+
+      if (gameError || !game) {
+        console.error('Failed to fetch game data:', gameError);
+        return { success: false, error: 'ゲームデータの取得に失敗しました' };
+      }
+
+      setIsRoomLocked(game.locked);
+      if (game.game_code || game.room_code) {
+        const actualGameCode = game.game_code || game.room_code || '';
+        setGameCode(actualGameCode);
+        sessionStorage.setItem(`game_${actualGameCode}`, gameId);
+        return { success: true, gameCode: actualGameCode };
+      }
+
+      return { success: true };
+    },
+    [setIsRoomLocked, setGameCode],
+  );
+
+  /**
+   * Function: fetchAndSyncQuizSettings
+   * Description:
+   * - Fetches quiz settings and syncs play settings
+   */
+  const fetchAndSyncQuizSettings = useCallback(
+    async (quizId: string, isMounted: boolean): Promise<void> => {
+      try {
+        const quizSet = await quizService.getQuiz(quizId);
+        if (!isMounted) return;
+
+        if (quizSet?.play_settings) {
+          setPlaySettings({
+            show_question_only: quizSet.play_settings.show_question_only ?? true,
+            show_explanation: quizSet.play_settings.show_explanation ?? true,
+            time_bonus: quizSet.play_settings.time_bonus ?? true,
+            streak_bonus: quizSet.play_settings.streak_bonus ?? true,
+            show_correct_answer: quizSet.play_settings.show_correct_answer ?? false,
+            max_players: quizSet.play_settings.max_players ?? 400,
+          });
+        }
+      } catch (quizError) {
+        console.warn('Failed to fetch quiz settings, using defaults:', quizError);
+      }
+    },
+    [setPlaySettings],
+  );
+
   useEffect(() => {
     if (!gameId || !quizId) return;
 
@@ -139,47 +250,15 @@ function HostWaitingRoomContent() {
     const initializeGameData = async () => {
       setIsInitializing(true);
       try {
-        // Fetch game data to get lock status and game code
-        const { data: game, error: gameError } = await gameApi.getGame(gameId);
-        if (!isMounted) return;
-
-        if (gameError || !game) {
-          console.error('Failed to fetch game data:', gameError);
-          setGameIdError('ゲームデータの取得に失敗しました');
+        const gameDataResult = await fetchAndSyncGameData(gameId, isMounted);
+        if (!gameDataResult.success) {
+          if (gameDataResult.error) {
+            setGameIdError(gameDataResult.error);
+          }
           return;
         }
 
-        // Sync lock status and game code from backend
-        setIsRoomLocked(game.locked);
-        if (game.game_code || game.room_code) {
-          const actualGameCode = game.game_code || game.room_code || '';
-          setGameCode(actualGameCode);
-          // Update sessionStorage
-          sessionStorage.setItem(`game_${actualGameCode}`, gameId);
-        }
-
-        // Fetch quiz set to get play_settings
-        try {
-          const quizSet = await quizService.getQuiz(quizId);
-          if (!isMounted) return;
-
-          if (quizSet?.play_settings) {
-            // Sync play_settings from quiz set
-            setPlaySettings({
-              show_question_only: quizSet.play_settings.show_question_only ?? true,
-              show_explanation: quizSet.play_settings.show_explanation ?? true,
-              time_bonus: quizSet.play_settings.time_bonus ?? true,
-              streak_bonus: quizSet.play_settings.streak_bonus ?? true,
-              show_correct_answer: quizSet.play_settings.show_correct_answer ?? false,
-              max_players: quizSet.play_settings.max_players ?? 400,
-            });
-          }
-        } catch (quizError) {
-          console.warn('Failed to fetch quiz settings, using defaults:', quizError);
-          // Continue with default settings if quiz fetch fails
-        }
-
-        // Fetch players
+        await fetchAndSyncQuizSettings(quizId, isMounted);
         await fetchPlayers();
       } catch (err) {
         if (!isMounted) return;
@@ -205,11 +284,11 @@ function HostWaitingRoomContent() {
       isMounted = false;
       clearInterval(pollInterval);
     };
-    // Note: fetchPlayers is stable (useCallback with gameId dependency)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameId, quizId]);
+  }, [gameId, quizId, fetchAndSyncGameData, fetchAndSyncQuizSettings, fetchPlayers]);
 
-  // Listen for WebSocket events for real-time player updates
+  //----------------------------------------------------
+  // 6.6. WebSocket Setup
+  //----------------------------------------------------
   useEffect(() => {
     if (!socket || !gameId || !socket.connected || isNavigatingRef.current) {
       // Wait for socket connection or skip if navigating away
@@ -317,7 +396,14 @@ function HostWaitingRoomContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket?.id, socket?.connected, gameId, socketJoinRoom, socketLeaveRoom]);
 
-  // Player management functions
+  //----------------------------------------------------
+  // 6.7. Event Handlers
+  //----------------------------------------------------
+  /**
+   * Function: handlePlayerBan
+   * Description:
+   * - Bans a player from the game
+   */
   const handlePlayerBan = async (playerId: string) => {
     if (!gameId) return;
 
@@ -354,11 +440,13 @@ function HostWaitingRoomContent() {
     }
   };
 
-  const handleStartQuiz = () => {
+  const handleStartQuiz = useCallback(() => {
     setIsStartConfirmOpen(true);
-  };
+  }, []);
 
-  // Initialize game from URL params or sessionStorage
+  //----------------------------------------------------
+  // 6.8. Game ID Initialization
+  //----------------------------------------------------
   useEffect(() => {
     // Skip if we already have a gameId (to avoid re-running when gameId state updates)
     if (gameId) return;
@@ -393,9 +481,15 @@ function HostWaitingRoomContent() {
     if (quizId && !gameIdParam) {
       setGameIdError('ゲームが見つかりません。ダッシュボードからゲームを開始してください。');
     }
+    // gameId is checked inside the effect to prevent re-runs when it changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomCode, gameIdParam, quizId, router]);
 
+  /**
+   * Function: handleConfirmStartQuiz
+   * Description:
+   * - Confirms and starts the game
+   */
   const handleConfirmStartQuiz = async () => {
     if (!gameId) {
       setGameIdError('ゲームIDが必要です。ゲームを作成してから開始してください。');
@@ -454,7 +548,7 @@ function HostWaitingRoomContent() {
     }
   };
 
-  const handleOpenScreen = () => {
+  const handleOpenScreen = useCallback(() => {
     // Open host screen in new window
     const actualGameCode = gameCode || roomCode;
     const hostScreenUrl = `/host-screen?code=${actualGameCode}&quizId=${quizId}${
@@ -466,14 +560,18 @@ function HostWaitingRoomContent() {
     if (gameId) {
       sessionStorage.setItem(`public_screen_open_${gameId}`, 'true');
     }
-  };
+  }, [gameCode, roomCode, quizId, gameId]);
 
-  const handleAddPlayer = () => {
+  const handleAddPlayer = useCallback(() => {
     // Remove this function - players join via the join endpoint, not manually
-    // This was only for testing with mock data
     console.warn('handleAddPlayer is deprecated - players join via the join endpoint');
-  };
+  }, []);
 
+  /**
+   * Function: handleRoomLockToggle
+   * Description:
+   * - Toggles room lock status
+   */
   const handleRoomLockToggle = async (isLocked: boolean) => {
     if (!gameId) {
       console.error('Cannot lock room: gameId is missing');
@@ -516,6 +614,9 @@ function HostWaitingRoomContent() {
     }
   };
 
+  //----------------------------------------------------
+  // 6.9. Main Render
+  //----------------------------------------------------
   return (
     <PageContainer>
       {/* Settings Button - Fixed Top Right */}
@@ -628,6 +729,9 @@ function HostWaitingRoomContent() {
   );
 }
 
+//----------------------------------------------------
+// 7. Page Wrapper Component
+//----------------------------------------------------
 export default function HostWaitingRoomPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
