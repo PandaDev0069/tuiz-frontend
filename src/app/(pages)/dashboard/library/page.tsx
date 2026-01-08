@@ -67,13 +67,15 @@ const TOAST_DURATION = {
   EDIT_PROMPT: 3000,
 } as const;
 
+const DEFAULT_MAX_PLAYERS = 200;
+
 const DEFAULT_PLAY_SETTINGS = {
   show_question_only: true,
   show_explanation: true,
   time_bonus: true,
   streak_bonus: true,
   show_correct_answer: false,
-  max_players: 400,
+  max_players: DEFAULT_MAX_PLAYERS,
 } as const;
 
 const EDIT_PROMPT_DELAY_MS = 1000;
@@ -299,7 +301,7 @@ function LibraryPageContent() {
           time_bonus: playSettings.time_bonus ?? true,
           streak_bonus: playSettings.streak_bonus ?? true,
           show_correct_answer: playSettings.show_correct_answer ?? false,
-          max_players: playSettings.max_players ?? 400,
+          max_players: playSettings.max_players ?? DEFAULT_MAX_PLAYERS,
         };
 
         const hostPlayerName = user?.username || user?.email?.split('@')[0] || 'Host';

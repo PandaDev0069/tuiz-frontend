@@ -73,7 +73,7 @@ import type { ProfileData } from '@/components/ui/overlays/profile-settings-moda
 const SCROLL_AMOUNT_PX = 320;
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_LIMIT = 50;
-const DEFAULT_MAX_PLAYERS = 400;
+const DEFAULT_MAX_PLAYERS = 200;
 
 const DEFAULT_PLAY_SETTINGS = {
   show_question_only: true,
