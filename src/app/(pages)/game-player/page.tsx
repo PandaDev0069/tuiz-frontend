@@ -1269,6 +1269,315 @@ function computeCurrentQuestion({
 }
 
 /**
+ * Hook: usePlayerGameParams
+ * Description:
+ * - Extracts and processes URL search parameters
+ */
+function usePlayerGameParams() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { deviceId } = useDeviceId();
+
+  const gameIdParam = searchParams.get('gameId') || '';
+  const roomCode = searchParams.get('code') || '';
+  const phaseParam = (searchParams.get('phase') as PlayerPhase) || DEFAULT_PHASE;
+  const questionIdParam = searchParams.get('questionId') || DEFAULT_PLACEHOLDER_QUESTION_ID;
+  const questionIndexParam = Number(
+    searchParams.get('questionIndex') || String(DEFAULT_QUESTION_INDEX),
+  );
+  const totalQuestions = Number(
+    searchParams.get('totalQuestions') || String(DEFAULT_TOTAL_QUESTIONS),
+  );
+  const playerParam = searchParams.get('playerId') || '';
+  const playerId = playerParam || deviceId || DEFAULT_ANONYMOUS_PLAYER;
+
+  return {
+    router,
+    gameIdParam,
+    roomCode,
+    phaseParam,
+    questionIdParam,
+    questionIndexParam,
+    totalQuestions,
+    playerId,
+  };
+}
+
+/**
+ * Hook: usePlayerGameComputedValues
+ * Description:
+ * - Computes derived values for player game
+ */
+function usePlayerGameComputedValues({
+  currentQuestionData,
+  gameFlow,
+  questions,
+  currentQuestion,
+  answerStats,
+  answerResult,
+  selectedAnswer,
+  leaderboard,
+}: {
+  currentQuestionData: CurrentQuestionData | null;
+  gameFlow: { current_question_id?: string | null; current_question_index?: number | null } | null;
+  questions: QuestionWithAnswers[];
+  currentQuestion: Question;
+  answerStats: Record<string, number>;
+  answerResult: { selectedOption?: string; isCorrect?: boolean } | null;
+  selectedAnswer: string | undefined;
+  leaderboard: unknown;
+}) {
+  const currentQuestionForPoints = useMemo(() => {
+    if (currentQuestionData) {
+      return {
+        points: currentQuestionData.points ?? DEFAULT_POINTS,
+        answering_time:
+          currentQuestionData.answeringTime ??
+          currentQuestionData.timeLimit ??
+          DEFAULT_ANSWERING_TIME_SECONDS,
+      };
+    }
+
+    if (!gameFlow?.current_question_id || !questions.length) return null;
+    const questionIndex = gameFlow.current_question_index ?? 0;
+    const questionData = questions[questionIndex];
+    if (questionData) {
+      return {
+        points: questionData.points ?? DEFAULT_POINTS,
+        answering_time:
+          questionData.answering_time ??
+          questionData.show_question_time ??
+          DEFAULT_ANSWERING_TIME_SECONDS,
+      };
+    }
+    return null;
+  }, [
+    currentQuestionData,
+    gameFlow?.current_question_id,
+    gameFlow?.current_question_index,
+    questions,
+  ]);
+
+  const statisticsMemo = useMemo(() => {
+    if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
+      return [];
+    }
+    const totalAnswered = Object.values(answerStats).reduce((sum, count) => sum + count, 0);
+    return currentQuestion.choices.map((choice) => {
+      const count = answerStats[choice.id] || 0;
+      return {
+        choiceId: choice.id,
+        count,
+        percentage: totalAnswered > 0 ? (count / totalAnswered) * 100 : 0,
+      };
+    });
+  }, [currentQuestion.choices, answerStats]);
+
+  const revealPayload: AnswerResult = useMemo(() => {
+    if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
+      return {
+        question: currentQuestion,
+        correctAnswer: { id: '', text: '読み込み中...', letter: 'A' },
+        playerAnswer: undefined,
+        isCorrect: false,
+        statistics: [],
+        totalPlayers: 0,
+        totalAnswered: 0,
+      };
+    }
+
+    const playerChoice = answerResult?.selectedOption
+      ? currentQuestion.choices.find((c) => c.id === answerResult.selectedOption)
+      : selectedAnswer
+        ? currentQuestion.choices.find((c) => c.id === selectedAnswer)
+        : undefined;
+
+    const isCorrect =
+      answerResult?.isCorrect ??
+      (playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false);
+
+    const correctAnswerChoice =
+      currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId) ||
+      currentQuestion.choices[0];
+
+    const totalAnswered = statisticsMemo.reduce((sum, stat) => sum + stat.count, 0);
+
+    return {
+      question: currentQuestion,
+      correctAnswer: correctAnswerChoice,
+      playerAnswer: playerChoice,
+      isCorrect,
+      statistics: statisticsMemo,
+      totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
+      totalAnswered,
+    };
+  }, [answerResult, currentQuestion, selectedAnswer, statisticsMemo, leaderboard]);
+
+  return {
+    currentQuestionForPoints,
+    revealPayload,
+  };
+}
+
+/**
+ * Component: PlayerGameLoadingStates
+ * Description:
+ * - Handles early return loading and error states
+ */
+const PlayerGameLoadingStates: React.FC<{
+  gameId: string;
+  gameFlow: unknown;
+  isConnected: boolean;
+  children: React.ReactNode;
+}> = ({ gameId, gameFlow, isConnected, children }) => {
+  if (!gameId) {
+    return <ErrorScreen message="gameId が指定されていません。" />;
+  }
+
+  if (!gameFlow) {
+    return <LoadingScreen message="ゲーム状態を読み込み中..." color="cyan" />;
+  }
+
+  if (!isConnected) {
+    return <LoadingScreen message="接続を確立中..." color="yellow" />;
+  }
+
+  return <>{children}</>;
+};
+
+/**
+ * Hook: usePlayerGameEventHandlers
+ * Description:
+ * - Creates event handlers for player game interactions
+ */
+function usePlayerGameEventHandlers({
+  gameId,
+  playerId,
+  router,
+  currentQuestion,
+  isDisplayPhaseDone,
+  selectedAnswer,
+  gameFlow,
+  answerDurationMs,
+  answerRemainingMs,
+  currentQuestionForPoints,
+  submitAnswer,
+  setIsDisplayPhaseDone,
+  setAnswerDurationMs,
+  setAnswerRemainingMs,
+  setCurrentPhase,
+  setSelectedAnswer,
+  answeringPhaseStartTimeRef,
+}: {
+  gameId: string;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+  currentQuestion: Question;
+  isDisplayPhaseDone: boolean;
+  selectedAnswer: string | undefined;
+  gameFlow: { current_question_id?: string | null } | null;
+  answerDurationMs: number | null;
+  answerRemainingMs: number | null;
+  currentQuestionForPoints: { points: number; answering_time: number } | null;
+  submitAnswer: (answerId: string | null, responseTimeMs: number) => Promise<void>;
+  setIsDisplayPhaseDone: React.Dispatch<React.SetStateAction<boolean>>;
+  setAnswerDurationMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  setSelectedAnswer: React.Dispatch<React.SetStateAction<string | undefined>>;
+  answeringPhaseStartTimeRef: React.MutableRefObject<number | null>;
+}) {
+  const handleAnswerSelect = useCallback(
+    (answerId: string) => {
+      setSelectedAnswer(answerId);
+    },
+    [setSelectedAnswer],
+  );
+
+  const startAnsweringPhase = useCallback(() => {
+    if (isDisplayPhaseDone) return;
+    const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
+      ? currentQuestion.answering_time
+      : DEFAULT_ANSWERING_TIME_SECONDS;
+    const durationMs = safeAnsweringTime * MS_PER_SECOND;
+    setIsDisplayPhaseDone(true);
+    setAnswerDurationMs(durationMs);
+    setAnswerRemainingMs(durationMs);
+    answeringPhaseStartTimeRef.current = Date.now();
+
+    setCurrentPhase('answering');
+    router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
+  }, [
+    currentQuestion.answering_time,
+    gameId,
+    isDisplayPhaseDone,
+    playerId,
+    router,
+    answeringPhaseStartTimeRef,
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setCurrentPhase,
+  ]);
+
+  const handleAnswerSubmit = useCallback(
+    async (answerId?: string | null) => {
+      const targetAnswerId: string | null =
+        answerId !== undefined ? answerId : selectedAnswer || null;
+      if (!gameFlow?.current_question_id) return;
+
+      try {
+        const fallbackAnsweringTime = Number.isFinite(
+          currentQuestionForPoints?.answering_time ?? currentQuestion.answering_time,
+        )
+          ? (currentQuestionForPoints?.answering_time ??
+            currentQuestion.answering_time ??
+            DEFAULT_ANSWERING_TIME_SECONDS)
+          : DEFAULT_ANSWERING_TIME_SECONDS;
+        const durationMs: number =
+          answerDurationMs !== null && Number.isFinite(answerDurationMs)
+            ? answerDurationMs
+            : fallbackAnsweringTime * MS_PER_SECOND;
+        const remainingMs: number =
+          answerRemainingMs !== null && Number.isFinite(answerRemainingMs)
+            ? answerRemainingMs
+            : durationMs;
+
+        let responseTimeMs: number;
+        if (answerId === null) {
+          responseTimeMs = durationMs;
+        } else if (answeringPhaseStartTimeRef.current !== null) {
+          const elapsedMs = Date.now() - answeringPhaseStartTimeRef.current;
+          responseTimeMs = Math.max(0, Math.min(durationMs, elapsedMs));
+        } else {
+          responseTimeMs = Math.max(0, Math.min(durationMs, durationMs - remainingMs));
+        }
+
+        await submitAnswer(targetAnswerId, responseTimeMs);
+      } catch {
+        toast.error('回答の送信に失敗しました');
+      }
+    },
+    [
+      selectedAnswer,
+      gameFlow?.current_question_id,
+      answerDurationMs,
+      answerRemainingMs,
+      currentQuestionForPoints?.answering_time,
+      currentQuestion.answering_time,
+      submitAnswer,
+      answeringPhaseStartTimeRef,
+    ],
+  );
+
+  return {
+    handleAnswerSelect,
+    startAnsweringPhase,
+    handleAnswerSubmit,
+  };
+}
+
+/**
  * Hook: useGameFlowEvents
  * Description:
  * - Creates game flow event handlers
@@ -1863,23 +2172,18 @@ function usePlayerGameWebSocket({
  */
 function PlayerGameContent() {
   //----------------------------------------------------
-  // 11.1. Hooks & Router Setup
+  // 11.1. URL Parameters & Setup
   //----------------------------------------------------
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const gameIdParam = searchParams.get('gameId') || '';
-  const roomCode = searchParams.get('code') || '';
-  const phaseParam = (searchParams.get('phase') as PlayerPhase) || DEFAULT_PHASE;
-  const questionIdParam = searchParams.get('questionId') || DEFAULT_PLACEHOLDER_QUESTION_ID;
-  const questionIndexParam = Number(
-    searchParams.get('questionIndex') || String(DEFAULT_QUESTION_INDEX),
-  );
-  const totalQuestions = Number(
-    searchParams.get('totalQuestions') || String(DEFAULT_TOTAL_QUESTIONS),
-  );
-  const playerParam = searchParams.get('playerId') || '';
-  const { deviceId } = useDeviceId();
-  const playerId = playerParam || deviceId || DEFAULT_ANONYMOUS_PLAYER;
+  const {
+    router,
+    gameIdParam,
+    roomCode,
+    phaseParam,
+    questionIdParam,
+    questionIndexParam,
+    totalQuestions,
+    playerId,
+  } = usePlayerGameParams();
 
   //----------------------------------------------------
   // 11.2. State Management
@@ -1956,37 +2260,29 @@ function PlayerGameContent() {
     events: gameFlowEvents,
   });
 
-  // Compute currentQuestionForPoints before useGameAnswer hook
-  const currentQuestionForPoints = useMemo(() => {
-    if (currentQuestionData) {
-      return {
-        points: currentQuestionData.points ?? DEFAULT_POINTS,
-        answering_time:
-          currentQuestionData.answeringTime ??
-          currentQuestionData.timeLimit ??
-          DEFAULT_ANSWERING_TIME_SECONDS,
-      };
-    }
+  const currentQuestion: Question = useMemo(
+    () =>
+      computeCurrentQuestion({
+        currentQuestionData,
+        gameFlow,
+        questionIdParam,
+        questionIndexParam,
+        questions,
+        timerState,
+      }),
+    [currentQuestionData, gameFlow, questionIdParam, questionIndexParam, questions, timerState],
+  );
 
-    if (!gameFlow?.current_question_id || !questions.length) return null;
-    const questionIndex = gameFlow.current_question_index ?? 0;
-    const questionData = questions[questionIndex];
-    if (questionData) {
-      return {
-        points: questionData.points ?? DEFAULT_POINTS,
-        answering_time:
-          questionData.answering_time ??
-          questionData.show_question_time ??
-          DEFAULT_ANSWERING_TIME_SECONDS,
-      };
-    }
-    return null;
-  }, [
+  const { currentQuestionForPoints } = usePlayerGameComputedValues({
     currentQuestionData,
-    gameFlow?.current_question_id,
-    gameFlow?.current_question_index,
+    gameFlow,
     questions,
-  ]);
+    currentQuestion,
+    answerStats: {},
+    answerResult: null,
+    selectedAnswer,
+    leaderboard: null,
+  });
 
   const {
     answerStatus,
@@ -2019,23 +2315,18 @@ function PlayerGameContent() {
     autoRefresh: true,
   });
 
-  const { socket, joinRoom, leaveRoom } = useSocket();
+  const { revealPayload } = usePlayerGameComputedValues({
+    currentQuestionData,
+    gameFlow,
+    questions,
+    currentQuestion,
+    answerStats,
+    answerResult,
+    selectedAnswer,
+    leaderboard,
+  });
 
-  //----------------------------------------------------
-  // 11.5. Computed Values
-  //----------------------------------------------------
-  const currentQuestion: Question = useMemo(
-    () =>
-      computeCurrentQuestion({
-        currentQuestionData,
-        gameFlow,
-        questionIdParam,
-        questionIndexParam,
-        questions,
-        timerState,
-      }),
-    [currentQuestionData, gameFlow, questionIdParam, questionIndexParam, questions, timerState],
-  );
+  const { socket, joinRoom, leaveRoom } = useSocket();
 
   //----------------------------------------------------
   // 11.6. Effects
@@ -2093,12 +2384,6 @@ function PlayerGameContent() {
     setCorrectAnswerIdState,
   });
 
-  /**
-   * Function: handlePlayerKicked
-   * Description:
-   * - Handles player kicked event from host
-   * - Shows notification and redirects to join page
-   */
   const handlePlayerKicked = useCallback(
     (data: PlayerKickedData) => {
       if (data.player_id === playerId || data.game_id === gameId) {
@@ -2168,91 +2453,28 @@ function PlayerGameContent() {
   });
 
   //----------------------------------------------------
-  // 11.10. Additional Computed Values
+  // 11.10. Event Handlers
   //----------------------------------------------------
-  const statisticsMemo = useMemo(() => {
-    if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
-      return [];
-    }
-    const totalAnswered = Object.values(answerStats).reduce((sum, count) => sum + count, 0);
-    return currentQuestion.choices.map((choice) => {
-      const count = answerStats[choice.id] || 0;
-      return {
-        choiceId: choice.id,
-        count,
-        percentage: totalAnswered > 0 ? (count / totalAnswered) * 100 : 0,
-      };
+  const { handleAnswerSelect, startAnsweringPhase, handleAnswerSubmit } =
+    usePlayerGameEventHandlers({
+      gameId,
+      playerId,
+      router,
+      currentQuestion,
+      isDisplayPhaseDone,
+      selectedAnswer,
+      gameFlow,
+      answerDurationMs,
+      answerRemainingMs,
+      currentQuestionForPoints,
+      submitAnswer,
+      setIsDisplayPhaseDone,
+      setAnswerDurationMs,
+      setAnswerRemainingMs,
+      setCurrentPhase,
+      setSelectedAnswer,
+      answeringPhaseStartTimeRef,
     });
-  }, [currentQuestion.choices, answerStats]);
-
-  const revealPayload: AnswerResult = useMemo(() => {
-    if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
-      return {
-        question: currentQuestion,
-        correctAnswer: { id: '', text: '読み込み中...', letter: 'A' },
-        playerAnswer: undefined,
-        isCorrect: false,
-        statistics: [],
-        totalPlayers: 0,
-        totalAnswered: 0,
-      };
-    }
-
-    const playerChoice = answerResult?.selectedOption
-      ? currentQuestion.choices.find((c) => c.id === answerResult.selectedOption)
-      : selectedAnswer
-        ? currentQuestion.choices.find((c) => c.id === selectedAnswer)
-        : undefined;
-
-    const isCorrect =
-      answerResult?.isCorrect ??
-      (playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false);
-
-    const correctAnswerChoice =
-      currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId) ||
-      currentQuestion.choices[0];
-
-    const totalAnswered = statisticsMemo.reduce((sum, stat) => sum + stat.count, 0);
-
-    return {
-      question: currentQuestion,
-      correctAnswer: correctAnswerChoice,
-      playerAnswer: playerChoice,
-      isCorrect,
-      statistics: statisticsMemo,
-      totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : 0,
-      totalAnswered,
-    };
-  }, [answerResult, currentQuestion, selectedAnswer, statisticsMemo, leaderboard]);
-
-  //----------------------------------------------------
-  // 11.11. Event Handlers
-  //----------------------------------------------------
-  const startAnsweringPhase = useCallback(() => {
-    if (isDisplayPhaseDone) return;
-    const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
-      ? currentQuestion.answering_time
-      : DEFAULT_ANSWERING_TIME_SECONDS;
-    const durationMs = safeAnsweringTime * MS_PER_SECOND;
-    setIsDisplayPhaseDone(true);
-    setAnswerDurationMs(durationMs);
-    setAnswerRemainingMs(durationMs);
-    answeringPhaseStartTimeRef.current = Date.now();
-
-    setCurrentPhase('answering');
-    router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
-  }, [
-    currentQuestion.answering_time,
-    gameId,
-    isDisplayPhaseDone,
-    playerId,
-    router,
-    answeringPhaseStartTimeRef,
-    setIsDisplayPhaseDone,
-    setAnswerDurationMs,
-    setAnswerRemainingMs,
-    setCurrentPhase,
-  ]);
 
   usePlayerGameTimerEffects({
     currentPhase,
@@ -2277,103 +2499,33 @@ function PlayerGameContent() {
   });
 
   //----------------------------------------------------
-  // 11.7. Helper Functions
-  //----------------------------------------------------
-  const handleAnswerSelect = (answerId: string) => {
-    setSelectedAnswer(answerId);
-  };
-
-  const handleAnswerSubmit = useCallback(
-    async (answerId?: string | null) => {
-      const targetAnswerId: string | null =
-        answerId !== undefined ? answerId : selectedAnswer || null;
-      if (!gameFlow?.current_question_id) return;
-
-      try {
-        const fallbackAnsweringTime = Number.isFinite(
-          currentQuestionForPoints?.answering_time ?? currentQuestion.answering_time,
-        )
-          ? (currentQuestionForPoints?.answering_time ??
-            currentQuestion.answering_time ??
-            DEFAULT_ANSWERING_TIME_SECONDS)
-          : DEFAULT_ANSWERING_TIME_SECONDS;
-        const durationMs: number =
-          answerDurationMs !== null && Number.isFinite(answerDurationMs)
-            ? answerDurationMs
-            : fallbackAnsweringTime * MS_PER_SECOND;
-        const remainingMs: number =
-          answerRemainingMs !== null && Number.isFinite(answerRemainingMs)
-            ? answerRemainingMs
-            : durationMs;
-
-        let responseTimeMs: number;
-        if (answerId === null) {
-          responseTimeMs = durationMs;
-        } else if (answeringPhaseStartTimeRef.current !== null) {
-          const elapsedMs = Date.now() - answeringPhaseStartTimeRef.current;
-          responseTimeMs = Math.max(0, Math.min(durationMs, elapsedMs));
-        } else {
-          responseTimeMs = Math.max(0, Math.min(durationMs, durationMs - remainingMs));
-        }
-
-        await submitAnswer(targetAnswerId, responseTimeMs);
-      } catch {
-        toast.error('回答の送信に失敗しました');
-      }
-    },
-    [
-      selectedAnswer,
-      gameFlow?.current_question_id,
-      answerDurationMs,
-      answerRemainingMs,
-      currentQuestionForPoints?.answering_time,
-      currentQuestion.answering_time,
-      submitAnswer,
-      answeringPhaseStartTimeRef,
-    ],
-  );
-
-  //----------------------------------------------------
-  // 11.12. Loading State
-  //----------------------------------------------------
-  if (!gameId) {
-    return <ErrorScreen message="gameId が指定されていません。" />;
-  }
-
-  if (!gameFlow) {
-    return <LoadingScreen message="ゲーム状態を読み込み中..." color="cyan" />;
-  }
-
-  if (!isConnected) {
-    return <LoadingScreen message="接続を確立中..." color="yellow" />;
-  }
-
-  //----------------------------------------------------
-  // 11.13. Main Render
+  // 11.12. Main Render
   //----------------------------------------------------
   return (
-    <PlayerGamePhaseRenderer
-      currentPhase={currentPhase}
-      gameFlow={gameFlow}
-      questionIndexParam={questionIndexParam}
-      currentQuestionData={currentQuestionData}
-      questions={questions}
-      totalQuestions={totalQuestions}
-      currentQuestion={currentQuestion}
-      currentTimeSeconds={currentTimeSeconds}
-      countdownStartedAt={countdownStartedAt}
-      isMobile={isMobile}
-      answerStatus={answerStatus}
-      answerError={answerError}
-      revealPayload={revealPayload}
-      explanationData={explanationData}
-      leaderboard={leaderboard}
-      timerState={timerState}
-      playerId={playerId}
-      router={router}
-      onAnswerSelect={handleAnswerSelect}
-      onAnswerSubmit={handleAnswerSubmit}
-    />
+    <PlayerGameLoadingStates gameId={gameId} gameFlow={gameFlow} isConnected={isConnected}>
+      <PlayerGamePhaseRenderer
+        currentPhase={currentPhase}
+        gameFlow={gameFlow}
+        questionIndexParam={questionIndexParam}
+        currentQuestionData={currentQuestionData}
+        questions={questions}
+        totalQuestions={totalQuestions}
+        currentQuestion={currentQuestion}
+        currentTimeSeconds={currentTimeSeconds}
+        countdownStartedAt={countdownStartedAt}
+        isMobile={isMobile}
+        answerStatus={answerStatus}
+        answerError={answerError}
+        revealPayload={revealPayload}
+        explanationData={explanationData}
+        leaderboard={leaderboard}
+        timerState={timerState}
+        playerId={playerId}
+        router={router}
+        onAnswerSelect={handleAnswerSelect}
+        onAnswerSubmit={handleAnswerSubmit}
+      />
+    </PlayerGameLoadingStates>
   );
 }
 
