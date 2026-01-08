@@ -1,152 +1,225 @@
-# TUIZ情報王 - Real-time Quiz Platform
+# TUIZ情報王 - Frontend
 
-**TUIZ情報王** is an innovative real-time quiz platform that allows you to create, host, and participate in interactive quiz games. Perfect for education, training, events, and fun learning experiences with friends.
+**Frontend repository for TUIZ情報王** - A real-time interactive quiz platform for education, training, and entertainment.
 
-## 🎯 What is TUIZ?
+## 📖 About TUIZ情報王
 
-TUIZ情報王 is a free learning platform where you can:
+TUIZ情報王 is a free, real-time quiz platform that enables:
 
-- **Create quizzes** with multiple choice questions, images, and explanations
-- **Host live quiz games** in real-time with instant synchronization
-- **Join games** using room codes to participate in interactive quiz sessions
-- **Track scores** and see leaderboards as you play
+- **Quiz Creation**: Build interactive quizzes with multiple choice questions, images, and explanations
+- **Live Game Hosting**: Host real-time quiz games with instant synchronization across all participants
+- **Player Participation**: Join games using room codes and compete in interactive quiz sessions
+- **Real-time Leaderboards**: Track scores and rankings as questions progress
+- **Educational Value**: Learn through explanations and detailed feedback
 
-## 🚀 How to Use
+## 🎯 Quick Start
 
-### As a Host (Quiz Creator)
+### For End Users
 
-1. **Create an Account**
-   - Click "ログイン" (Login) on the homepage
-   - Register a new account with your email, username, and password
-   - Or log in if you already have an account
+**Want to use TUIZ?** Visit the live application:
 
-2. **Access Your Dashboard**
-   - After logging in, you'll be taken to your dashboard
-   - Here you can create new quizzes, manage existing ones, and start games
+- **Production**: [tuiz-info-king.vercel.app](https://tuiz-info-king.vercel.app)
 
-3. **Create a Quiz**
-   - Build quizzes with multiple choice questions
-   - Add images to questions for visual learning
-   - Set time limits for each question
-   - Include explanations for educational value
+**Need help?** See the comprehensive user manual:
 
-4. **Start a Game**
-   - Select a quiz from your library
-   - Start the game session
-   - Share the room code with participants
-   - Control the game flow as questions progress
+- **English**: [User Manual](./user-manual/01-USER-MANUAL.md)
+- **日本語**: [ユーザーマニュアル](./user-manual/01-USER-MANUAL-JA.md)
 
-5. **Manage the Game**
-   - View player participation in real-time
-   - Control question timing and progression
-   - Reveal answers and show explanations
-   - Display leaderboards and results
+The user manual includes:
 
-### As a Player (Quiz Participant)
+- Step-by-step guides for hosts and players
+- Complete game flow documentation
+- Troubleshooting and best practices
+- Feature overviews
 
-1. **Join a Game**
-   - Click "TUIZ参加" (Join TUIZ) on the homepage
-   - Enter the room code provided by the host
-   - Enter your name to join the game
+### For Developers
 
-2. **Play the Quiz**
-   - Wait in the waiting room until the host starts
-   - Answer questions as they appear
-   - Select your answer before time runs out
-   - View answer reveals and explanations
-   - See your score and ranking on leaderboards
+**Want to contribute or run locally?**
 
-3. **Follow the Game Flow**
-   - The game automatically progresses through questions
-   - View answer statistics and explanations
-   - See final results and podium rankings
+1. **Clone the repository**
 
-## ✨ Features
+   ```bash
+   git clone https://github.com/PandaDev0069/tuiz-frontend.git
+   cd tuiz-frontend
+   ```
 
-### Real-time Synchronization
+2. **Install dependencies**
 
-- Instant updates across all devices
-- Live player participation tracking
-- Synchronized game progression
-- Real-time score updates
+   ```bash
+   npm install
+   ```
 
-### Interactive Learning
+3. **Set up environment variables**
 
-- Multiple choice questions with visual support
-- Time-limited challenges for engagement
-- Answer explanations for educational value
-- Leaderboards for competitive learning
+   ```bash
+   cp .env.example .env.local
+   ```
 
-### Flexible Quiz Creation
+   Required variables:
+   - `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anon key
+   - `NEXT_PUBLIC_API_BASE` - Backend API URL (optional, defaults to localhost:8080)
 
-- Create quizzes with custom questions
-- Add images to enhance questions
-- Set individual question time limits
-- Organize questions in your quiz library
+4. **Run development server**
+   ```bash
+   npm run dev
+   ```
+   Opens at `http://localhost:3000`
 
-### User-Friendly Interface
+## 🏗️ Project Overview
 
-- Clean, modern design
-- Mobile-responsive for all devices
-- Intuitive navigation
-- Accessible for all users
+This is the **frontend** of TUIZ, built with:
 
-### Game Management
+- **Next.js 15** (App Router) - React framework
+- **TypeScript** - Type safety
+- **Tailwind CSS** - Styling
+- **Socket.IO Client** - Real-time communication
+- **Supabase** - Authentication
 
-- Host control panel for game flow
-- Player management (kick, view participants)
-- Real-time statistics and analytics
-- Question-by-question progression control
+### Architecture
 
-## 🎓 Use Cases
+The frontend communicates with:
 
-### Education
+- **Backend API**: REST endpoints for game operations, quiz management, and data queries
+- **WebSocket Server**: Real-time game events and synchronization
+- **Supabase**: User authentication and database access
 
-- **Classroom Learning**: Teachers can create quizzes for students
-- **Homework Review**: Reinforce learning with interactive questions
-- **Exam Preparation**: Practice with timed quiz sessions
+## 📚 Documentation
 
-### Corporate Training
+Comprehensive documentation is available in the `user-manual` folder:
 
-- **Employee Training**: Test knowledge with company-specific quizzes
-- **Onboarding**: Help new employees learn company policies
-- **Knowledge Checks**: Verify understanding of training materials
+- **[User Manual (English)](./user-manual/01-USER-MANUAL.md)** - Complete user guide
+- **[ユーザーマニュアル (日本語)](./user-manual/01-USER-MANUAL-JA.md)** - 完全なユーザーガイド
+- **[Technical Documentation](./user-manual/02-TECHNICAL-DOCUMENTATION.md)** - Architecture and implementation details
+- **[API Documentation](./user-manual/05-API-DOCUMENTATION.md)** - API reference
+- **[Database Schema](./user-manual/04-DATABASE-SCHEMA.md)** - Database structure
+- **[Component Documentation](./user-manual/06-COMPONENT-DOCUMENTATION.md)** - Component reference
+- **[Architecture & DFD](./user-manual/03-ARCHITECTURE-DFD.md)** - System architecture and data flow
 
-### Events & Engagement
+## 🔗 Related Repositories
 
-- **Conferences**: Engage audiences with interactive quiz sessions
-- **Team Building**: Fun quizzes for team activities
-- **Social Gatherings**: Play quizzes with friends and family
+- **Backend**: [tuiz-backend](https://github.com/PandaDev0069/tuiz-backend) - Express + TypeScript + Socket.IO backend API server
 
-### Self-Learning
+## 🚀 Features
 
-- **Study Groups**: Create and share quizzes with study partners
-- **Personal Practice**: Test your knowledge on various topics
-- **Fun Learning**: Make learning enjoyable with game elements
+### For Hosts
 
-## 📱 Platform Benefits
+- Create and manage quiz libraries
+- Host real-time quiz games
+- Control game flow and timing
+- View player statistics and participation
+- Manage players (kick, view participants)
 
-- **Free to Use**: No cost to create or join quizzes
-- **Easy Setup**: Simple registration and quick quiz creation
-- **Mobile Friendly**: Works seamlessly on phones, tablets, and computers
-- **Real-time Updates**: Instant synchronization across all participants
-- **No Installation Required**: Access directly from your web browser
+### For Players
 
-## 🌟 Key Highlights
+- Join games with room codes
+- Answer questions in real-time
+- View answer statistics and explanations
+- Track scores and rankings
+- See final results and podium
 
-- **リアルタイムクイズ** (Real-time Quizzes): Instant synchronization for all players
-- **学習クイズアプリ** (Learning Quiz App): Perfect for educational purposes
-- **クイズ作成** (Quiz Creation): Easy-to-use quiz builder
-- **インタラクティブ** (Interactive): Engaging user experience
-- **無料** (Free): Completely free to use
+### Platform Features
 
-## 📚 Getting Started
+- Real-time synchronization across all devices
+- Mobile-responsive design
+- No installation required (web-based)
+- Free to use
+- Support for images in questions and explanations
+- Multiple question types (multiple choice, true/false)
+- Customizable time limits
+- Educational explanations
 
-1. Visit the homepage
-2. Choose to either:
-   - **Login** as a host to create and manage quizzes
-   - **Join** a game using a room code to participate
-3. Start creating or playing quizzes!
+## 🛠️ Development
+
+### Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+- `npm run typecheck` - TypeScript type checking
+
+### Project Structure
+
+```
+src/
+├── app/              # Next.js App Router pages
+├── components/        # React components
+├── hooks/            # Custom React hooks
+├── services/         # API clients and services
+├── state/            # State management (Zustand)
+├── lib/              # Utilities and helpers
+├── types/            # TypeScript type definitions
+├── config/           # Configuration
+└── styles/           # Global styles and design tokens
+```
+
+### Code Quality
+
+- **TypeScript** - Strict type checking
+- **ESLint** - Code linting
+- **Prettier** - Code formatting
+- **Husky** - Git hooks
+- **Conventional Commits** - Commit message standards
+
+## 📦 Dependencies
+
+### Core
+
+- Next.js 15.4.10
+- React 19.1.0
+- TypeScript 5
+- Tailwind CSS 4.1.12
+
+### State & Communication
+
+- Zustand 5.0.7 - State management
+- TanStack Query 5.87.4 - Server state
+- Socket.IO Client 4.8.1 - WebSocket communication
+- Supabase JS 2.55.0 - Authentication
+
+### UI & Styling
+
+- Framer Motion 12.23.12 - Animations
+- React Hot Toast 2.6.0 - Notifications
+- Radix UI - Accessible components
+- Lucide React - Icons
+
+## 🔐 Environment Variables
+
+Create `.env.local` file:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_API_BASE=http://localhost:8080
+```
+
+## 🧪 Testing
+
+The project includes test infrastructure:
+
+- **Vitest** - Unit and integration testing
+- **React Testing Library** - Component testing
+- **Playwright** - End-to-end testing
+
+## 📄 License
+
+Licensed under the Apache-2.0 License. See [LICENSE](./LICENSE) for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+## 📞 Support
+
+- **User Manual**: See [user-manual](./user-manual/) folder for comprehensive guides
+- **Issues**: Report bugs or request features via [GitHub Issues](https://github.com/PandaDev0069/tuiz-frontend/issues)
+- **Documentation**: All technical documentation is in the `user-manual` folder
+
+## 🌐 Live Application
+
+- **Production**: [tuiz-info-king.vercel.app](https://tuiz-info-king.vercel.app)
 
 ---
 
