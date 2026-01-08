@@ -1,41 +1,91 @@
+// ====================================================
+// File Name   : AuthGuard.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-11
+// Last Update : 2025-09-13
+//
+// Description:
+// - Authentication guard component that protects routes requiring authentication
+// - Redirects unauthenticated users to login page
+// - Shows loading state while checking authentication
+// - Provides higher-order component for protecting pages
+//
+// Notes:
+// - Uses Next.js router for navigation
+// - Integrates with auth store for authentication state
+// - Supports custom fallback components and redirect paths
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/state/useAuthStore';
 import { Loader2 } from 'lucide-react';
-import { Container, PageContainer } from '@/components/ui';
 
-interface AuthGuardProps {
+import { Container, PageContainer } from '@/components/ui';
+import { useAuthStore } from '@/state/useAuthStore';
+
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const DEFAULT_REDIRECT_PATH = '/auth/login';
+const REDIRECT_QUERY_PARAM = 'redirect';
+const LOADING_MESSAGE = '認証を確認中...';
+const CONTAINER_SIZE = 'sm' as const;
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+export interface AuthGuardProps {
   children: React.ReactNode;
   redirectTo?: string;
   fallback?: React.ReactNode;
 }
 
+export interface WithAuthGuardOptions {
+  redirectTo?: string;
+  fallback?: React.ReactNode;
+}
+
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
 /**
- * Authentication guard component that protects routes requiring authentication
+ * Component: AuthGuard
+ * Description:
+ * - Protects routes requiring authentication
  * - Redirects unauthenticated users to login page
  * - Shows loading state while checking authentication
- * - Can be customized with custom fallback component
+ * - Stores current URL for post-login redirect
+ *
+ * Parameters:
+ * - children (React.ReactNode): Content to render when authenticated
+ * - redirectTo (string, optional): Path to redirect unauthenticated users (default: '/auth/login')
+ * - fallback (React.ReactNode, optional): Custom component to show during loading
+ *
+ * Returns:
+ * - JSX.Element: Protected content or loading/redirect UI
  */
-export function AuthGuard({ children, redirectTo = '/auth/login', fallback }: AuthGuardProps) {
+export function AuthGuard({
+  children,
+  redirectTo = DEFAULT_REDIRECT_PATH,
+  fallback,
+}: AuthGuardProps) {
   const router = useRouter();
   const { user, session, loading, initializeAuth } = useAuthStore();
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    // Initialize auth state if not already done
     if (!isInitialized) {
-      console.log('AuthGuard: Initializing auth state');
       initializeAuth();
       setIsInitialized(true);
     }
   }, [initializeAuth, isInitialized]);
 
-  // Debug logging
-  useEffect(() => {}, [user, session, loading, isInitialized]);
-
-  // Show loading state while checking authentication
   if (loading || !isInitialized) {
     if (fallback) {
       return <>{fallback}</>;
@@ -43,36 +93,50 @@ export function AuthGuard({ children, redirectTo = '/auth/login', fallback }: Au
 
     return (
       <PageContainer className="min-h-screen flex items-center justify-center">
-        <Container size="sm" className="text-center">
+        <Container size={CONTAINER_SIZE} className="text-center">
           <div className="flex flex-col items-center space-y-4">
             <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="text-gray-600">認証を確認中...</p>
+            <p className="text-gray-600">{LOADING_MESSAGE}</p>
           </div>
         </Container>
       </PageContainer>
     );
   }
 
-  // Redirect to login if not authenticated
   if (!user || !session) {
-    // Store the current URL to redirect back after login
     const currentPath = window.location.pathname + window.location.search;
-    const redirectUrl = redirectTo + `?redirect=${encodeURIComponent(currentPath)}`;
+    const redirectUrl = `${redirectTo}?${REDIRECT_QUERY_PARAM}=${encodeURIComponent(currentPath)}`;
 
     router.push(redirectUrl);
     return null;
   }
 
-  // User is authenticated, render children
   return <>{children}</>;
 }
 
 /**
- * Higher-order component for protecting pages
+ * Function: withAuthGuard
+ * Description:
+ * - Higher-order component that wraps a component with authentication guard
+ * - Provides convenient way to protect pages with authentication
+ *
+ * Parameters:
+ * - Component (React.ComponentType<P>): Component to protect
+ * - options (WithAuthGuardOptions, optional): Configuration options
+ *   - redirectTo (string, optional): Path to redirect unauthenticated users
+ *   - fallback (React.ReactNode, optional): Custom loading component
+ *
+ * Returns:
+ * - React.ComponentType<P>: Wrapped component with authentication guard
+ *
+ * Example:
+ * ```typescript
+ * const ProtectedPage = withAuthGuard(MyPage, { redirectTo: '/login' });
+ * ```
  */
 export function withAuthGuard<P extends object>(
   Component: React.ComponentType<P>,
-  options?: { redirectTo?: string; fallback?: React.ReactNode },
+  options?: WithAuthGuardOptions,
 ) {
   return function AuthGuardedComponent(props: P) {
     return (
@@ -82,3 +146,11 @@ export function withAuthGuard<P extends object>(
     );
   };
 }
+
+//----------------------------------------------------
+// 5. Helper Functions
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------

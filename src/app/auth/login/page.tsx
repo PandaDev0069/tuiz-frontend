@@ -1,12 +1,39 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-21
+// Last Update : 2025-09-11
+//
+// Description:
+// - Login page component for host authentication
+// - Handles user login with email and password
+// - Supports remember me functionality
+//
+// Notes:
+// - Uses auth store for authentication state
+// - Supports credential saving for remember me
+// - Redirects to dashboard or intended page on success
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/state/useAuthStore';
-import { useUiStore } from '@/state/useUiStore';
-import { credentialsService } from '@/lib/credentials';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
+// (No external libraries needed)
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
 import {
   AuthCard,
   InputField,
@@ -21,14 +48,27 @@ import {
   Footer,
 } from '@/components/ui';
 
-/**
- * Login page component
- * - Tailwind CSS for styling
- * - React Hook Form for form handling
- * @returns JSX.Element
- */
+//----------------------------------------------------
+// 4. Service & Hook Imports
+//----------------------------------------------------
+import { useAuthStore } from '@/state/useAuthStore';
+import { useUiStore } from '@/state/useUiStore';
+import { credentialsService } from '@/lib/credentials';
 
+//----------------------------------------------------
+// 5. Main Component
+//----------------------------------------------------
+/**
+ * Component: LoginPage
+ * Description:
+ * - Login page component for host authentication
+ * - Handles user login with email and password
+ * - Supports remember me functionality
+ */
 export default function LoginPage() {
+  //----------------------------------------------------
+  // 5.1. Setup & State
+  //----------------------------------------------------
   const router = useRouter();
   const { login, loading } = useAuthStore();
   const { setToast } = useUiStore();
@@ -41,7 +81,9 @@ export default function LoginPage() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [generalError, setGeneralError] = useState('');
 
-  // Load saved credentials on component mount
+  //----------------------------------------------------
+  // 5.2. Effects
+  //----------------------------------------------------
   useEffect(() => {
     const savedCredentials = credentialsService.getSavedCredentials();
     if (savedCredentials) {
@@ -49,17 +91,19 @@ export default function LoginPage() {
         email: savedCredentials.email,
         password: '',
       });
-      setRememberMe(true); // Auto-check remember me if credentials were saved
+      setRememberMe(true);
     }
   }, []);
 
+  //----------------------------------------------------
+  // 5.3. Event Handlers
+  //----------------------------------------------------
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -72,7 +116,6 @@ export default function LoginPage() {
     e.preventDefault();
     setGeneralError('');
 
-    // Basic validation
     const newErrors: { [key: string]: string } = {};
 
     if (!formData.email) {
@@ -91,11 +134,9 @@ export default function LoginPage() {
     }
 
     try {
-      // Save credentials (email only) if "Remember Me" is checked
       if (rememberMe) {
         credentialsService.saveCredentials(formData.email);
       } else {
-        // Clear any previously saved credentials if user unchecks remember me
         credentialsService.clearCredentials();
       }
 
@@ -105,10 +146,8 @@ export default function LoginPage() {
         rememberMe: rememberMe,
       });
 
-      // Success - redirect to intended page or dashboard
       setToast('ログインしました');
 
-      // Check for redirect parameter in URL
       const urlParams = new URLSearchParams(window.location.search);
       const redirectTo = urlParams.get('redirect');
 
@@ -126,6 +165,9 @@ export default function LoginPage() {
     }
   };
 
+  //----------------------------------------------------
+  // 5.4. Main Render
+  //----------------------------------------------------
   return (
     <PageContainer
       entrance="scaleIn"
@@ -133,7 +175,6 @@ export default function LoginPage() {
     >
       <main role="main">
         <Container size="sm" className="w-full max-w-md mx-auto">
-          {/* Header */}
           <div className="text-center mb-8">
             <div className="flex justify-center items-center mb-4">
               <Image
@@ -154,10 +195,8 @@ export default function LoginPage() {
 
           <AuthCard variant="success" className="shadow-2xl">
             <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-              {/* General Error */}
               {generalError && <FormError message={generalError} />}
 
-              {/* Email Field */}
               <InputField
                 label="メールアドレス"
                 type="email"
@@ -169,7 +208,6 @@ export default function LoginPage() {
                 required
               />
 
-              {/* Password Field */}
               <PasswordField
                 label="パスワード"
                 name="password"
@@ -180,7 +218,6 @@ export default function LoginPage() {
                 required
               />
 
-              {/* Remember Me Checkbox */}
               <div className="flex items-center">
                 <Checkbox
                   id="rememberMe"
@@ -191,7 +228,6 @@ export default function LoginPage() {
                 />
               </div>
 
-              {/* Login Button */}
               <Button
                 type="submit"
                 variant="gradient"
@@ -202,7 +238,6 @@ export default function LoginPage() {
                 {loading ? 'ログイン中...' : 'ログイン'}
               </Button>
 
-              {/* Register Link */}
               <RedirectLink
                 text="アカウントをお持ちでない方は"
                 linkText="新規登録"
@@ -213,7 +248,6 @@ export default function LoginPage() {
             </form>
           </AuthCard>
 
-          {/* Back to Home Link */}
           <div className="mt-8 text-center">
             <Link
               href="/"

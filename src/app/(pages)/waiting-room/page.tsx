@@ -1,17 +1,128 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-18
+// Last Update : 2026-01-08
+//
+// Description:
+// - Waiting room page for players before game starts
+// - Handles player join flow, reconnection, and WebSocket setup
+// - Manages game state synchronization
+//
+// Notes:
+// - Handles existing player reconnection scenarios
+// - Syncs game state to avoid missing phase changes
+// - WebSocket event listeners for game start and phase changes
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
+import { toast } from 'react-hot-toast';
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
 import { Header, PageContainer, Container, Main } from '@/components/ui';
 import { PlayerCountdownScreen } from '@/components/game';
+
+//----------------------------------------------------
+// 4. Service & Hook Imports
+//----------------------------------------------------
 import { useSocket } from '@/components/providers/SocketProvider';
 import { gameApi } from '@/services/gameApi';
 import { useDeviceId } from '@/hooks/useDeviceId';
-import { toast } from 'react-hot-toast';
 
+//----------------------------------------------------
+// 5. Types / Interfaces
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 6. Helper Functions for Join Flow
+//----------------------------------------------------
+/**
+ * Function: resetJoinState
+ * Description:
+ * - Resets join state and refs
+ */
+function resetJoinState(
+  setIsJoining: React.Dispatch<React.SetStateAction<boolean>>,
+  isJoiningRef: React.MutableRefObject<boolean>,
+) {
+  setIsJoining(false);
+  isJoiningRef.current = false;
+}
+
+/**
+ * Function: storePlayerIdInSession
+ * Description:
+ * - Stores player ID in sessionStorage
+ */
+function storePlayerIdInSession(gameId: string, deviceId: string | null, playerId: string) {
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem(`player_${gameId}_${deviceId || 'unknown'}`, playerId);
+  }
+}
+
+/**
+ * Function: clearCachedPlayerId
+ * Description:
+ * - Clears cached player ID from sessionStorage
+ */
+function clearCachedPlayerId(gameId: string, deviceId: string | null) {
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem(`player_${gameId}_${deviceId || 'unknown'}`);
+  }
+}
+
+/**
+ * Function: finalizePlayerJoin
+ * Description:
+ * - Finalizes player join by setting all state together
+ */
+function finalizePlayerJoin(
+  setIsJoining: React.Dispatch<React.SetStateAction<boolean>>,
+  setJoinError: React.Dispatch<React.SetStateAction<string | null>>,
+  setPlayerId: React.Dispatch<React.SetStateAction<string | null>>,
+  setIsInitialized: React.Dispatch<React.SetStateAction<boolean>>,
+  isJoiningRef: React.MutableRefObject<boolean>,
+  hasInitializedRef: React.MutableRefObject<boolean>,
+  playerId: string,
+) {
+  isJoiningRef.current = false;
+  flushSync(() => {
+    setIsJoining(false);
+    setJoinError(null);
+    setPlayerId(playerId);
+    setIsInitialized(true);
+  });
+  hasInitializedRef.current = true;
+}
+
+//----------------------------------------------------
+// 7. Main Component
+//----------------------------------------------------
+/**
+ * Component: WaitingRoomContent
+ * Description:
+ * - Waiting room component for players
+ * - Handles player join flow and WebSocket setup
+ */
 function WaitingRoomContent() {
+  //----------------------------------------------------
+  // 7.1. URL Parameters & Setup
+  //----------------------------------------------------
   const router = useRouter();
   const searchParams = useSearchParams();
   const playerName = searchParams.get('name') || '';
@@ -20,24 +131,33 @@ function WaitingRoomContent() {
   const { socket, isConnected, isRegistered, joinRoom, leaveRoom } = useSocket();
   const { deviceId, isLoading: isDeviceIdLoading } = useDeviceId();
 
-  // State management
+  //----------------------------------------------------
+  // 7.2. State Management
+  //----------------------------------------------------
   const [gameId, setGameId] = useState<string | null>(gameIdParam || null);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isRoomLocked, setIsRoomLocked] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const isNavigatingRef = useRef(false);
-  const hasJoinedRoomRef = useRef(false);
-  const isJoiningRef = useRef(false); // Prevent multiple concurrent join attempts
-  const hasInitializedRef = useRef(false); // Track if we've completed initialization
-
-  // Computed: Check if we should show the waiting message
-  const shouldShowWaitingMessage = !isJoining && !joinError && isInitialized && !!playerId;
-
-  // Mobile detection
   const [isMobile, setIsMobile] = useState(true);
 
+  //----------------------------------------------------
+  // 7.3. Refs
+  //----------------------------------------------------
+  const isNavigatingRef = useRef(false);
+  const hasJoinedRoomRef = useRef(false);
+  const isJoiningRef = useRef(false);
+  const hasInitializedRef = useRef(false);
+
+  //----------------------------------------------------
+  // 7.4. Computed Values
+  //----------------------------------------------------
+  const shouldShowWaitingMessage = !isJoining && !joinError && isInitialized && !!playerId;
+
+  //----------------------------------------------------
+  // 7.5. Effects
+  //----------------------------------------------------
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -47,33 +167,40 @@ function WaitingRoomContent() {
     window.addEventListener('resize', checkMobile);
 
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  }, [setIsMobile]);
 
-  // Get gameId from room code and join game
+  //----------------------------------------------------
+  // 7.6. Helper Functions
+  //----------------------------------------------------
+  /**
+   * Function: getGameIdFromCode
+   * Description:
+   * - Gets game ID from room code
+   * - Checks sessionStorage first, then API
+   */
   const getGameIdFromCode = useCallback(async (code: string): Promise<string | null> => {
-    // Priority 1: Check sessionStorage (set when host creates game)
     const storedGameId = sessionStorage.getItem(`game_${code}`);
     if (storedGameId) {
       return storedGameId;
     }
 
-    // Priority 2: Fetch game by code from API
     try {
       const { data: game, error: gameError } = await gameApi.getGameByCode(code);
       if (gameError || !game) {
-        console.warn('Failed to fetch game by code:', gameError);
         return null;
       }
-      // Store in sessionStorage for future use
       sessionStorage.setItem(`game_${code}`, game.id);
       return game.id;
-    } catch (err) {
-      console.error('Error fetching game by code:', err);
+    } catch {
       return null;
     }
   }, []);
 
-  // Handle reconnection: Check if player already exists for this device+game
+  /**
+   * Function: checkExistingPlayer
+   * Description:
+   * - Checks if player already exists for reconnection
+   */
   const checkExistingPlayer = useCallback(
     async (targetGameId?: string) => {
       const gameIdToCheck = targetGameId || gameId;
@@ -82,11 +209,9 @@ function WaitingRoomContent() {
       }
 
       try {
-        // Get all players for this game
         const { data: playersResponse, error: playersError } =
           await gameApi.getPlayers(gameIdToCheck);
         if (playersError) {
-          console.warn('[WaitingRoom] Error fetching players:', playersError);
           return null;
         }
         if (!playersResponse) {
@@ -94,18 +219,20 @@ function WaitingRoomContent() {
         }
 
         const playersArray = playersResponse.players || [];
-        // Find player with matching device_id
         const existingPlayer = playersArray.find((p) => p.device_id === deviceId);
         return existingPlayer || null;
-      } catch (err) {
-        console.error('[WaitingRoom] Failed to check existing player:', err);
+      } catch {
         return null;
       }
     },
     [gameId, deviceId],
   );
 
-  // Fetch current game state to recover if websocket events were missed
+  /**
+   * Function: syncGameState
+   * Description:
+   * - Syncs game state to recover if WebSocket events were missed
+   */
   const syncGameState = useCallback(async () => {
     if (!gameId || isNavigatingRef.current) return;
 
@@ -130,30 +257,341 @@ function WaitingRoomContent() {
         nextPhase = 'countdown';
       }
 
-      // Only navigate if game has actually started (not in waiting state)
       if (nextPhase !== 'waiting') {
         isNavigatingRef.current = true;
         router.replace(
           `/game-player?gameId=${gameId}&phase=${nextPhase}&playerId=${playerId || playerName}`,
         );
       }
-    } catch (err) {
-      console.warn('[WaitingRoom] Failed to sync game state', err);
-    }
+    } catch {}
   }, [gameId, router, playerId, playerName]);
 
-  // Initialize player join flow
+  /**
+   * Function: resolveGameId
+   * Description:
+   * - Resolves game ID from param or room code
+   */
+  const resolveGameId = useCallback(
+    async (gameIdParam: string, roomCode: string): Promise<string | null> => {
+      if (gameIdParam) {
+        return gameIdParam;
+      }
+      return await getGameIdFromCode(roomCode);
+    },
+    [getGameIdFromCode],
+  );
+
+  /**
+   * Function: handleExistingPlayerReconnection
+   * Description:
+   * - Handles reconnection for existing player
+   */
+  const handleExistingPlayerReconnection = useCallback(
+    (
+      existingPlayer: { id: string },
+      currentGameId: string,
+      deviceId: string | null,
+      isMounted: boolean,
+    ): boolean => {
+      if (!isMounted || hasInitializedRef.current) {
+        return false;
+      }
+
+      storePlayerIdInSession(currentGameId, deviceId, existingPlayer.id);
+      finalizePlayerJoin(
+        setIsJoining,
+        setJoinError,
+        setPlayerId,
+        setIsInitialized,
+        isJoiningRef,
+        hasInitializedRef,
+        existingPlayer.id,
+      );
+      toast.success('再接続しました');
+      return true;
+    },
+    [setIsJoining, setJoinError, setPlayerId, setIsInitialized],
+  );
+
+  /**
+   * Function: validateJoinParameters
+   * Description:
+   * - Validates required parameters for joining
+   */
+  const validateJoinParameters = useCallback(
+    (
+      deviceId: string | null,
+      playerName: string,
+      isMounted: boolean,
+    ): { valid: boolean; error?: string } => {
+      if (!deviceId) {
+        if (!isMounted) {
+          return { valid: false };
+        }
+        return {
+          valid: false,
+          error: 'デバイスIDが見つかりません。ページを再読み込みしてください。',
+        };
+      }
+
+      if (!playerName || playerName.trim() === '') {
+        if (!isMounted) {
+          return { valid: false };
+        }
+        return { valid: false, error: 'プレイヤー名が必要です' };
+      }
+
+      return { valid: true };
+    },
+    [],
+  );
+
+  /**
+   * Function: performGameJoin
+   * Description:
+   * - Performs the actual game join API call
+   */
+  const performGameJoin = useCallback(
+    async (
+      currentGameId: string,
+      playerName: string,
+      deviceId: string,
+    ): Promise<{ success: boolean; player?: { id: string }; error?: string }> => {
+      const { data: player, error: joinError } = await gameApi.joinGame(
+        currentGameId,
+        playerName.trim(),
+        deviceId,
+      );
+
+      if (joinError || !player) {
+        const errorMessage = joinError?.message || 'ゲームへの参加に失敗しました';
+
+        if (joinError?.error === 'join_game_failed' && joinError.message?.includes('locked')) {
+          return { success: false, error: errorMessage, player: undefined };
+        }
+
+        return { success: false, error: errorMessage, player: undefined };
+      }
+
+      if (!player.id) {
+        return { success: false, error: 'プレイヤー情報が不正です', player: undefined };
+      }
+
+      return { success: true, player };
+    },
+    [],
+  );
+
+  /**
+   * Function: initializePlayerGameData
+   * Description:
+   * - Initializes player game data (handles 409 conflicts gracefully)
+   */
+  const initializePlayerGameData = useCallback(
+    async (currentGameId: string, playerId: string, deviceId: string) => {
+      try {
+        const { error: dataError } = await gameApi.initializePlayerData(
+          currentGameId,
+          playerId,
+          deviceId,
+        );
+        if (dataError) {
+        }
+      } catch {}
+    },
+    [],
+  );
+
+  /**
+   * Function: fetchGameLockStatus
+   * Description:
+   * - Fetches game data to check lock status
+   */
+  const fetchGameLockStatus = useCallback(
+    async (currentGameId: string) => {
+      const { data: game } = await gameApi.getGame(currentGameId);
+      if (game) {
+        setIsRoomLocked(game.locked);
+      }
+    },
+    [setIsRoomLocked],
+  );
+
+  /**
+   * Function: handleGameIdResolution
+   * Description:
+   * - Resolves and validates game ID
+   * - Returns game ID or null with error handling
+   */
+  const handleGameIdResolution = useCallback(
+    async (
+      gameIdParam: string,
+      roomCode: string,
+      isMounted: boolean,
+    ): Promise<{ success: boolean; gameId?: string; error?: string }> => {
+      const currentGameId = await resolveGameId(gameIdParam, roomCode);
+      if (!currentGameId) {
+        if (!isMounted) {
+          return { success: false };
+        }
+        return {
+          success: false,
+          error: 'ゲームが見つかりません。ルームコードを確認してください。',
+        };
+      }
+
+      if (!isMounted) {
+        return { success: false };
+      }
+
+      setGameId(currentGameId);
+      return { success: true, gameId: currentGameId };
+    },
+    [resolveGameId, setGameId],
+  );
+
+  /**
+   * Function: handleExistingPlayerFlow
+   * Description:
+   * - Handles the entire existing player reconnection flow
+   */
+  const handleExistingPlayerFlow = useCallback(
+    async (
+      currentGameId: string,
+      deviceId: string | null,
+      isMounted: boolean,
+    ): Promise<{ handled: boolean }> => {
+      const existingPlayer = await checkExistingPlayer(currentGameId);
+      if (!existingPlayer) {
+        const cachedPlayerId =
+          (typeof window !== 'undefined' &&
+            sessionStorage.getItem(`player_${currentGameId}_${deviceId || 'unknown'}`)) ||
+          null;
+        if (cachedPlayerId) {
+          clearCachedPlayerId(currentGameId, deviceId);
+        }
+        return { handled: false };
+      }
+
+      if (handleExistingPlayerReconnection(existingPlayer, currentGameId, deviceId, isMounted)) {
+        return { handled: true };
+      }
+
+      if (!isMounted) {
+        return { handled: false };
+      }
+
+      return { handled: false };
+    },
+    [checkExistingPlayer, handleExistingPlayerReconnection],
+  );
+
+  /**
+   * Function: handleJoinError
+   * Description:
+   * - Handles join errors consistently
+   */
+  const handleJoinError = useCallback(
+    (error: string, isMounted: boolean, isLocked?: boolean): { shouldReturn: boolean } => {
+      if (!isMounted) {
+        return { shouldReturn: true };
+      }
+
+      setJoinError(error);
+      resetJoinState(setIsJoining, isJoiningRef);
+      toast.error(error);
+
+      if (isLocked) {
+        setIsRoomLocked(true);
+      }
+
+      return { shouldReturn: true };
+    },
+    [setIsJoining, setJoinError, setIsRoomLocked],
+  );
+
+  /**
+   * Function: handleNewPlayerJoinFlow
+   * Description:
+   * - Handles the entire new player join flow
+   */
+  const handleNewPlayerJoinFlow = useCallback(
+    async (
+      currentGameId: string,
+      playerName: string,
+      deviceId: string,
+      isMounted: boolean,
+    ): Promise<{ success: boolean; error?: string }> => {
+      const validation = validateJoinParameters(deviceId, playerName, isMounted);
+      if (!validation.valid) {
+        if (!isMounted) {
+          return { success: false };
+        }
+        if (validation.error) {
+          setJoinError(validation.error);
+        }
+        resetJoinState(setIsJoining, isJoiningRef);
+        return { success: false, error: validation.error };
+      }
+
+      const joinResult = await performGameJoin(currentGameId, playerName, deviceId);
+      if (!joinResult.success) {
+        const isLocked = joinResult.error?.includes('locked');
+        handleJoinError(joinResult.error || 'ゲームへの参加に失敗しました', isMounted, isLocked);
+        return { success: false, error: joinResult.error };
+      }
+
+      if (!joinResult.player?.id) {
+        if (!isMounted) {
+          return { success: false };
+        }
+        setJoinError('プレイヤー情報が不正です');
+        resetJoinState(setIsJoining, isJoiningRef);
+        return { success: false, error: 'プレイヤー情報が不正です' };
+      }
+
+      storePlayerIdInSession(currentGameId, deviceId, joinResult.player.id);
+
+      await initializePlayerGameData(currentGameId, joinResult.player.id, deviceId);
+      await fetchGameLockStatus(currentGameId);
+
+      finalizePlayerJoin(
+        setIsJoining,
+        setJoinError,
+        setPlayerId,
+        setIsInitialized,
+        isJoiningRef,
+        hasInitializedRef,
+        joinResult.player.id,
+      );
+      toast.success('ゲームに参加しました！');
+
+      return { success: true };
+    },
+    [
+      validateJoinParameters,
+      performGameJoin,
+      handleJoinError,
+      initializePlayerGameData,
+      fetchGameLockStatus,
+      setIsJoining,
+      setJoinError,
+      setPlayerId,
+      setIsInitialized,
+    ],
+  );
+
+  //----------------------------------------------------
+  // 7.7. Initialize Player Join Flow
+  //----------------------------------------------------
   useEffect(() => {
-    // Wait for deviceId to be ready
     if (isDeviceIdLoading || !deviceId) return;
 
-    // Check required params
     if (!roomCode || !playerName) {
       setJoinError('ルームコードとプレイヤー名が必要です');
       return;
     }
 
-    // Skip if already initialized or if a join is already in progress
     if (hasInitializedRef.current || isJoiningRef.current) {
       return;
     }
@@ -161,7 +599,6 @@ function WaitingRoomContent() {
     let isMounted = true;
 
     const initializeAndJoin = async () => {
-      // Prevent multiple concurrent join attempts
       if (isJoiningRef.current) {
         return;
       }
@@ -171,210 +608,42 @@ function WaitingRoomContent() {
         setIsJoining(true);
         setJoinError(null);
 
-        // Step 1: Get gameId from room code
-        let currentGameId: string | null = gameIdParam || null;
-        if (!currentGameId) {
-          currentGameId = await getGameIdFromCode(roomCode);
-          if (!currentGameId) {
-            if (!isMounted) {
-              setIsJoining(false);
-              isJoiningRef.current = false;
-              return;
-            }
-            setJoinError('ゲームが見つかりません。ルームコードを確認してください。');
-            setIsJoining(false);
-            isJoiningRef.current = false;
-            return;
+        const gameIdResult = await handleGameIdResolution(gameIdParam, roomCode, isMounted);
+        if (!gameIdResult.success) {
+          if (gameIdResult.error) {
+            setJoinError(gameIdResult.error);
           }
-        }
-
-        if (!isMounted || !currentGameId) {
-          setIsJoining(false);
-          isJoiningRef.current = false;
-          return;
-        }
-        setGameId(currentGameId);
-
-        // Step 1.5: Check if player already exists (reconnection scenario)
-        // This handles the case where player refreshes page or reconnects
-        // Always verify player exists in DB, even if we have a cached playerId
-        const existingPlayer = await checkExistingPlayer(currentGameId);
-        if (existingPlayer) {
-          // Player already exists in DB, use existing player
-          if (!isMounted) {
-            setIsJoining(false);
-            isJoiningRef.current = false;
-            return;
-          }
-
-          // Prevent duplicate initialization
-          if (hasInitializedRef.current) {
-            return;
-          }
-
-          // Store playerId in sessionStorage immediately
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem(
-              `player_${currentGameId}_${deviceId || 'unknown'}`,
-              existingPlayer.id,
-            );
-          }
-          // Update all state together - use flushSync to force immediate re-render
-          isJoiningRef.current = false;
-          // Set all state in a single flushSync to ensure they update together
-          flushSync(() => {
-            setIsJoining(false);
-            setJoinError(null);
-            setPlayerId(existingPlayer.id);
-            setIsInitialized(true);
-          });
-          // Mark as initialized AFTER state is set
-          hasInitializedRef.current = true;
-          toast.success('再接続しました');
+          resetJoinState(setIsJoining, isJoiningRef);
           return;
         }
 
-        // If we had a cached playerId but player doesn't exist in DB, clear the cache
-        const cachedPlayerId =
-          (typeof window !== 'undefined' &&
-            sessionStorage.getItem(`player_${currentGameId}_${deviceId || 'unknown'}`)) ||
-          null;
-        if (cachedPlayerId) {
-          if (typeof window !== 'undefined') {
-            sessionStorage.removeItem(`player_${currentGameId}_${deviceId || 'unknown'}`);
-          }
-        }
+        const currentGameId = gameIdResult.gameId!;
 
-        // Step 2: Join the game (creates players table record)
-        // Validate required parameters before joining
-        if (!deviceId) {
-          if (!isMounted) {
-            setIsJoining(false);
-            isJoiningRef.current = false;
-            return;
-          }
-          setJoinError('デバイスIDが見つかりません。ページを再読み込みしてください。');
-          setIsJoining(false);
-          isJoiningRef.current = false;
-          return;
-        }
-
-        if (!playerName || playerName.trim() === '') {
-          if (!isMounted) {
-            setIsJoining(false);
-            isJoiningRef.current = false;
-            return;
-          }
-          setJoinError('プレイヤー名が必要です');
-          setIsJoining(false);
-          isJoiningRef.current = false;
-          return;
-        }
-        const { data: player, error: joinError } = await gameApi.joinGame(
+        const existingPlayerResult = await handleExistingPlayerFlow(
           currentGameId,
-          playerName.trim(),
           deviceId,
+          isMounted,
         );
-
-        // Note: We continue even if unmounted to ensure state is set
-        // React will handle cleanup if component is actually unmounted
-
-        if (joinError || !player) {
-          const errorMessage = joinError?.message || 'ゲームへの参加に失敗しました';
-          console.error('[WaitingRoom] Join game failed:', {
-            error: joinError,
-            player,
-            errorMessage,
-          });
-          setJoinError(errorMessage);
-          setIsJoining(false);
-          isJoiningRef.current = false;
-          toast.error(errorMessage);
-
-          // Handle specific error cases
-          if (joinError?.error === 'join_game_failed') {
-            if (joinError.message?.includes('locked')) {
-              setIsRoomLocked(true);
-            }
-          }
+        if (existingPlayerResult.handled) {
           return;
         }
 
-        // Double-check player has required fields
-        if (!player.id) {
-          setJoinError('プレイヤー情報が不正です');
-          setIsJoining(false);
-          isJoiningRef.current = false;
+        const newPlayerResult = await handleNewPlayerJoinFlow(
+          currentGameId,
+          playerName,
+          deviceId!,
+          isMounted,
+        );
+        if (!newPlayerResult.success) {
           return;
         }
-
-        // Store playerId in sessionStorage immediately
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem(`player_${currentGameId}_${deviceId || 'unknown'}`, player.id);
-        }
-
-        // Step 3: Initialize game_player_data (if not already created)
-        // Note: Backend creates this automatically when player joins, so this will likely return 409
-        // We try to create it anyway as a safety measure, but 409 is expected and harmless
-        try {
-          const { error: dataError } = await gameApi.initializePlayerData(
-            currentGameId,
-            player.id,
-            deviceId,
-          );
-          if (dataError) {
-            // 409 Conflict means it already exists, which is expected and fine
-            if (dataError.error !== 'conflict' && !dataError.message?.includes('already exists')) {
-              console.warn('[WaitingRoom] Game player data initialization error:', dataError);
-            }
-            // Silently ignore 409 conflicts - this is expected behavior
-          }
-        } catch (dataError) {
-          // Network errors or other unexpected errors - log but don't fail
-          const errorMessage = dataError instanceof Error ? dataError.message : String(dataError);
-          // Only log if it's not a 409 conflict
-          if (!errorMessage.includes('409') && !errorMessage.includes('Conflict')) {
-            console.warn('[WaitingRoom] Game player data initialization error:', dataError);
-          }
-        }
-
-        // Step 4: Fetch game data to check lock status
-        const { data: game } = await gameApi.getGame(currentGameId);
-
-        if (game) {
-          setIsRoomLocked(game.locked);
-        }
-
-        // Update all state together - use flushSync to force immediate re-render
-        isJoiningRef.current = false;
-        // Set all state in a single flushSync to ensure they update together
-        flushSync(() => {
-          setIsJoining(false);
-          setJoinError(null);
-          setPlayerId(player.id);
-          setIsInitialized(true);
-        });
-        // Mark as initialized AFTER state is set
-        hasInitializedRef.current = true;
-        toast.success('ゲームに参加しました！');
       } catch (err) {
-        if (!isMounted) {
-          setIsJoining(false);
-          isJoiningRef.current = false;
-          return;
-        }
         const errorMessage =
           err instanceof Error ? err.message : 'ゲームへの参加中にエラーが発生しました';
-        setJoinError(errorMessage);
-        setIsJoining(false);
-        isJoiningRef.current = false;
-        toast.error(errorMessage);
-        console.error('Failed to join game:', err);
+        handleJoinError(errorMessage, isMounted);
       } finally {
-        // Ensure isJoining is always reset, even if something unexpected happens
         if (isMounted) {
-          setIsJoining(false);
-          isJoiningRef.current = false;
+          resetJoinState(setIsJoining, isJoiningRef);
         }
       }
     };
@@ -390,28 +659,31 @@ function WaitingRoomContent() {
     deviceId,
     gameIdParam,
     isDeviceIdLoading,
-    getGameIdFromCode,
-    checkExistingPlayer,
+    handleGameIdResolution,
+    handleExistingPlayerFlow,
+    handleNewPlayerJoinFlow,
+    handleJoinError,
   ]);
 
-  // If already initialized, double-check the current game state to avoid missing phase changes
+  //----------------------------------------------------
+  // 7.8. Game State Sync
+  //----------------------------------------------------
   useEffect(() => {
     if (isInitialized) {
       syncGameState();
     }
   }, [isInitialized, syncGameState]);
 
-  // WebSocket room joining and event listeners
+  //----------------------------------------------------
+  // 7.9. WebSocket Setup
+  //----------------------------------------------------
   useEffect(() => {
-    // Wait for socket to be connected AND registered before joining room
     if (!socket || !isConnected || !isRegistered || !gameId || !isInitialized || !playerId) {
       return;
     }
 
     let reconnectAttempted = false;
 
-    // Join the game room via WebSocket
-    // Backend will create room_participants and websocket_connections records
     const joinRoomSafe = () => {
       if (hasJoinedRoomRef.current) {
         return;
@@ -422,7 +694,6 @@ function WaitingRoomContent() {
 
     joinRoomSafe();
 
-    // Listen for game start event
     const handleGameStarted = (data: {
       roomId?: string;
       gameId?: string;
@@ -433,35 +704,29 @@ function WaitingRoomContent() {
       if (isNavigatingRef.current) return;
       if (targetGameId === gameId || data.roomCode === roomCode) {
         isNavigatingRef.current = true;
-        // Persist countdown start timestamp for the player page to sync timers
         if (data.startedAt) {
           sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
         }
-        // Use replace for faster navigation (no history entry)
         router.replace(
           `/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId || playerName}`,
         );
       }
     };
 
-    // Listen for explicit phase changes (fallback if game:started missed)
     const handlePhaseChange = (data: { roomId: string; phase: string; startedAt?: number }) => {
       if (data.roomId === gameId) {
-        // Always store countdown start timestamp so game-player can sync even if navigation is in-flight
         if (data.phase === 'countdown' && data.startedAt) {
           sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
         }
         if (isNavigatingRef.current) return;
 
         isNavigatingRef.current = true;
-        // Use replace for faster navigation (no history entry)
         router.replace(
           `/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId || playerName}`,
         );
       }
     };
 
-    // Listen for room lock status changes
     const handleRoomLocked = (data: { gameId?: string; roomId?: string; locked: boolean }) => {
       const targetGameId = data.gameId || data.roomId;
       if (targetGameId === gameId) {
@@ -469,18 +734,14 @@ function WaitingRoomContent() {
       }
     };
 
-    // Handle WebSocket reconnection
     const handleReconnect = async () => {
       if (reconnectAttempted) return;
       reconnectAttempted = true;
 
-      // Wait a bit for socket to be registered
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Check if player still exists
       const existingPlayer = await checkExistingPlayer();
       if (existingPlayer) {
-        // Player exists, rejoin room (reset flag to allow rejoin)
         hasJoinedRoomRef.current = false;
         setPlayerId(existingPlayer.id);
         if (typeof window !== 'undefined' && gameId) {
@@ -489,25 +750,17 @@ function WaitingRoomContent() {
         if (gameId && isRegistered) {
           joinRoom(gameId);
         }
-        // Re-sync current phase in case we missed events while disconnected
         syncGameState();
         toast.success('再接続しました');
       } else {
-        // Player doesn't exist, need to rejoin game
         toast.error('接続が切断されました。ページを再読み込みしてください。');
       }
     };
 
-    // Listen for player join/leave events (for future use - showing player count)
-    const handlePlayerJoined = () => {
-      // Could update player list here if needed
-    };
+    const handlePlayerJoined = () => {};
 
-    const handlePlayerLeft = () => {
-      // Could update player list here if needed
-    };
+    const handlePlayerLeft = () => {};
 
-    // Handle player kicked event - redirect to join page
     const handlePlayerKicked = (data: {
       player_id: string;
       player_name: string;
@@ -515,15 +768,12 @@ function WaitingRoomContent() {
       kicked_by: string;
       timestamp: string;
     }) => {
-      // Check if the kicked player is the current player
       if (data.player_id === playerId || data.game_id === gameId) {
-        // Show notification
         toast.error('ホストによってBANされました', {
           icon: '🚫',
           duration: 5000,
         });
 
-        // Clear stored game data
         if (roomCode) {
           sessionStorage.removeItem(`game_${roomCode}`);
         }
@@ -531,14 +781,12 @@ function WaitingRoomContent() {
           sessionStorage.removeItem(`player_${gameId}_${deviceId || 'unknown'}`);
         }
 
-        // Redirect to join page after a short delay
         setTimeout(() => {
           router.push('/join');
         }, 2000);
       }
     };
 
-    // Register event listeners
     socket.on('game:started', handleGameStarted);
     socket.on('game:phase:change', handlePhaseChange);
     socket.on('game:room-locked', handleRoomLocked);
@@ -576,16 +824,19 @@ function WaitingRoomContent() {
     leaveRoom,
   ]);
 
-  // Countdown state
+  //----------------------------------------------------
+  // 7.10. Countdown State (Legacy - not currently used)
+  //----------------------------------------------------
   const [showCountdown] = useState(false);
   const [countdownTime] = useState(5);
 
-  const handleCountdownComplete = () => {
-    // Navigate to player question screen after countdown
+  const handleCountdownComplete = useCallback(() => {
     window.location.href = `/player-question-screen?code=${roomCode}&playerId=test&name=${encodeURIComponent(playerName)}`;
-  };
+  }, [roomCode, playerName]);
 
-  // Show countdown screen if countdown is active
+  //----------------------------------------------------
+  // 7.11. Loading State
+  //----------------------------------------------------
   if (showCountdown) {
     return (
       <PlayerCountdownScreen
@@ -786,6 +1037,9 @@ function WaitingRoomContent() {
   );
 }
 
+//----------------------------------------------------
+// 8. Page Wrapper Component
+//----------------------------------------------------
 export default function WaitingRoomPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>

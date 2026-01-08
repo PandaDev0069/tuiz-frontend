@@ -1,14 +1,73 @@
+// ====================================================
+// File Name   : SocketProvider.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-20
+// Last Update : 2025-12-26
+//
+// Description:
+// - Socket.IO provider component for WebSocket communication
+// - Manages socket connection, reconnection, and room management
+// - Provides socket context to child components via useSocket hook
+// - Handles device ID initialization and heartbeat mechanism
+//
+// Notes:
+// - Client-only component (requires 'use client')
+// - Uses Socket.IO client for real-time communication
+// - Implements automatic reconnection with configurable attempts
+// - Manages room join/leave with deduplication
+// ====================================================
+
 'use client';
 
 import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+
 import { cfg } from '@/config/config';
-import { DebugPanel } from '@/components/debug';
 import { getOrCreateDeviceIdScoped } from '@/lib/deviceId';
 
 const HEARTBEAT_INTERVAL_MS = 30000;
+const SOCKET_CONNECTION_TIMEOUT_MS = 10000;
+const RECONNECTION_ATTEMPTS = 5;
+const RECONNECTION_DELAY_MS = 1000;
 
-// Socket context type
+const SOCKET_TRANSPORTS = ['websocket', 'polling'] as const;
+
+const HOST_SCREEN_PATH = '/host-screen';
+const HOST_SCREEN_WINDOW_NAME = 'host-screen';
+const TEMP_DEVICE_ID_PREFIX = 'temp-';
+const TEMP_DEVICE_ID_RANDOM_LENGTH = 9;
+
+const SOCKET_EVENTS = {
+  CONNECT: 'connect',
+  DISCONNECT: 'disconnect',
+  CONNECT_ERROR: 'connect_error',
+  RECONNECT: 'reconnect',
+  RECONNECT_ERROR: 'reconnect_error',
+  RECONNECT_FAILED: 'reconnect_failed',
+  ERROR: 'error',
+  WS_CONNECT: 'ws:connect',
+  WS_CONNECTED: 'ws:connected',
+  WS_HEARTBEAT: 'ws:heartbeat',
+  WS_PONG: 'ws:pong',
+  WS_ERROR: 'ws:error',
+  CLIENT_HELLO: 'client:hello',
+  SERVER_HELLO: 'server:hello',
+  ROOM_JOIN: 'room:join',
+  ROOM_LEAVE: 'room:leave',
+} as const;
+
+const ERROR_MESSAGES = {
+  CONNECTION_FAILED: 'Connection failed',
+  RECONNECTION_FAILED: 'Reconnection failed',
+  RECONNECTION_FAILED_ALL_ATTEMPTS: 'Reconnection failed after all attempts',
+  UNKNOWN_SERVER_ERROR: 'Unknown server error',
+  UNKNOWN_SOCKET_ERROR: 'Unknown socket error',
+  USE_SOCKET_OUTSIDE_PROVIDER: 'useSocket must be used within a SocketProvider',
+} as const;
+
+const DEFAULT_USER_AGENT = 'unknown';
+
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
@@ -18,7 +77,10 @@ interface SocketContextType {
   leaveRoom: (roomId: string) => void;
 }
 
-// Create Socket context
+interface SocketProviderProps {
+  children: React.ReactNode;
+}
+
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
@@ -28,16 +90,100 @@ const SocketContext = createContext<SocketContextType>({
   leaveRoom: () => {},
 });
 
-// Hook to access socket instance
+/**
+ * Hook: useSocket
+ * Description:
+ * - Custom hook to access the Socket.IO context
+ * - Provides socket instance, connection status, and room management functions
+ * - Throws error if used outside of SocketProvider
+ *
+ * Returns:
+ * - SocketContextType: Socket context with connection state and methods
+ *
+ * Throws:
+ * - Error if used outside of SocketProvider
+ *
+ * Example:
+ * ```tsx
+ * const { socket, isConnected, joinRoom } = useSocket();
+ * ```
+ */
 export function useSocket() {
   const context = useContext(SocketContext);
   if (!context) {
-    throw new Error('useSocket must be used within a SocketProvider');
+    throw new Error(ERROR_MESSAGES.USE_SOCKET_OUTSIDE_PROVIDER);
   }
   return context;
 }
 
-export function SocketProvider({ children }: { children: React.ReactNode }) {
+/**
+ * Generates a temporary device ID when device ID retrieval fails.
+ *
+ * @returns {string} Temporary device ID string
+ */
+const generateTemporaryDeviceId = (): string => {
+  const timestamp = Date.now();
+  const randomString = Math.random().toString(36).substr(2, TEMP_DEVICE_ID_RANDOM_LENGTH);
+  return `${TEMP_DEVICE_ID_PREFIX}${timestamp}-${randomString}`;
+};
+
+/**
+ * Checks if the current window is a public screen based on pathname or window name.
+ *
+ * @returns {boolean} True if the window is a public screen
+ */
+const isPublicScreenWindow = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  return (
+    window.location.pathname.includes(HOST_SCREEN_PATH) || window.name === HOST_SCREEN_WINDOW_NAME
+  );
+};
+
+/**
+ * Extracts error message from various error object formats.
+ *
+ * @param {unknown} error - Error object or string
+ * @param {string} defaultMessage - Default message if extraction fails
+ * @returns {string} Extracted error message
+ */
+const extractErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (error && typeof error === 'object' && 'message' in error && error.message) {
+    return String(error.message);
+  }
+  if (error && typeof error === 'string') {
+    return error;
+  }
+  if (error) {
+    return String(error);
+  }
+  return defaultMessage;
+};
+
+/**
+ * Component: SocketProvider
+ * Description:
+ * - Provider component that manages Socket.IO connection lifecycle
+ * - Initializes device ID and establishes WebSocket connection
+ * - Handles connection events, reconnection, and error handling
+ * - Provides room join/leave functionality with deduplication
+ * - Manages heartbeat mechanism for connection health
+ *
+ * Parameters:
+ * - children (React.ReactNode): Child components to wrap with socket provider
+ *
+ * Returns:
+ * - React.ReactElement: The socket provider component
+ *
+ * Example:
+ * ```tsx
+ * <SocketProvider>
+ *   <App />
+ * </SocketProvider>
+ * ```
+ */
+export function SocketProvider({ children }: SocketProviderProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -54,84 +200,71 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Initialize device ID on client side only
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        const isPublicScreen =
-          typeof window !== 'undefined' &&
-          (window.location.pathname.includes('/host-screen') || window.name === 'host-screen');
-
-        // Public screen runs in a separate window; use per-tab ID to avoid clobbering host ID
+        const isPublicScreen = isPublicScreenWindow();
         deviceIdRef.current = getOrCreateDeviceIdScoped({ perTab: isPublicScreen });
       } catch (error) {
         console.error('[SocketProvider] Failed to get device ID:', error);
-        // Generate a temporary device ID if we can't get one
-        deviceIdRef.current = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        deviceIdRef.current = generateTemporaryDeviceId();
       }
     }
   }, []);
 
   useEffect(() => {
-    // Don't initialize socket if device ID is not ready (during SSR)
     if (typeof window === 'undefined' || !deviceIdRef.current) {
       return;
     }
 
-    // Use the configured API base URL instead of hardcoded localhost
     const socketUrl = cfg.apiBase;
 
-    console.log(`Connecting to Socket.IO server at: ${socketUrl}`);
-
     const socketInstance = io(socketUrl, {
-      transports: ['websocket', 'polling'], // Try WebSocket first, fallback to polling
-      timeout: 10000, // 10 second timeout
+      transports: [...SOCKET_TRANSPORTS],
+      timeout: SOCKET_CONNECTION_TIMEOUT_MS,
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: RECONNECTION_ATTEMPTS,
+      reconnectionDelay: RECONNECTION_DELAY_MS,
       forceNew: true,
     });
 
     socketRef.current = socketInstance;
 
-    socketInstance.on('connect', () => {
-      console.log('Socket.IO connected successfully');
+    socketInstance.on(SOCKET_EVENTS.CONNECT, () => {
       if (deviceIdRef.current) {
-        socketInstance.emit('ws:connect', {
+        socketInstance.emit(SOCKET_EVENTS.WS_CONNECT, {
           deviceId: deviceIdRef.current,
           metadata: {
-            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+            userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : DEFAULT_USER_AGENT,
             connectedAt: new Date().toISOString(),
           },
         });
       }
       heartbeatRef.current = setInterval(() => {
-        socketInstance.emit('ws:heartbeat');
+        socketInstance.emit(SOCKET_EVENTS.WS_HEARTBEAT);
       }, HEARTBEAT_INTERVAL_MS);
       setIsConnected(true);
-      setIsRegistered(false); // wait for ws:connected
+      setIsRegistered(false);
       isRegisteredRef.current = false;
       setConnectionError(null);
     });
 
-    socketInstance.on('ws:connected', (data) => {
-      console.log('Socket.IO registration confirmed', data);
+    socketInstance.on(SOCKET_EVENTS.WS_CONNECTED, () => {
       setIsConnected(true);
       setIsRegistered(true);
       isRegisteredRef.current = true;
       setConnectionError(null);
     });
 
-    socketInstance.on('disconnect', (reason) => {
-      console.log('Socket.IO disconnected:', reason);
+    socketInstance.on(SOCKET_EVENTS.DISCONNECT, () => {
       clearHeartbeat();
       setIsConnected(false);
       setIsRegistered(false);
       isRegisteredRef.current = false;
     });
 
-    socketInstance.on('connect_error', (error) => {
-      const errorMessage = error?.message || error?.toString() || 'Connection failed';
+    socketInstance.on(SOCKET_EVENTS.CONNECT_ERROR, (error) => {
+      const errorMessage = extractErrorMessage(error, ERROR_MESSAGES.CONNECTION_FAILED);
       console.error('Socket.IO connection error:', {
         error,
         message: errorMessage,
@@ -142,26 +275,17 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       setIsConnected(false);
       setIsRegistered(false);
       isRegisteredRef.current = false;
-
-      // Log additional debugging info
-      console.log('Connection details:', {
-        url: socketUrl,
-        transports: socketInstance.io.opts.transports,
-        timeout: socketInstance.io.opts.timeout,
-        reconnection: socketInstance.io.opts.reconnection,
-      });
     });
 
-    socketInstance.on('reconnect', (attemptNumber) => {
-      console.log('Socket.IO reconnected after', attemptNumber, 'attempts');
+    socketInstance.on(SOCKET_EVENTS.RECONNECT, () => {
       setIsConnected(true);
-      setIsRegistered(false); // wait for ws:connected
+      setIsRegistered(false);
       isRegisteredRef.current = false;
       setConnectionError(null);
     });
 
-    socketInstance.on('reconnect_error', (error) => {
-      const errorMessage = error?.message || error?.toString() || 'Reconnection failed';
+    socketInstance.on(SOCKET_EVENTS.RECONNECT_ERROR, (error) => {
+      const errorMessage = extractErrorMessage(error, ERROR_MESSAGES.RECONNECTION_FAILED);
       console.error('Socket.IO reconnection error:', {
         error,
         message: errorMessage,
@@ -172,21 +296,20 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       isRegisteredRef.current = false;
     });
 
-    socketInstance.on('reconnect_failed', () => {
+    socketInstance.on(SOCKET_EVENTS.RECONNECT_FAILED, () => {
       console.error('Socket.IO reconnection failed after all attempts');
-      setConnectionError('Reconnection failed after all attempts');
+      setConnectionError(ERROR_MESSAGES.RECONNECTION_FAILED_ALL_ATTEMPTS);
       setIsRegistered(false);
       isRegisteredRef.current = false;
     });
 
-    socketInstance.on('ws:error', (data) => {
-      // Handle empty error objects or missing message
+    socketInstance.on(SOCKET_EVENTS.WS_ERROR, (data) => {
       const errorMessage =
         data && typeof data === 'object' && 'message' in data && data.message
-          ? data.message
+          ? String(data.message)
           : data && typeof data === 'string'
             ? data
-            : 'Unknown server error';
+            : ERROR_MESSAGES.UNKNOWN_SERVER_ERROR;
 
       console.error('Socket.IO server error:', {
         error: data,
@@ -200,34 +323,24 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       isRegisteredRef.current = false;
     });
 
-    socketInstance.on('ws:pong', () => {
-      // Heartbeat acknowledgement
-    });
+    socketInstance.on(SOCKET_EVENTS.WS_PONG, () => {});
 
-    socketInstance.on('server:hello', () => {
-      console.log('Received server hello message');
-      // no-op; just verifying connectivity
-    });
+    socketInstance.on(SOCKET_EVENTS.SERVER_HELLO, () => {});
 
-    // Catch-all error handler for any unhandled errors
-    socketInstance.on('error', (error) => {
-      const errorMessage = error?.message || error?.toString() || 'Unknown socket error';
+    socketInstance.on(SOCKET_EVENTS.ERROR, (error) => {
+      const errorMessage = extractErrorMessage(error, ERROR_MESSAGES.UNKNOWN_SOCKET_ERROR);
       console.error('Socket.IO unhandled error:', {
         error,
         message: errorMessage,
         type: (error as { type?: string })?.type,
       });
-      // Don't set connection error for unhandled errors - they might be recoverable
-      // Only log them for debugging
     });
 
-    // Send initial greeting
-    socketInstance.emit('client:hello');
+    socketInstance.emit(SOCKET_EVENTS.CLIENT_HELLO);
 
     const joinedRoomsOnSetup = joinedRoomsRef.current;
 
     return () => {
-      console.log('Cleaning up Socket.IO connection');
       clearHeartbeat();
       joinedRoomsOnSetup.clear();
       socketInstance.close();
@@ -237,30 +350,35 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       isRegisteredRef.current = false;
       setConnectionError(null);
     };
-  }, []); // Empty deps - only run once on mount (client-side)
+  }, []);
 
-  // Log connection status for debugging
   useEffect(() => {
     if (connectionError) {
       console.warn('Socket.IO connection error state:', connectionError);
     }
   }, [connectionError]);
 
-  // Safe room join/leave helpers with deduping
-  // Use useCallback to ensure stable function references
   const joinRoom = useCallback((roomId: string) => {
-    if (!socketRef.current || !roomId || !isRegisteredRef.current) return;
-    if (joinedRoomsRef.current.has(roomId)) return;
-    socketRef.current.emit('room:join', { roomId });
+    if (!socketRef.current || !roomId || !isRegisteredRef.current) {
+      return;
+    }
+    if (joinedRoomsRef.current.has(roomId)) {
+      return;
+    }
+    socketRef.current.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId });
     joinedRoomsRef.current.add(roomId);
-  }, []); // Empty deps - functions use refs which are stable
+  }, []);
 
   const leaveRoom = useCallback((roomId: string) => {
-    if (!socketRef.current || !roomId || !isRegisteredRef.current) return;
-    if (!joinedRoomsRef.current.has(roomId)) return;
-    socketRef.current.emit('room:leave', { roomId });
+    if (!socketRef.current || !roomId || !isRegisteredRef.current) {
+      return;
+    }
+    if (!joinedRoomsRef.current.has(roomId)) {
+      return;
+    }
+    socketRef.current.emit(SOCKET_EVENTS.ROOM_LEAVE, { roomId });
     joinedRoomsRef.current.delete(roomId);
-  }, []); // Empty deps - functions use refs which are stable
+  }, []);
 
   return (
     <SocketContext.Provider
@@ -273,8 +391,6 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         leaveRoom,
       }}
     >
-      {/* Debug Panel - only in development */}
-      <DebugPanel isSocketConnected={isConnected} socketError={connectionError} />
       {children}
     </SocketContext.Provider>
   );

@@ -1,18 +1,72 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-23
+// Last Update : 2025-12-30
+//
+// Description:
+// - Player answer reveal screen component
+// - Displays answer statistics and player's result
+// - Handles navigation to leaderboard on time expiry
+//
+// Notes:
+// - Uses game flow hook for real-time game state
+// - Fetches current question and answer statistics
+// - Supports WebSocket connection for live updates
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. Component Imports
+//----------------------------------------------------
 import { PlayerAnswerRevealScreen } from '@/components/game';
-import { Question, AnswerResult } from '@/types/game';
+
+//----------------------------------------------------
+// 3. Hook Imports
+//----------------------------------------------------
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameAnswer } from '@/hooks/useGameAnswer';
 import { useGameLeaderboard } from '@/hooks/useGameLeaderboard';
 import { useDeviceId } from '@/hooks/useDeviceId';
 import { useSocket } from '@/components/providers/SocketProvider';
+
+//----------------------------------------------------
+// 4. Service Imports
+//----------------------------------------------------
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
 
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
+import { Question, AnswerResult } from '@/types/game';
+
+//----------------------------------------------------
+// 6. Utility Imports
+//----------------------------------------------------
+import toast from 'react-hot-toast';
+
+//----------------------------------------------------
+// 7. Main Component
+//----------------------------------------------------
+/**
+ * Component: PlayerAnswerRevealScreenContent
+ * Description:
+ * - Displays answer statistics and player's result
+ * - Handles navigation to leaderboard on time expiry
+ */
 function PlayerAnswerRevealScreenContent() {
+  //----------------------------------------------------
+  // 7.1. URL Parameters & Setup
+  //----------------------------------------------------
   const router = useRouter();
   const searchParams = useSearchParams();
   const gameIdParam = searchParams.get('gameId') || '';
@@ -30,57 +84,9 @@ function PlayerAnswerRevealScreenContent() {
   const [totalQuestionsState, setTotalQuestionsState] = useState<number>(totalQuestions);
   const hasJoinedRoomRef = useRef(false);
 
-  // Get gameId from room code if not provided
-  useEffect(() => {
-    if (gameId || !roomCode) return;
-
-    const getGameIdFromCode = async () => {
-      try {
-        const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
-        if (storedGameId) {
-          setGameId(storedGameId);
-          return;
-        }
-
-        const { data: game, error } = await gameApi.getGameByCode(roomCode);
-        if (error || !game) {
-          console.error('Failed to get game by code:', error);
-          return;
-        }
-        setGameId(game.id);
-        sessionStorage.setItem(`game_${roomCode}`, game.id);
-      } catch (err) {
-        console.error('Failed to get game ID:', err);
-      }
-    };
-
-    getGameIdFromCode();
-  }, [roomCode, gameId]);
-
-  // Load quiz data once (for fallback)
-  useEffect(() => {
-    if (!gameId) return;
-    const loadQuiz = async () => {
-      try {
-        const { data: game, error } = await gameApi.getGame(gameId);
-        if (error || !game) {
-          console.error('Failed to get game:', error);
-          return;
-        }
-        const quizSetId = game?.quiz_id || game?.quiz_set_id;
-        if (quizSetId) {
-          const quiz = await quizService.getQuizComplete(quizSetId);
-          const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
-          setTotalQuestionsState(sorted.length);
-        }
-      } catch (err) {
-        console.error('Failed to load quiz for game', err);
-      }
-    };
-    loadQuiz();
-  }, [gameId]);
-
-  // Use game flow for timer and question state
+  //----------------------------------------------------
+  // 7.2. Game Flow & State
+  //----------------------------------------------------
   const { gameFlow } = useGameFlow({
     gameId,
     autoSync: true,
@@ -90,11 +96,12 @@ function PlayerAnswerRevealScreenContent() {
       onQuestionEnd: () => {},
       onAnswerReveal: () => {},
       onGameEnd: () => {},
-      onError: (err) => console.error('Player GameFlow Error:', err),
+      onError: (err) => {
+        console.error('Player GameFlow Error:', err);
+      },
     },
   });
 
-  // Use game answer hook to get player's answer
   const { answerResult: playerAnswerResult } = useGameAnswer({
     gameId,
     playerId,
@@ -108,7 +115,56 @@ function PlayerAnswerRevealScreenContent() {
 
   const { socket, isConnected, joinRoom, leaveRoom } = useSocket();
 
-  // Fetch current question from API when question changes
+  //----------------------------------------------------
+  // 7.3. Effects
+  //----------------------------------------------------
+  useEffect(() => {
+    if (gameId || !roomCode) return;
+
+    const getGameIdFromCode = async () => {
+      try {
+        const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
+        if (storedGameId) {
+          setGameId(storedGameId);
+          return;
+        }
+
+        const { data: game, error } = await gameApi.getGameByCode(roomCode);
+        if (error || !game) {
+          toast.error('ゲーム情報の取得に失敗しました');
+          return;
+        }
+        setGameId(game.id);
+        sessionStorage.setItem(`game_${roomCode}`, game.id);
+      } catch {
+        toast.error('ゲームIDの取得に失敗しました');
+      }
+    };
+
+    getGameIdFromCode();
+  }, [roomCode, gameId]);
+
+  useEffect(() => {
+    if (!gameId) return;
+    const loadQuiz = async () => {
+      try {
+        const { data: game, error } = await gameApi.getGame(gameId);
+        if (error || !game) {
+          return;
+        }
+        const quizSetId = game?.quiz_id || game?.quiz_set_id;
+        if (quizSetId) {
+          const quiz = await quizService.getQuizComplete(quizSetId);
+          const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
+          setTotalQuestionsState(sorted.length);
+        }
+      } catch {
+        console.error('Failed to load quiz for game');
+      }
+    };
+    loadQuiz();
+  }, [gameId]);
+
   useEffect(() => {
     if (!gameId || !gameFlow?.current_question_id) {
       setCurrentQuestion(null);
@@ -119,11 +175,10 @@ function PlayerAnswerRevealScreenContent() {
       try {
         const { data, error } = await gameApi.getCurrentQuestion(gameId);
         if (error || !data) {
-          console.error('Failed to fetch current question:', error);
+          toast.error('問題データの取得に失敗しました');
           return;
         }
 
-        // Transform API response to Question format
         const answeringTime = data.question.answering_time || 30;
         const timeLimit = data.question.time_limit || 40;
 
@@ -147,31 +202,27 @@ function PlayerAnswerRevealScreenContent() {
         };
 
         setCurrentQuestion(question);
-      } catch (err) {
-        console.error('Error fetching current question:', err);
+      } catch {
+        toast.error('問題データの取得に失敗しました');
       }
     };
 
     fetchCurrentQuestion();
   }, [gameId, gameFlow?.current_question_id]);
 
-  // Listen for WebSocket events
   useEffect(() => {
     if (!socket || !isConnected || !gameId) return;
 
-    // Join the game room
     const doJoinRoom = () => {
       if (hasJoinedRoomRef.current) {
         return;
       }
-      console.log('[PlayerAnswerRevealScreen] Joining room:', gameId);
       joinRoom(gameId);
       hasJoinedRoomRef.current = true;
     };
 
     doJoinRoom();
 
-    // Listen for answer stats updates
     const handleStatsUpdate = (data: {
       roomId: string;
       questionId: string;
@@ -189,22 +240,21 @@ function PlayerAnswerRevealScreenContent() {
       socket.off('game:answer:stats:update', handleStatsUpdate);
       socket.off('game:answer:stats', handleStatsUpdate);
 
-      // Leave room on unmount
       if (gameId && hasJoinedRoomRef.current) {
-        console.log('[PlayerAnswerRevealScreen] Leaving room on unmount');
         leaveRoom(gameId);
         hasJoinedRoomRef.current = false;
       }
     };
   }, [socket, isConnected, gameId, gameFlow?.current_question_id, joinRoom, leaveRoom]);
 
-  // Construct answer result from real data
+  //----------------------------------------------------
+  // 7.4. Computed Values
+  //----------------------------------------------------
   const answerResult: AnswerResult | null = useMemo(() => {
     if (!currentQuestion || !currentQuestion.choices || currentQuestion.choices.length === 0) {
       return null;
     }
 
-    // Get player's answer from hook
     const playerChoice = playerAnswerResult?.selectedOption
       ? currentQuestion.choices.find((c) => c.id === playerAnswerResult.selectedOption)
       : undefined;
@@ -219,7 +269,6 @@ function PlayerAnswerRevealScreenContent() {
       };
     });
 
-    // Determine if answer is correct
     const isCorrect =
       playerAnswerResult?.isCorrect ??
       (playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false);
@@ -241,6 +290,9 @@ function PlayerAnswerRevealScreenContent() {
 
   const questionIndex = gameFlow?.current_question_index ?? questionIndexParam;
 
+  //----------------------------------------------------
+  // 7.5. Main Render
+  //----------------------------------------------------
   if (!gameId) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -277,13 +329,15 @@ function PlayerAnswerRevealScreenContent() {
       questionNumber={questionIndex + 1}
       totalQuestions={totalQuestionsState || totalQuestions}
       onTimeExpired={() => {
-        // Navigate to leaderboard with gameId and playerId
         router.push(`/player-leaderboard-screen?gameId=${gameId}&playerId=${playerId}`);
       }}
     />
   );
 }
 
+//----------------------------------------------------
+// 8. Page Wrapper Component
+//----------------------------------------------------
 export default function PlayerAnswerRevealScreenPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>

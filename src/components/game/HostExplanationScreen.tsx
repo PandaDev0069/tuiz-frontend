@@ -1,17 +1,74 @@
+// ====================================================
+// File Name   : HostExplanationScreen.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-27
+// Last Update : 2025-12-12
+//
+// Description:
+// - Host screen component for displaying question explanations
+// - Shows explanation title, body text, and optional image
+// - Manages timer countdown and automatic navigation
+// - Includes fade-in animations for content
+//
+// Notes:
+// - Uses staggered animation delays for visual effect
+// - Supports manual navigation via next button
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. Imports / Dependencies
+//----------------------------------------------------
 import Image from 'next/image';
 import React, { useEffect, useRef, useState } from 'react';
+
 import { PageContainer, Main, QuizBackground } from '@/components/ui';
 import { TimeBar } from './TimeBar';
-import { ExplanationData } from '@/types/game';
+import type { ExplanationData } from '@/types/game';
 
-interface HostExplanationScreenProps {
+//----------------------------------------------------
+// 2. Constants / Configuration
+//----------------------------------------------------
+const INTRO_ANIMATION_DELAY_MS = 200;
+const TIMER_INTERVAL_MS = 1000;
+const NAVIGATION_DELAY_MS = 0;
+const MIN_TIME_LIMIT = 0;
+const TIME_EXPIRED_THRESHOLD = 1;
+
+const TEXT_EXPLANATION = '解説';
+const IMAGE_ALT_TEXT = '解説イメージ';
+const TEXT_NEXT = '次へ';
+
+//----------------------------------------------------
+// 3. Types / Interfaces
+//----------------------------------------------------
+export interface HostExplanationScreenProps {
   explanation: ExplanationData;
   onTimeExpired?: () => void;
-  onNext?: () => void; // Callback for manual next action
+  onNext?: () => void;
 }
 
+//----------------------------------------------------
+// 4. Core Logic
+//----------------------------------------------------
+/**
+ * Component: HostExplanationScreen
+ * Description:
+ * - Displays explanation screen for host with animated content
+ * - Shows explanation title, body text, and optional image
+ * - Manages timer countdown and automatic navigation
+ * - Includes fade-in animations with staggered delays
+ *
+ * Parameters:
+ * - explanation (ExplanationData): Explanation data with title, body, image, and timing
+ * - onTimeExpired (function, optional): Callback when timer expires
+ * - onNext (function, optional): Callback for manual next action
+ *
+ * Returns:
+ * - JSX.Element: Host explanation screen component
+ */
 export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
   explanation,
   onTimeExpired,
@@ -23,7 +80,6 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
   const [isTimeExpired, setIsTimeExpired] = useState(false);
   const hasTriggeredTimeout = useRef(false);
 
-  // Reset state when data changes
   useEffect(() => {
     setCurrentTime(timeLimit);
     setIsIntroVisible(false);
@@ -34,20 +90,19 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
   useEffect(() => {
     const introTimer = setTimeout(() => {
       setIsIntroVisible(true);
-    }, 200);
+    }, INTRO_ANIMATION_DELAY_MS);
 
     return () => clearTimeout(introTimer);
   }, [questionNumber]);
 
-  // Internal timer countdown
   useEffect(() => {
-    if (timeLimit <= 0) {
+    if (timeLimit <= MIN_TIME_LIMIT) {
       return;
     }
 
     const timer = setInterval(() => {
       setCurrentTime((prev) => {
-        if (prev <= 1) {
+        if (prev <= TIME_EXPIRED_THRESHOLD) {
           if (!hasTriggeredTimeout.current) {
             hasTriggeredTimeout.current = true;
             setIsTimeExpired(true);
@@ -56,22 +111,21 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
         }
         return prev - 1;
       });
-    }, 1000);
+    }, TIMER_INTERVAL_MS);
 
     return () => clearInterval(timer);
   }, [timeLimit]);
 
-  // Handle timeout navigation in separate effect
   useEffect(() => {
     if (isTimeExpired) {
-      // Use setTimeout to ensure navigation happens after current render cycle
       const timeoutId = setTimeout(() => {
         onTimeExpired?.();
-      }, 0);
+      }, NAVIGATION_DELAY_MS);
 
       return () => clearTimeout(timeoutId);
     }
   }, [isTimeExpired, onTimeExpired]);
+
   return (
     <PageContainer className="h-screen">
       <Main className="h-full relative">
@@ -97,7 +151,7 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
             >
               <div className="relative">
                 <span className="text-5xl md:text-8xl font-mono font-black bg-gradient-to-r from-cyan-700 via-blue-600 to-cyan-700 bg-clip-text text-transparent tracking-wider drop-shadow-sm">
-                  解説
+                  {TEXT_EXPLANATION}
                 </span>
               </div>
             </div>
@@ -119,7 +173,14 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
                     isIntroVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
                   }`}
                 >
-                  <Image src={image} alt="解説イメージ" fill className="object-cover" priority />
+                  <Image
+                    src={image}
+                    alt={IMAGE_ALT_TEXT}
+                    width={1000}
+                    height={500}
+                    className="object-contain w-full h-full"
+                    priority
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
                 </div>
               )}
@@ -141,14 +202,13 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
             </div>
           </div>
 
-          {/* Next Button */}
           {onNext && (
             <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20">
               <button
                 onClick={onNext}
                 className="px-8 py-4 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
               >
-                次へ
+                {TEXT_NEXT}
               </button>
             </div>
           )}
@@ -157,3 +217,11 @@ export const HostExplanationScreen: React.FC<HostExplanationScreenProps> = ({
     </PageContainer>
   );
 };
+
+//----------------------------------------------------
+// 5. Helper Functions
+//----------------------------------------------------
+
+//----------------------------------------------------
+// 6. Export
+//----------------------------------------------------

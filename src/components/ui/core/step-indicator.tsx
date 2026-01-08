@@ -1,8 +1,29 @@
+// ====================================================
+// File Name   : step-indicator.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-02
+// Last Update : 2025-09-02
+//
+// Description:
+// - Step indicator component for multi-step forms
+// - Displays progress through quiz creation steps
+// - Shows active, completed, and inactive states with color coding
+// - Includes icons and connector lines between steps
+//
+// Notes:
+// - Client-only component (requires 'use client')
+// - Uses Lucide React icons for step indicators
+// - Supports responsive design for mobile and desktop
+// ====================================================
+
 'use client';
 
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { ClipboardList, HelpCircle, Settings, Target, CheckCheck } from 'lucide-react';
+
+const INACTIVE_CONNECTOR_CLASSES = 'bg-gradient-to-r from-gray-200 to-gray-300';
 
 interface StepIndicatorProps {
   currentStep: number;
@@ -30,7 +51,100 @@ interface Step {
     | 'indigo';
 }
 
-const steps: Step[] = [
+interface ColorClasses {
+  circle: string;
+  text: string;
+  icon: string;
+  connector: string;
+}
+
+interface ColorMap {
+  active: string;
+  completed: string;
+  inactive: string;
+  text: {
+    active: string;
+    completed: string;
+    inactive: string;
+  };
+  icon: {
+    active: string;
+    inactive: string;
+  };
+  connector: string;
+}
+
+const COLOR_MAP: Record<string, ColorMap> = {
+  emerald: {
+    active:
+      'bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-600 border-emerald-500 shadow-emerald-200',
+    completed: 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-emerald-500',
+    inactive: 'bg-gradient-to-br from-gray-50 to-gray-100 text-gray-400 border-gray-300',
+    text: {
+      active: 'text-emerald-600',
+      completed: 'text-emerald-600',
+      inactive: 'text-gray-500',
+    },
+    icon: {
+      active: 'text-emerald-600',
+      inactive: 'text-emerald-400',
+    },
+    connector: 'bg-gradient-to-r from-emerald-400 to-emerald-500',
+  },
+  purple: {
+    active:
+      'bg-gradient-to-br from-purple-50 to-purple-100 text-purple-600 border-purple-500 shadow-purple-200',
+    completed: 'bg-gradient-to-br from-purple-500 to-purple-600 text-white border-purple-500',
+    inactive:
+      'bg-gradient-to-br from-purple-50 to-purple-100 text-purple-400 border-purple-300 shadow-purple-100',
+    text: {
+      active: 'text-purple-600',
+      completed: 'text-purple-600',
+      inactive: 'text-purple-500',
+    },
+    icon: {
+      active: 'text-purple-600',
+      inactive: 'text-purple-500',
+    },
+    connector: 'bg-gradient-to-r from-purple-400 to-purple-500',
+  },
+  orange: {
+    active:
+      'bg-gradient-to-br from-orange-50 to-orange-100 text-orange-600 border-orange-500 shadow-orange-200',
+    completed: 'bg-gradient-to-br from-orange-500 to-orange-600 text-white border-orange-500',
+    inactive:
+      'bg-gradient-to-br from-orange-50 to-orange-100 text-orange-400 border-orange-300 shadow-orange-100',
+    text: {
+      active: 'text-orange-600',
+      completed: 'text-orange-600',
+      inactive: 'text-orange-500',
+    },
+    icon: {
+      active: 'text-orange-600',
+      inactive: 'text-orange-400',
+    },
+    connector: 'bg-gradient-to-r from-orange-400 to-orange-500',
+  },
+  success: {
+    active:
+      'bg-gradient-to-br from-success-bg to-success-light/20 text-success border-success shadow-success/20',
+    completed: 'bg-gradient-to-br from-success to-success-light text-white border-success',
+    inactive:
+      'bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-400 border-emerald-300 shadow-emerald-100',
+    text: {
+      active: 'text-success',
+      completed: 'text-success',
+      inactive: 'text-emerald-500',
+    },
+    icon: {
+      active: 'text-success',
+      inactive: 'text-emerald-500',
+    },
+    connector: 'bg-gradient-to-r from-success to-success-light',
+  },
+} as const;
+
+const STEPS: Step[] = [
   {
     id: 1,
     title: '基本情報',
@@ -57,110 +171,82 @@ const steps: Step[] = [
   },
 ];
 
-export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, className }) => {
-  // Color mapping function
-  const getColorClasses = (color: string, isActive: boolean, isCompleted: boolean) => {
-    const colorMap = {
-      emerald: {
-        active:
-          'bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-600 border-emerald-500 shadow-emerald-200',
-        completed:
-          'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-emerald-500',
-        inactive: 'bg-gradient-to-br from-gray-50 to-gray-100 text-gray-400 border-gray-300',
-        text: {
-          active: 'text-emerald-600',
-          completed: 'text-emerald-600',
-          inactive: 'text-gray-500',
-        },
-        icon: {
-          active: 'text-emerald-600',
-          inactive: 'text-emerald-400',
-        },
-        connector: 'bg-gradient-to-r from-emerald-400 to-emerald-500',
-      },
-      purple: {
-        active:
-          'bg-gradient-to-br from-purple-50 to-purple-100 text-purple-600 border-purple-500 shadow-purple-200',
-        completed: 'bg-gradient-to-br from-purple-500 to-purple-600 text-white border-purple-500',
-        inactive:
-          'bg-gradient-to-br from-purple-50 to-purple-100 text-purple-400 border-purple-300 shadow-purple-100',
-        text: {
-          active: 'text-purple-600',
-          completed: 'text-purple-600',
-          inactive: 'text-purple-500',
-        },
-        icon: {
-          active: 'text-purple-600',
-          inactive: 'text-purple-500',
-        },
-        connector: 'bg-gradient-to-r from-purple-400 to-purple-500',
-      },
-      orange: {
-        active:
-          'bg-gradient-to-br from-orange-50 to-orange-100 text-orange-600 border-orange-500 shadow-orange-200',
-        completed: 'bg-gradient-to-br from-orange-500 to-orange-600 text-white border-orange-500',
-        inactive:
-          'bg-gradient-to-br from-orange-50 to-orange-100 text-orange-400 border-orange-300 shadow-orange-100',
-        text: {
-          active: 'text-orange-600',
-          completed: 'text-orange-600',
-          inactive: 'text-orange-500',
-        },
-        icon: {
-          active: 'text-orange-600',
-          inactive: 'text-orange-400',
-        },
-        connector: 'bg-gradient-to-r from-orange-400 to-orange-500',
-      },
-      success: {
-        active:
-          'bg-gradient-to-br from-success-bg to-success-light/20 text-success border-success shadow-success/20',
-        completed: 'bg-gradient-to-br from-success to-success-light text-white border-success',
-        inactive:
-          'bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-400 border-emerald-300 shadow-emerald-100',
-        text: {
-          active: 'text-success',
-          completed: 'text-success',
-          inactive: 'text-emerald-500',
-        },
-        icon: {
-          active: 'text-success',
-          inactive: 'text-emerald-500',
-        },
-        connector: 'bg-gradient-to-r from-success to-success-light',
-      },
+/**
+ * Function: getColorClasses
+ * Description:
+ * - Returns color classes based on step state (active, completed, inactive)
+ * - Maps color names to Tailwind CSS classes for different states
+ * - Provides fallback to emerald color if color not found
+ *
+ * Parameters:
+ * - color (string): Color name for the step
+ * - isActive (boolean): Whether step is currently active
+ * - isCompleted (boolean): Whether step has been completed
+ *
+ * Returns:
+ * - ColorClasses: Object containing circle, text, icon, and connector classes
+ *
+ * Example:
+ * ```ts
+ * const colors = getColorClasses('emerald', true, false);
+ * // Returns active emerald color classes
+ * ```
+ */
+const getColorClasses = (color: string, isActive: boolean, isCompleted: boolean): ColorClasses => {
+  const colors = COLOR_MAP[color as keyof typeof COLOR_MAP] || COLOR_MAP.emerald;
+
+  if (isActive) {
+    return {
+      circle: colors.active,
+      text: colors.text.active,
+      icon: colors.icon.active,
+      connector: colors.connector,
     };
+  }
 
-    const colors = colorMap[color as keyof typeof colorMap] || colorMap.emerald;
+  if (isCompleted) {
+    return {
+      circle: colors.completed,
+      text: colors.text.completed,
+      icon: colors.icon.active,
+      connector: colors.connector,
+    };
+  }
 
-    if (isActive) {
-      return {
-        circle: colors.active,
-        text: colors.text.active,
-        icon: colors.icon.active,
-        connector: colors.connector,
-      };
-    } else if (isCompleted) {
-      return {
-        circle: colors.completed,
-        text: colors.text.completed,
-        icon: colors.icon.active,
-        connector: colors.connector,
-      };
-    } else {
-      return {
-        circle: colors.inactive,
-        text: colors.text.inactive,
-        icon: colors.icon.inactive,
-        connector: 'bg-gradient-to-r from-gray-200 to-gray-300',
-      };
-    }
+  return {
+    circle: colors.inactive,
+    text: colors.text.inactive,
+    icon: colors.icon.inactive,
+    connector: INACTIVE_CONNECTOR_CLASSES,
   };
+};
 
+/**
+ * Component: StepIndicator
+ * Description:
+ * - Step indicator component for multi-step forms
+ * - Displays progress through quiz creation steps with visual indicators
+ * - Shows active, completed, and inactive states with color coding
+ * - Includes icons, titles, and animated connector lines
+ * - Supports responsive design for mobile and desktop
+ *
+ * Parameters:
+ * - currentStep (number): Current active step number
+ * - totalSteps (number): Total number of steps
+ * - className (string, optional): Additional CSS classes
+ *
+ * Returns:
+ * - React.ReactElement: The step indicator component
+ *
+ * Example:
+ * ```tsx
+ * <StepIndicator currentStep={2} totalSteps={4} />
+ * ```
+ */
+export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, className }) => {
   return (
     <div className={cn('w-full', className)}>
       <div className="max-w-6xl mx-auto px-2 sm:px-4 lg:px-8">
-        {/* Header */}
         <div className="text-center mb-3 sm:mb-4">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-800">クイズ作成</h1>
           <p className="text-sm sm:text-base text-gray-600 max-w-md mx-auto leading-relaxed">
@@ -168,17 +254,15 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, class
           </p>
         </div>
 
-        {/* Progress Steps */}
         <div className="flex items-center mb-3 sm:mb-4">
-          {steps.map((step, index) => {
+          {STEPS.map((step, index) => {
             const isActive = step.id === currentStep;
             const isCompleted = step.id < currentStep;
-            const isLast = index === steps.length - 1;
+            const isLast = index === STEPS.length - 1;
             const colors = getColorClasses(step.color, isActive, isCompleted);
 
             return (
               <React.Fragment key={step.id}>
-                {/* Step Circle */}
                 <div className="flex flex-col items-center relative">
                   <div
                     className={cn(
@@ -203,7 +287,6 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, class
                     )}
                   </div>
 
-                  {/* Step Title */}
                   <span
                     className={cn(
                       'mt-1 sm:mt-2 text-[10px] sm:text-xs font-semibold text-center transition-all duration-300',
@@ -215,7 +298,6 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStep, class
                   </span>
                 </div>
 
-                {/* Connector Line */}
                 {!isLast && (
                   <div className="flex-1 mx-2 sm:mx-3">
                     <div className="h-1 bg-gradient-to-r from-gray-200 to-gray-300 rounded-full relative overflow-hidden">

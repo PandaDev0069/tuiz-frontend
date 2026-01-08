@@ -1,21 +1,76 @@
-'use client';
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-24
+// Last Update : 2025-12-28
+//
+// Description:
+// - Host answer screen component
+// - Displays question and answer phases
+// - Handles real-time phase transitions and answer statistics
+//
+// Notes:
+// - Uses game flow hook for real-time game state
+// - Supports question display and answering phases
+// - Manages WebSocket connections for live updates
+// ====================================================
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
+import React, { useState, useEffect, useMemo, useRef, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. Component Imports
+//----------------------------------------------------
 import { HostAnswerScreen, HostQuestionScreen } from '@/components/game';
+
+//----------------------------------------------------
+// 3. Hook Imports
+//----------------------------------------------------
 import { useSocket } from '@/components/providers/SocketProvider';
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameLeaderboard } from '@/hooks/useGameLeaderboard';
+
+//----------------------------------------------------
+// 4. Service Imports
+//----------------------------------------------------
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
+
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
 import type { QuestionWithAnswers } from '@/types/quiz';
 import { Question } from '@/types/game';
 
+//----------------------------------------------------
+// 6. Utility Imports
+//----------------------------------------------------
+import toast from 'react-hot-toast';
+
+//----------------------------------------------------
+// 7. Type Definitions
+//----------------------------------------------------
 type Phase = 'question' | 'answering' | 'answer_reveal' | 'ended';
 
+//----------------------------------------------------
+// 8. Main Component
+//----------------------------------------------------
+/**
+ * Component: HostAnswerScreenContent
+ * Description:
+ * - Displays question and answer phases
+ * - Handles real-time phase transitions and answer statistics
+ */
 function HostAnswerScreenContent() {
+  //----------------------------------------------------
+  // 8.1. URL Parameters & Setup
+  //----------------------------------------------------
   const searchParams = useSearchParams();
   const router = useRouter();
   const roomCode = searchParams.get('code') || '';
@@ -38,48 +93,9 @@ function HostAnswerScreenContent() {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const hasJoinedRoomRef = useRef(false);
 
-  // Resolve gameId from room code if needed
-  useEffect(() => {
-    if (gameId || !roomCode) return;
-    const resolve = async () => {
-      try {
-        const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
-        if (storedGameId) {
-          setGameId(storedGameId);
-          return;
-        }
-        const { data: game } = await gameApi.getGameByCode(roomCode);
-        if (game?.id) {
-          setGameId(game.id);
-          sessionStorage.setItem(`game_${roomCode}`, game.id);
-        }
-      } catch (err) {
-        console.error('Failed to resolve gameId for host-answer-screen', err);
-      }
-    };
-    resolve();
-  }, [gameId, roomCode]);
-
-  // Load quiz data (timings) for current game
-  useEffect(() => {
-    if (!gameId) return;
-    const loadQuiz = async () => {
-      try {
-        const { data: game } = await gameApi.getGame(gameId);
-        const quizId = game?.quiz_id || game?.quiz_set_id;
-        if (quizId) {
-          const quiz = await quizService.getQuizComplete(quizId);
-          const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
-          setQuestions(sorted);
-        }
-      } catch (err) {
-        console.error('Failed to load quiz for host-answer-screen', err);
-      }
-    };
-    loadQuiz();
-  }, [gameId]);
-
-  // Game flow subscription (read-only)
+  //----------------------------------------------------
+  // 8.2. Game Flow & State
+  //----------------------------------------------------
   const { gameFlow, timerState } = useGameFlow({
     gameId: gameId || '',
     isHost: false,
@@ -96,13 +112,56 @@ function HostAnswerScreenContent() {
         setCurrentPhase('answer_reveal');
       },
       onGameEnd: () => setCurrentPhase('ended'),
-      onError: (err) => console.error('[HostAnswerScreen] GameFlow error', err),
+      onError: (err) => {
+        console.error('HostAnswerScreen GameFlow error', err);
+      },
     },
   });
 
   useGameLeaderboard({ gameId: gameId || '', autoRefresh: true });
 
-  // Fetch current question from API for full metadata
+  //----------------------------------------------------
+  // 8.3. Effects
+  //----------------------------------------------------
+  useEffect(() => {
+    if (gameId || !roomCode) return;
+    const resolve = async () => {
+      try {
+        const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
+        if (storedGameId) {
+          setGameId(storedGameId);
+          return;
+        }
+        const { data: game } = await gameApi.getGameByCode(roomCode);
+        if (game?.id) {
+          setGameId(game.id);
+          sessionStorage.setItem(`game_${roomCode}`, game.id);
+        }
+      } catch {
+        toast.error('ゲーム情報の取得に失敗しました');
+      }
+    };
+    resolve();
+  }, [gameId, roomCode]);
+
+  useEffect(() => {
+    if (!gameId) return;
+    const loadQuiz = async () => {
+      try {
+        const { data: game } = await gameApi.getGame(gameId);
+        const quizId = game?.quiz_id || game?.quiz_set_id;
+        if (quizId) {
+          const quiz = await quizService.getQuizComplete(quizId);
+          const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
+          setQuestions(sorted);
+        }
+      } catch {
+        console.error('Failed to load quiz for host-answer-screen');
+      }
+    };
+    loadQuiz();
+  }, [gameId]);
+
   useEffect(() => {
     if (!gameId || !gameFlow?.current_question_id) {
       setCurrentQuestionData(null);
@@ -112,7 +171,6 @@ function HostAnswerScreenContent() {
       try {
         const { data, error } = await gameApi.getCurrentQuestion(gameId);
         if (error || !data) return;
-        // Extract timing values from API
         const answeringTime = data.question.answering_time || 30;
         const timeLimit = data.question.time_limit || 40;
         const showQuestionTime = Math.max(0, timeLimit - answeringTime);
@@ -142,8 +200,8 @@ function HostAnswerScreenContent() {
           answeringTime,
           showQuestionTime,
         });
-      } catch (err) {
-        console.error('[HostAnswerScreen] Failed to fetch current question', err);
+      } catch {
+        toast.error('問題データの取得に失敗しました');
       }
     };
     fetchCurrentQuestion();
@@ -151,7 +209,6 @@ function HostAnswerScreenContent() {
     return () => clearInterval(interval);
   }, [gameId, gameFlow?.current_question_id]);
 
-  // Join socket room and listen for stats / phase
   useEffect(() => {
     if (!socket || !isConnected || !gameId) return;
 
@@ -188,14 +245,12 @@ function HostAnswerScreenContent() {
     };
   }, [socket, isConnected, gameId, joinRoom, leaveRoom, gameFlow?.current_question_id]);
 
-  // Reset display/answer timers whenever a new question becomes current (exactly like player screen)
   useEffect(() => {
     if (!gameFlow?.current_question_id) return;
     setIsDisplayPhaseDone(false);
     setAnswerRemainingMs(null);
   }, [gameFlow?.current_question_id]);
 
-  // Update current time every second to force timer re-renders
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(Date.now());
@@ -203,9 +258,10 @@ function HostAnswerScreenContent() {
     return () => clearInterval(interval);
   }, []);
 
-  // Derive per-question timing - prefer API data, fallback to questions array
+  //----------------------------------------------------
+  // 8.4. Computed Values
+  //----------------------------------------------------
   const questionTimings = useMemo(() => {
-    // Prefer API data if available (most accurate)
     if (
       currentQuestionData?.showQuestionTime !== undefined &&
       currentQuestionData?.answeringTime !== undefined
@@ -215,7 +271,6 @@ function HostAnswerScreenContent() {
         answeringTime: currentQuestionData.answeringTime,
       };
     }
-    // Fallback to questions array
     const idx = gameFlow?.current_question_index ?? 0;
     const q = questions[idx];
     if (q) {
@@ -232,7 +287,6 @@ function HostAnswerScreenContent() {
     gameFlow?.current_question_index,
   ]);
 
-  // Calculate display remaining time (exactly like player screen)
   const derivedRemainingMsFromFlow = useMemo(() => {
     if (!gameFlow?.current_question_start_time || !gameFlow?.current_question_end_time) return null;
     return Math.max(0, new Date(gameFlow.current_question_end_time).getTime() - currentTime);
@@ -243,7 +297,6 @@ function HostAnswerScreenContent() {
     derivedRemainingMsFromFlow ??
     questionTimings.showQuestionTime * 1000;
 
-  // Compute current question (API preferred, fallback to quiz data)
   const currentQuestion: Question = useMemo(() => {
     if (currentQuestionData?.question) return currentQuestionData.question;
     const idx = gameFlow?.current_question_index ?? 0;
@@ -280,8 +333,7 @@ function HostAnswerScreenContent() {
     };
   }, [currentQuestionData, questions, gameFlow?.current_question_index]);
 
-  const startAnsweringPhase = React.useCallback(() => {
-    console.log('[HostAnswerScreen] Display phase complete, moving to answering');
+  const startAnsweringPhase = useCallback(() => {
     setIsDisplayPhaseDone(true);
     setCurrentPhase('answering');
     const answeringDurationMs =
@@ -289,13 +341,11 @@ function HostAnswerScreenContent() {
     setAnswerRemainingMs(answeringDurationMs);
   }, [questionTimings.answeringTime, currentQuestion.timeLimit]);
 
-  // Move to answering once the question display timer expires (player-style)
   useEffect(() => {
     if (currentPhase !== 'question' || displayRemainingMs > 0 || isDisplayPhaseDone) return;
     startAnsweringPhase();
   }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
 
-  // Client-side answering countdown (separate from display timer) - exactly like player screen
   useEffect(() => {
     if (currentPhase !== 'answering' || answerRemainingMs === null || answerRemainingMs <= 0)
       return;
@@ -305,11 +355,9 @@ function HostAnswerScreenContent() {
     return () => clearInterval(interval);
   }, [currentPhase, answerRemainingMs]);
 
-  // Calculate answering remaining time (exactly like player screen)
   const answeringRemainingMs =
     answerRemainingMs ?? (questionTimings.answeringTime ?? currentQuestion.timeLimit ?? 30) * 1000;
 
-  // Current time in seconds (exactly like player screen)
   const currentTimeSeconds = Math.max(
     0,
     Math.round((currentPhase === 'question' ? displayRemainingMs : answeringRemainingMs) / 1000),
@@ -321,7 +369,9 @@ function HostAnswerScreenContent() {
     [answerStats],
   );
 
-  // Render
+  //----------------------------------------------------
+  // 8.5. Main Render
+  //----------------------------------------------------
   switch (currentPhase) {
     case 'question':
       return (
@@ -363,6 +413,9 @@ function HostAnswerScreenContent() {
   }
 }
 
+//----------------------------------------------------
+// 9. Page Wrapper Component
+//----------------------------------------------------
 export default function HostAnswerScreenPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>

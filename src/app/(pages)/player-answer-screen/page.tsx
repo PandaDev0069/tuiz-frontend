@@ -1,15 +1,59 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-21
+// Last Update : 2025-12-29
+//
+// Description:
+// - Player answer screen page component
+// - Displays question and allows player to select and submit answers
+// - Handles answer submission with response time tracking
+//
+// Notes:
+// - Uses game flow hook for real-time game state
+// - Tracks answer submission time for scoring
+// - Auto-submits answer when time expires
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
+import toast from 'react-hot-toast';
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
 import { PlayerAnswerScreen } from '@/components/game';
-import { Question } from '@/types/game';
+
+//----------------------------------------------------
+// 4. Service & Hook Imports
+//----------------------------------------------------
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameAnswer } from '@/hooks/useGameAnswer';
 import { useDeviceId } from '@/hooks/useDeviceId';
 import { gameApi } from '@/services/gameApi';
 
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
+import { Question } from '@/types/game';
+
+//----------------------------------------------------
+// 6. Main Component
+//----------------------------------------------------
 function PlayerAnswerScreenContent() {
+  //----------------------------------------------------
+  // 6.1. URL Parameters & Setup
+  //----------------------------------------------------
   const router = useRouter();
   const searchParams = useSearchParams();
   const gameIdParam = searchParams.get('gameId') || '';
@@ -21,7 +65,9 @@ function PlayerAnswerScreenContent() {
   const { deviceId } = useDeviceId();
   const playerId = playerParam || deviceId || 'anonymous-player';
 
-  // Get gameId from room code if not provided
+  //----------------------------------------------------
+  // 6.2. Effects
+  //----------------------------------------------------
   useEffect(() => {
     if (gameId || !roomCode) return;
 
@@ -35,13 +81,13 @@ function PlayerAnswerScreenContent() {
 
         const { data: game, error } = await gameApi.getGameByCode(roomCode);
         if (error || !game) {
-          console.error('Failed to get game by code:', error);
+          toast.error('ゲーム情報の取得に失敗しました');
           return;
         }
         setGameId(game.id);
         sessionStorage.setItem(`game_${roomCode}`, game.id);
-      } catch (err) {
-        console.error('Failed to get game ID:', err);
+      } catch {
+        toast.error('ゲームIDの取得に失敗しました');
       }
     };
 
@@ -67,7 +113,6 @@ function PlayerAnswerScreenContent() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const answerStartTimeRef = React.useRef<number | null>(null);
 
-  // Fetch current question from API
   useEffect(() => {
     if (!gameId || !gameFlow?.current_question_id) {
       setCurrentQuestion(null);
@@ -78,7 +123,7 @@ function PlayerAnswerScreenContent() {
       try {
         const { data, error } = await gameApi.getCurrentQuestion(gameId);
         if (error || !data) {
-          console.error('Failed to fetch current question:', error);
+          toast.error('問題データの取得に失敗しました');
           return;
         }
 
@@ -106,23 +151,21 @@ function PlayerAnswerScreenContent() {
 
         setCurrentQuestion(question);
         setCurrentTime(answeringTime);
-        answerStartTimeRef.current = Date.now(); // Start timing when question is loaded
-      } catch (err) {
-        console.error('Error fetching current question:', err);
+        answerStartTimeRef.current = Date.now();
+      } catch {
+        toast.error('問題データの取得に失敗しました');
       }
     };
 
     fetchCurrentQuestion();
   }, [gameId, gameFlow?.current_question_id]);
 
-  // Use game answer hook
   const { answerResult, submitAnswer, answerStatus } = useGameAnswer({
     gameId: gameId || '',
     playerId,
     questionId: gameFlow?.current_question_id || '',
   });
 
-  // Check if already submitted
   useEffect(() => {
     if (answerStatus.hasAnswered) {
       setIsSubmitted(true);
@@ -132,6 +175,9 @@ function PlayerAnswerScreenContent() {
     }
   }, [answerStatus.hasAnswered, answerResult?.selectedOption]);
 
+  //----------------------------------------------------
+  // 6.3. Event Handlers
+  //----------------------------------------------------
   const handleAnswerSelect = (answerId: string) => {
     if (isSubmitted) return;
     setSelectedAnswer(answerId);
@@ -141,18 +187,16 @@ function PlayerAnswerScreenContent() {
     if (!selectedAnswer || isSubmitted || !gameId || !gameFlow?.current_question_id) return;
 
     try {
-      // Calculate response time
       const responseTimeMs =
         answerStartTimeRef.current !== null ? Date.now() - answerStartTimeRef.current : 0;
 
       await submitAnswer(selectedAnswer, responseTimeMs);
       setIsSubmitted(true);
-      // Navigate to answer reveal screen after submission
       router.push(
         `/player-answer-reveal-screen?gameId=${gameId}&code=${roomCode}&questionIndex=${questionIndexParam}&totalQuestions=${totalQuestions}&playerId=${playerId}`,
       );
-    } catch (err) {
-      console.error('Failed to submit answer:', err);
+    } catch {
+      toast.error('回答の送信に失敗しました');
     }
   }, [
     selectedAnswer,
@@ -167,14 +211,12 @@ function PlayerAnswerScreenContent() {
     playerId,
   ]);
 
-  // Timer countdown
   useEffect(() => {
     if (!currentQuestion || isSubmitted) return;
 
     const timer = setInterval(() => {
       setCurrentTime((prev) => {
         if (prev <= 1) {
-          // Time's up - auto-submit if answer is selected
           if (selectedAnswer && !isSubmitted) {
             handleAnswerSubmit();
           }
@@ -187,7 +229,6 @@ function PlayerAnswerScreenContent() {
     return () => clearInterval(timer);
   }, [selectedAnswer, isSubmitted, currentQuestion, handleAnswerSubmit]);
 
-  // Detect if mobile device
   const [isMobile, setIsMobile] = useState(true);
 
   useEffect(() => {
@@ -201,6 +242,9 @@ function PlayerAnswerScreenContent() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  //----------------------------------------------------
+  // 6.4. Main Render
+  //----------------------------------------------------
   const questionNumber = (gameFlow?.current_question_index ?? questionIndexParam) + 1;
 
   if (!gameId) {

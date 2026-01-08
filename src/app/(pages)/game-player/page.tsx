@@ -1,7 +1,39 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-12-12
+// Last Update : 2026-01-01
+//
+// Description:
+// - Player game interface for participating in live quiz games
+// - Real-time synchronization with host via WebSocket
+// - Handles all game phases: countdown, question, answering, reveal, leaderboard, explanation, podium
+// - Manages timers, answer submission, and phase transitions
+//
+// Notes:
+// - Uses WebSocket for real-time updates from host
+// - Complex timer management for question and answering phases
+// - Auto-submits answers when timer expires
+// - Prevents phase downgrades from host events
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { Suspense, useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
+import { toast } from 'react-hot-toast';
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
 import {
   PlayerCountdownScreen,
   PlayerAnswerScreen,
@@ -12,18 +44,82 @@ import {
   PlayerGameEndScreen,
   PlayerQuestionScreen,
 } from '@/components/game';
+
+//----------------------------------------------------
+// 4. Service & Hook Imports
+//----------------------------------------------------
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameAnswer } from '@/hooks/useGameAnswer';
 import { useGameLeaderboard } from '@/hooks/useGameLeaderboard';
 import { useDeviceId } from '@/hooks/useDeviceId';
 import { useSocket } from '@/components/providers/SocketProvider';
-import { Question, AnswerResult, LeaderboardEntry } from '@/types/game';
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
 import { apiClient } from '@/lib/apiClient';
-import type { QuestionWithAnswers } from '@/types/quiz';
-import { toast } from 'react-hot-toast';
 
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
+import type { Question, AnswerResult, LeaderboardEntry } from '@/types/game';
+import type { QuestionWithAnswers } from '@/types/quiz';
+
+//----------------------------------------------------
+// 6. Constants / Configuration
+//----------------------------------------------------
+const DEFAULT_TOTAL_QUESTIONS = 10;
+const DEFAULT_QUESTION_INDEX = 0;
+const DEFAULT_PHASE: PlayerPhase = 'countdown';
+const DEFAULT_PLACEHOLDER_QUESTION_ID = 'placeholder-q1';
+const DEFAULT_ANONYMOUS_PLAYER = 'anonymous-player';
+
+const COUNTDOWN_TIME_SECONDS = 3;
+const QUESTION_REFRESH_INTERVAL_MS = 5000;
+const SOCKET_CHECK_INTERVAL_MS = 50;
+const CONNECTION_CHECK_INTERVAL_MS = 100;
+const CONNECTION_CHECK_TIMEOUT_MS = 5000;
+const PLAYER_KICKED_DELAY_MS = 2000;
+const TOAST_DURATION_MS = 5000;
+const ANSWER_REVEAL_TIME_LIMIT_SECONDS = 10;
+const LEADERBOARD_TIME_LIMIT_SECONDS = 10;
+const DEFAULT_EXPLANATION_TIME_SECONDS = 10;
+
+const DEFAULT_SHOW_QUESTION_TIME_SECONDS = 10;
+const DEFAULT_ANSWERING_TIME_SECONDS = 30;
+const DEFAULT_POINTS = 100;
+const DEFAULT_MIN_TIME_LIMIT_SECONDS = 5;
+const DEFAULT_FALLBACK_TIME_MS = 10000;
+
+const TIMER_DECREMENT_INTERVAL_MS = 1000;
+const TIMER_SYNC_THRESHOLD_MS = 2000;
+const MS_PER_SECOND = 1000;
+const RADIX_DECIMAL = 10;
+
+const MOBILE_BREAKPOINT_PX = 768;
+const ANIMATION_DELAY_1 = '0.2s';
+const ANIMATION_DELAY_2 = '0.4s';
+
+const PHASE_PRIORITY: Record<PlayerPhase, number> = {
+  waiting: 0,
+  countdown: 1,
+  question: 2,
+  answering: 3,
+  answer_reveal: 4,
+  leaderboard: 5,
+  explanation: 6,
+  podium: 7,
+  ended: 8,
+} as const;
+
+const ANSWER_LETTERS = ['A', 'B', 'C', 'D'] as const;
+
+//----------------------------------------------------
+// 7. Query Client Instance
+//----------------------------------------------------
+// (Not needed - using hooks)
+
+//----------------------------------------------------
+// 8. Types / Interfaces
+//----------------------------------------------------
 type PlayerPhase =
   | 'waiting'
   | 'countdown'
@@ -35,399 +131,454 @@ type PlayerPhase =
   | 'podium'
   | 'ended';
 
-function PlayerGameContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const gameIdParam = searchParams.get('gameId') || '';
-  const roomCode = searchParams.get('code') || '';
-  const [gameId, setGameId] = useState<string>(gameIdParam);
-  const phaseParam = (searchParams.get('phase') as PlayerPhase) || 'countdown';
-  const questionIdParam = searchParams.get('questionId') || 'placeholder-q1';
-  const questionIndexParam = Number(searchParams.get('questionIndex') || '0');
-  const totalQuestions = Number(searchParams.get('totalQuestions') || '10');
-  const playerParam = searchParams.get('playerId') || '';
-  const { deviceId } = useDeviceId();
-  const playerId = playerParam || deviceId || 'anonymous-player';
+interface ExplanationData {
+  title: string | null;
+  text: string | null;
+  image_url: string | null;
+  show_time: number;
+}
 
+interface CurrentQuestionData {
+  question: Question;
+  serverTime: string | null;
+  isActive: boolean;
+  points: number;
+  timeLimit: number;
+  answeringTime?: number;
+  showExplanationTime?: number;
+  totalQuestions?: number;
+}
+
+interface StatsUpdateData {
+  roomId: string;
+  questionId: string;
+  counts: Record<string, number>;
+}
+
+interface AnswerLockedData {
+  roomId: string;
+  questionId: string;
+  counts?: Record<string, number>;
+}
+
+interface PhaseChangeData {
+  roomId: string;
+  phase: PlayerPhase;
+  startedAt?: number;
+}
+
+interface GameEventData {
+  gameId?: string;
+  roomId?: string;
+  roomCode?: string;
+  timestamp?: string;
+}
+
+interface PlayerKickedData {
+  player_id: string;
+  player_name: string;
+  game_id: string;
+  kicked_by: string;
+  timestamp: string;
+}
+
+//----------------------------------------------------
+// 9. Helper Components
+//----------------------------------------------------
+/**
+ * Component: LoadingScreen
+ * Description:
+ * - Displays loading state with animated dots
+ */
+const LoadingScreen: React.FC<{ message: string; color: string }> = ({ message, color }) => (
+  <div className="flex items-center justify-center h-screen bg-gradient-to-br from-cyan-900 via-blue-900 to-purple-900">
+    <div className="text-center">
+      <div className={`p-6 text-${color}-400 text-xl mb-4`}>{message}</div>
+      <div className="flex justify-center space-x-2">
+        <div className={`w-2 h-2 bg-${color}-400 rounded-full animate-bounce`}></div>
+        <div
+          className={`w-2 h-2 bg-${color}-400 rounded-full animate-bounce`}
+          style={{ animationDelay: ANIMATION_DELAY_1 }}
+        ></div>
+        <div
+          className={`w-2 h-2 bg-${color}-400 rounded-full animate-bounce`}
+          style={{ animationDelay: ANIMATION_DELAY_2 }}
+        ></div>
+      </div>
+    </div>
+  </div>
+);
+
+/**
+ * Component: ErrorScreen
+ * Description:
+ * - Displays error message
+ */
+const ErrorScreen: React.FC<{ message: string }> = ({ message }) => (
+  <div className="flex items-center justify-center h-screen">
+    <div className="p-6 text-red-600 text-xl">{message}</div>
+  </div>
+);
+
+/**
+ * Component: LeaderboardContent
+ * Description:
+ * - Renders leaderboard screen with redirect handling
+ */
+const LeaderboardContent: React.FC<{
+  gameFlow: { current_question_index: number | null };
+  questionIndexParam: number;
+  currentQuestionData: CurrentQuestionData | null;
+  questions: QuestionWithAnswers[];
+  totalQuestions: number;
+  leaderboard: unknown;
+  timerState: { remainingMs?: number } | null;
+}> = ({
+  gameFlow,
+  questionIndexParam,
+  currentQuestionData,
+  questions,
+  totalQuestions,
+  leaderboard,
+  timerState,
+}) => {
+  const currentQuestionNum =
+    gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+      ? gameFlow.current_question_index + 1
+      : questionIndexParam + 1;
+  const totalQuestionsCount =
+    currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+  const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
+
+  if (isLastQuestion) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="p-6 text-white text-xl">リダイレクト中...</div>
+        </div>
+      </div>
+    );
+  }
+
+  const leaderboardEntries = Array.isArray(leaderboard)
+    ? leaderboard.map(
+        (entry: {
+          player_id: string;
+          player_name: string;
+          score: number;
+          rank: number;
+          previous_rank?: number;
+          rank_change?: string;
+          score_change?: number;
+        }) => ({
+          playerId: entry.player_id,
+          playerName: entry.player_name,
+          score: entry.score,
+          rank: entry.rank,
+          previousRank: entry.previous_rank ?? entry.rank,
+          rankChange: (entry.rank_change || 'same') as 'up' | 'down' | 'same',
+          scoreChange: entry.score_change ?? 0,
+        }),
+      )
+    : [];
+
+  return (
+    <PlayerLeaderboardScreen
+      leaderboardData={{
+        entries: leaderboardEntries,
+        questionNumber: currentQuestionNum,
+        totalQuestions: totalQuestionsCount,
+        timeRemaining: Math.max(
+          0,
+          Math.round(
+            (timerState?.remainingMs || LEADERBOARD_TIME_LIMIT_SECONDS * MS_PER_SECOND) /
+              MS_PER_SECOND,
+          ),
+        ),
+        timeLimit: LEADERBOARD_TIME_LIMIT_SECONDS,
+      }}
+      onTimeExpired={() => {}}
+    />
+  );
+};
+
+/**
+ * Component: ExplanationContent
+ * Description:
+ * - Renders explanation screen
+ */
+const ExplanationContent: React.FC<{
+  gameFlow: { current_question_index: number | null };
+  questionIndexParam: number;
+  currentQuestionData: CurrentQuestionData | null;
+  questions: QuestionWithAnswers[];
+  totalQuestions: number;
+  explanationData: ExplanationData | null;
+  currentQuestion: Question;
+}> = ({
+  gameFlow,
+  questionIndexParam,
+  currentQuestionData,
+  questions,
+  totalQuestions,
+  explanationData,
+  currentQuestion,
+}) => {
+  const currentQuestionNum =
+    gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+      ? gameFlow.current_question_index + 1
+      : questionIndexParam + 1;
+  const totalQuestionsCount =
+    currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+
+  return (
+    <PlayerExplanationScreen
+      explanation={{
+        questionNumber: currentQuestionNum,
+        totalQuestions: totalQuestionsCount,
+        timeLimit:
+          currentQuestionData?.showExplanationTime ??
+          explanationData?.show_time ??
+          currentQuestion.show_explanation_time ??
+          DEFAULT_EXPLANATION_TIME_SECONDS,
+        title: explanationData?.title || '解説',
+        body: explanationData?.text || currentQuestion.explanation || '解説は近日追加されます。',
+        image: explanationData?.image_url || undefined,
+      }}
+      onTimeExpired={() => {}}
+    />
+  );
+};
+
+/**
+ * Component: PodiumContent
+ * Description:
+ * - Renders podium screen
+ */
+const PodiumContent: React.FC<{
+  leaderboard: unknown;
+}> = ({ leaderboard }) => {
+  const podiumEntries = Array.isArray(leaderboard)
+    ? leaderboard.map(
+        (entry: { player_id: string; player_name: string; score: number; rank: number }) => ({
+          playerId: entry.player_id,
+          playerName: entry.player_name,
+          score: entry.score,
+          rank: entry.rank,
+          previousRank: entry.rank,
+          rankChange: 'same' as const,
+        }),
+      )
+    : [];
+
+  return <PlayerPodiumScreen entries={podiumEntries} />;
+};
+
+/**
+ * Component: GameEndContent
+ * Description:
+ * - Renders game end screen
+ */
+const GameEndContent: React.FC<{
+  leaderboard: unknown;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+}> = ({ leaderboard, playerId, router }) => {
+  const playerEntry = Array.isArray(leaderboard)
+    ? (
+        leaderboard as Array<{
+          player_id: string;
+          player_name: string;
+          score: number;
+          rank: number;
+        }>
+      ).find((entry) => entry.player_id === playerId)
+    : undefined;
+
+  const leaderboardEntries: LeaderboardEntry[] = Array.isArray(leaderboard)
+    ? (
+        leaderboard as Array<{
+          player_id: string;
+          player_name: string;
+          score: number;
+          rank: number;
+        }>
+      ).map((entry) => ({
+        playerId: entry.player_id,
+        playerName: entry.player_name,
+        score: entry.score,
+        rank: entry.rank,
+        previousRank: entry.rank,
+        rankChange: 'same' as const,
+      }))
+    : [];
+
+  return (
+    <PlayerGameEndScreen
+      playerEntry={
+        playerEntry
+          ? {
+              playerId: playerEntry.player_id,
+              playerName: playerEntry.player_name,
+              score: playerEntry.score,
+              rank: playerEntry.rank,
+              previousRank: playerEntry.rank,
+              rankChange: 'same',
+            }
+          : undefined
+      }
+      entries={leaderboardEntries}
+      onReturnHome={() => router.push('/')}
+      onJoinNewGame={() => router.push('/')}
+    />
+  );
+};
+
+//----------------------------------------------------
+// 10. Custom Hooks
+//----------------------------------------------------
+/**
+ * Hook: usePlayerGameState
+ * Description:
+ * - Manages all state for player game component
+ */
+function usePlayerGameState(gameIdParam: string, phaseParam: PlayerPhase) {
+  const [gameId, setGameId] = useState<string>(gameIdParam);
   const [currentPhase, setCurrentPhase] = useState<PlayerPhase>(phaseParam);
   const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
-
-  // Player-side phase ordering used to prevent "downgrade" transitions from host events.
-  // Example: the player locally transitions `question -> answering` based on the per-question timer,
-  // while the host may still broadcast `phase=question`. We must ignore that downgrade to avoid flicker.
-  const phasePriority: Record<PlayerPhase, number> = useMemo(
-    () => ({
-      waiting: 0,
-      countdown: 1,
-      question: 2,
-      answering: 3,
-      answer_reveal: 4,
-      leaderboard: 5,
-      explanation: 6,
-      podium: 7,
-      ended: 8,
-    }),
-    [],
-  );
-
-  // If we're already in countdown phase from URL, try to restore timestamp immediately
-  useEffect(() => {
-    if (phaseParam === 'countdown' && !countdownStartedAt) {
-      const stored = sessionStorage.getItem(`countdown_started_${gameId}`);
-      if (stored) {
-        const timestamp = parseInt(stored, 10);
-        if (!isNaN(timestamp)) {
-          setCountdownStartedAt(timestamp);
-        }
-      }
-    }
-  }, [phaseParam, gameId, countdownStartedAt]);
-
-  // State for explanation data
-  const [explanationData, setExplanationData] = useState<{
-    title: string | null;
-    text: string | null;
-    image_url: string | null;
-    show_time: number;
-  } | null>(null);
-
-  const { gameFlow, timerState, isConnected, refreshFlow } = useGameFlow({
-    gameId,
-    autoSync: true,
-    triggerOnQuestionEndOnTimer: false,
-    events: {
-      onQuestionStart: (qId, qIndex) => {
-        console.log('Player: Question started', qId, qIndex);
-
-        // Track last question start we processed to distinguish:
-        // - duplicate "question started" events for the same question (ignore if already in later phases)
-        // - a genuinely new question start while we're on leaderboard/explanation (must transition)
-        const isNewQuestionStart = qId && qId !== lastQuestionStartIdRef.current;
-        lastQuestionStartIdRef.current = qId;
-
-        // Only ignore duplicate question-start events (same qId) if we're already in later phases.
-        // Important: for a NEW question, we always allow transition even if we're currently
-        // in leaderboard/explanation, otherwise the player gets stuck.
-        const currentPhaseValue = currentPhaseRef.current;
-        if (
-          !isNewQuestionStart &&
-          (currentPhaseValue === 'answering' ||
-            currentPhaseValue === 'answer_reveal' ||
-            currentPhaseValue === 'leaderboard' ||
-            currentPhaseValue === 'explanation')
-        ) {
-          console.log(
-            'Player: Question start event received but already in',
-            currentPhaseValue,
-            'phase - ignoring to prevent flash',
-          );
-          // Still reset the display/answer state for the new question
-          setIsDisplayPhaseDone(false);
-          setAnswerDurationMs(null);
-          setAnswerRemainingMs(null);
-          setQuestionRemainingMs(null); // Reset question timer for new question
-          answeringPhaseStartTimeRef.current = null;
-          return;
-        }
-
-        setIsDisplayPhaseDone(false);
-        setAnswerDurationMs(null);
-        setAnswerRemainingMs(null);
-        setQuestionRemainingMs(null); // Reset question timer for new question
-        answeringPhaseStartTimeRef.current = null; // Reset timestamp for new question
-        setCurrentPhase('question');
-        router.replace(
-          `/game-player?gameId=${gameId}&phase=question&questionIndex=${qIndex}&playerId=${playerId}`,
-        );
-      },
-      onQuestionEnd: () => {
-        console.log('Player: Question ended, moving to answer reveal');
-        setAnswerRemainingMs(0);
-        setCurrentPhase('answer_reveal');
-        router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
-      },
-      onAnswerReveal: () => {
-        console.log('Player: Answer revealed');
-        setCurrentPhase('answer_reveal');
-        router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
-      },
-      onExplanationShow: (questionId, explanation) => {
-        console.log('Player: Explanation shown', questionId, explanation);
-        // Only transition to explanation if there's actual content
-        const hasContent =
-          (explanation.text && explanation.text.trim() !== '') ||
-          (explanation.title && explanation.title.trim() !== '');
-
-        if (hasContent) {
-          setExplanationData({
-            title: explanation.title,
-            text: explanation.text,
-            image_url: explanation.image_url,
-            show_time: explanation.show_time || 10,
-          });
-          setCurrentPhase('explanation');
-          router.replace(`/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`);
-        } else {
-          // No explanation content, skip explanation phase
-          console.log('Player: Explanation event received but no content, skipping explanation');
-          // Wait for host to advance to next question or podium
-        }
-      },
-      onExplanationHide: (questionId) => {
-        console.log('Player: Explanation hidden', questionId);
-        // Explanation phase ended, move to next phase
-        // This will be handled by the explanation screen's onTimeExpired
-      },
-      onGameEnd: () => {
-        console.log('Player: Game ended, moving to podium');
-        setCurrentPhase('podium');
-        router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
-      },
-      onError: (err) => console.error('Player GameFlow Error:', err),
-    },
-  });
-
-  // Reset display/answer timers and explanation data whenever a new question becomes current
-  useEffect(() => {
-    if (!gameFlow?.current_question_id) return;
-    setIsDisplayPhaseDone(false);
-    setAnswerDurationMs(null);
-    setAnswerRemainingMs(null);
-    setExplanationData(null); // Reset explanation data for new question
-  }, [gameFlow?.current_question_id]);
-
-  // Note: correctAnswerId will be passed after currentQuestion is computed below
-  const [correctAnswerIdState, setCorrectAnswerIdState] = useState<string | null>(null);
-
+  const [explanationData, setExplanationData] = useState<ExplanationData | null>(null);
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
   const [quizPlaySettings, setQuizPlaySettings] = useState<{
     time_bonus: boolean;
     streak_bonus: boolean;
   } | null>(null);
-  const [currentQuestionData, setCurrentQuestionData] = useState<{
-    question: Question;
-    serverTime: string | null;
-    isActive: boolean;
-    points: number;
-    timeLimit: number;
-    answeringTime?: number;
-    showExplanationTime?: number;
-    totalQuestions?: number;
-  } | null>(null);
+  const [currentQuestionData, setCurrentQuestionData] = useState<CurrentQuestionData | null>(null);
   const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
   const [answerDurationMs, setAnswerDurationMs] = useState<number | null>(null);
   const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
-  const answeringPhaseStartTimeRef = useRef<number | null>(null);
   const [questionRemainingMs, setQuestionRemainingMs] = useState<number | null>(null);
-  const questionTimerInitializedRef = useRef<string | null>(null);
-  const previousPhaseRef = useRef<PlayerPhase | null>(null);
-
-  // Get current question data for point calculation
-  // Prefer API data (has authoritative points and time_limit), fallback to local quiz data
-  const currentQuestionForPoints = useMemo(() => {
-    // Priority 1: Use API question data if available (most authoritative)
-    if (currentQuestionData) {
-      return {
-        points: currentQuestionData.points ?? 100,
-        answering_time: currentQuestionData.answeringTime ?? currentQuestionData.timeLimit ?? 30,
-      };
-    }
-
-    // Priority 2: Use local quiz data as fallback
-    if (!gameFlow?.current_question_id || !questions.length) return null;
-    const questionIndex = gameFlow.current_question_index ?? 0;
-    const questionData = questions[questionIndex];
-    if (questionData) {
-      return {
-        points: questionData.points ?? 100,
-        answering_time: questionData.answering_time ?? questionData.show_question_time ?? 30,
-      };
-    }
-    return null;
-  }, [
-    currentQuestionData,
-    gameFlow?.current_question_id,
-    gameFlow?.current_question_index,
-    questions,
-  ]);
-
-  const {
-    answerStatus,
-    answerResult,
-    submitAnswer,
-    error: answerError,
-  } = useGameAnswer({
-    gameId,
-    playerId,
-    questionId: gameFlow?.current_question_id || null,
-    questionNumber:
-      gameFlow && gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-        ? gameFlow.current_question_index + 1
-        : undefined,
-    correctAnswerId: correctAnswerIdState || undefined,
-    autoReveal: false,
-    // Point calculation parameters
-    questionPoints: currentQuestionForPoints?.points ?? 100,
-    answeringTime: currentQuestionForPoints?.answering_time ?? 30,
-    timeBonusEnabled: quizPlaySettings?.time_bonus ?? false,
-    streakBonusEnabled: quizPlaySettings?.streak_bonus ?? false,
-    events: {
-      onAnswerSubmitted: (submission) => {
-        console.log('Player: Answer submitted', submission);
-      },
-      onError: (err) => console.error('Player Answer Error:', err),
-    },
-  });
-
-  const {
-    leaderboard,
-    loading: leaderboardLoading,
-    refreshLeaderboard,
-  } = useGameLeaderboard({
-    gameId,
-    playerId,
-    autoRefresh: true,
-  });
-
-  // Debug: Log leaderboard data
-  useEffect(() => {
-    if (currentPhase === 'leaderboard') {
-      console.log('Leaderboard data:', {
-        leaderboard,
-        length: Array.isArray(leaderboard) ? leaderboard.length : 0,
-        loading: leaderboardLoading,
-        gameId,
-      });
-    }
-  }, [leaderboard, leaderboardLoading, currentPhase, gameId]);
-
-  // Refresh leaderboard when entering leaderboard phase
-  useEffect(() => {
-    if (currentPhase === 'leaderboard' && gameId && refreshLeaderboard) {
-      console.log('[Leaderboard] Refreshing leaderboard on phase entry');
-      refreshLeaderboard();
-    }
-  }, [currentPhase, gameId, refreshLeaderboard]);
-
-  // Redirect from leaderboard if it's the last question (go directly to podium)
-  useEffect(() => {
-    if (currentPhase === 'leaderboard' && gameFlow) {
-      const currentQuestionNum =
-        gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-          ? gameFlow.current_question_index + 1
-          : questionIndexParam + 1;
-      const totalQuestionsCount =
-        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
-      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
-
-      if (isLastQuestion) {
-        console.log('Player: Last question detected in leaderboard phase, redirecting to podium');
-        setCurrentPhase('podium');
-        router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
-      }
-    }
-  }, [
-    currentPhase,
-    gameFlow,
-    questionIndexParam,
-    currentQuestionData?.totalQuestions,
-    questions.length,
-    totalQuestions,
-    gameId,
-    playerId,
-    router,
-  ]);
-
-  // Fetch explanation data when entering explanation phase (fallback if WebSocket event didn't provide data)
-  useEffect(() => {
-    if (
-      currentPhase === 'explanation' &&
-      gameId &&
-      gameFlow?.current_question_id &&
-      !explanationData
-    ) {
-      const fetchExplanation = async () => {
-        try {
-          const questionId = gameFlow.current_question_id;
-          if (!questionId) return;
-
-          const { data, error } = await gameApi.getExplanation(gameId, questionId);
-          if (error) {
-            // Missing explanation is an expected case for many questions.
-            // Avoid console.error noise (Next devtools will surface it as a red error).
-            console.debug('[Explanation] No explanation available (or fetch failed)', {
-              gameId,
-              questionId,
-              error,
-            });
-            return;
-          } else if (data) {
-            const hasContent =
-              (data.explanation_text && data.explanation_text.trim() !== '') ||
-              (data.explanation_title && data.explanation_title.trim() !== '');
-
-            if (!hasContent) {
-              console.debug('[Explanation] Explanation endpoint returned empty content', {
-                gameId,
-                questionId,
-              });
-              return;
-            }
-            setExplanationData({
-              title: data.explanation_title,
-              text: data.explanation_text,
-              image_url: data.explanation_image_url,
-              show_time: data.show_explanation_time || 10,
-            });
-          }
-        } catch (err) {
-          console.debug('[Explanation] Error fetching explanation (non-blocking)', err);
-        }
-      };
-      fetchExplanation();
-    }
-  }, [currentPhase, gameId, gameFlow?.current_question_id, explanationData]);
-
-  const { socket, joinRoom, leaveRoom } = useSocket();
   const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
   const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
   const [isMobile, setIsMobile] = useState(true);
-  const hasJoinedRoomRef = useRef(false);
+  const [correctAnswerIdState, setCorrectAnswerIdState] = useState<string | null>(null);
 
-  // Refs for stable access
-  const gameFlowRef = useRef(gameFlow);
-  const socketRef = useRef(socket);
-  const isConnectedRef = useRef(isConnected);
-  const handlePlayerKickedRef = useRef<typeof handlePlayerKicked | undefined>(undefined);
-  const currentPhaseRef = useRef<PlayerPhase>(phaseParam);
-  const lastQuestionStartIdRef = useRef<string | null>(null);
+  return {
+    gameId,
+    setGameId,
+    currentPhase,
+    setCurrentPhase,
+    countdownStartedAt,
+    setCountdownStartedAt,
+    explanationData,
+    setExplanationData,
+    questions,
+    setQuestions,
+    quizPlaySettings,
+    setQuizPlaySettings,
+    currentQuestionData,
+    setCurrentQuestionData,
+    isDisplayPhaseDone,
+    setIsDisplayPhaseDone,
+    answerDurationMs,
+    setAnswerDurationMs,
+    answerRemainingMs,
+    setAnswerRemainingMs,
+    questionRemainingMs,
+    setQuestionRemainingMs,
+    answerStats,
+    setAnswerStats,
+    selectedAnswer,
+    setSelectedAnswer,
+    isMobile,
+    setIsMobile,
+    correctAnswerIdState,
+    setCorrectAnswerIdState,
+  };
+}
 
-  // Keep refs in sync
+/**
+ * Hook: usePlayerGameDataEffects
+ * Description:
+ * - Handles data loading effects (quiz, questions, explanations)
+ */
+function usePlayerGameDataEffects({
+  gameId,
+  roomCode,
+  gameFlow,
+  currentPhase,
+  explanationData,
+  setGameId,
+  setQuestions,
+  setQuizPlaySettings,
+  setCurrentQuestionData,
+  setExplanationData,
+  setIsDisplayPhaseDone,
+  setAnswerDurationMs,
+  setAnswerRemainingMs,
+  setSelectedAnswer,
+  setCountdownStartedAt,
+  phaseParam,
+}: {
+  gameId: string;
+  roomCode: string;
+  gameFlow: unknown;
+  currentPhase: PlayerPhase;
+  explanationData: ExplanationData | null;
+  setGameId: React.Dispatch<React.SetStateAction<string>>;
+  setQuestions: React.Dispatch<React.SetStateAction<QuestionWithAnswers[]>>;
+  setQuizPlaySettings: React.Dispatch<
+    React.SetStateAction<{ time_bonus: boolean; streak_bonus: boolean } | null>
+  >;
+  setCurrentQuestionData: React.Dispatch<React.SetStateAction<CurrentQuestionData | null>>;
+  setExplanationData: React.Dispatch<React.SetStateAction<ExplanationData | null>>;
+  setIsDisplayPhaseDone: React.Dispatch<React.SetStateAction<boolean>>;
+  setAnswerDurationMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setSelectedAnswer: React.Dispatch<React.SetStateAction<string | undefined>>;
+  setCorrectAnswerIdState: React.Dispatch<React.SetStateAction<string | null>>;
+  setCountdownStartedAt: React.Dispatch<React.SetStateAction<number | undefined>>;
+  phaseParam: PlayerPhase;
+}) {
   useEffect(() => {
-    gameFlowRef.current = gameFlow;
-  }, [gameFlow]);
+    if (phaseParam === 'countdown' && !explanationData) {
+      const stored = sessionStorage.getItem(`countdown_started_${gameId}`);
+      if (stored) {
+        const timestamp = parseInt(stored, RADIX_DECIMAL);
+        if (!isNaN(timestamp)) {
+          setCountdownStartedAt(timestamp);
+        }
+      }
+    }
+  }, [phaseParam, gameId, explanationData, setCountdownStartedAt]);
 
   useEffect(() => {
-    socketRef.current = socket;
-  }, [socket]);
+    const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
+    if (!currentQuestionId) return;
+    setIsDisplayPhaseDone(false);
+    setAnswerDurationMs(null);
+    setAnswerRemainingMs(null);
+    setExplanationData(null);
+  }, [
+    gameFlow,
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setExplanationData,
+  ]);
 
   useEffect(() => {
-    isConnectedRef.current = isConnected;
-  }, [isConnected]);
+    const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
+    if (currentQuestionId) {
+      setSelectedAnswer(undefined);
+    }
+  }, [gameFlow, setSelectedAnswer]);
 
-  useEffect(() => {
-    currentPhaseRef.current = currentPhase;
-  }, [currentPhase]);
-
-  // Resolve gameId from room code (fallback) and load quiz data (best-effort)
   useEffect(() => {
     let cancelled = false;
 
     const resolveGameId = async () => {
-      // If already have gameId, keep it
       if (gameId) return gameId;
 
-      // Try sessionStorage
       const stored = roomCode ? sessionStorage.getItem(`game_${roomCode}`) : null;
       if (stored) {
         if (!cancelled) setGameId(stored);
@@ -438,7 +589,6 @@ function PlayerGameContent() {
 
     const loadQuiz = async (resolvedGameId: string) => {
       try {
-        // Player quiz load is best-effort; only attempt when authenticated to avoid noise
         if (!apiClient.isAuthenticated()) {
           return;
         }
@@ -457,10 +607,8 @@ function PlayerGameContent() {
             }
           }
         }
-      } catch (err) {
-        if (!cancelled) {
-          console.warn('Failed to load quiz for game (non-blocking)', err);
-        }
+      } catch {
+        // Silent error - quiz load is best-effort
       }
     };
 
@@ -472,11 +620,10 @@ function PlayerGameContent() {
     return () => {
       cancelled = true;
     };
-  }, [gameId, roomCode]);
+  }, [gameId, roomCode, setGameId, setQuestions, setQuizPlaySettings]);
 
-  // Fetch current question from API when question changes (with full metadata)
   useEffect(() => {
-    if (!gameId || !gameFlow?.current_question_id) {
+    if (!gameId || !(gameFlow as { current_question_id?: string })?.current_question_id) {
       setCurrentQuestionData(null);
       return;
     }
@@ -488,7 +635,6 @@ function PlayerGameContent() {
           return;
         }
 
-        // Transform API response to Question format
         const question: Question = {
           id: data.question.id,
           text: data.question.text,
@@ -502,7 +648,7 @@ function PlayerGameContent() {
             .map((a, i) => ({
               id: a.id,
               text: a.text,
-              letter: ['A', 'B', 'C', 'D'][i] || String.fromCharCode(65 + i),
+              letter: ANSWER_LETTERS[i] || String.fromCharCode(65 + i),
             })),
           correctAnswerId: data.answers.find((a) => a.is_correct)?.id || '',
           explanation: data.question.explanation_text || undefined,
@@ -519,737 +665,253 @@ function PlayerGameContent() {
           showExplanationTime: data.question.show_explanation_time,
           totalQuestions: data.total_questions,
         });
-      } catch (err) {
-        console.warn('Error fetching current question (non-blocking)', err);
+      } catch {
+        // Silent error - question refresh is best-effort
       }
     };
 
     fetchCurrentQuestion();
 
-    // Refresh question data periodically to sync with server (every 5 seconds)
-    const refreshInterval = setInterval(fetchCurrentQuestion, 5000);
+    const refreshInterval = setInterval(fetchCurrentQuestion, QUESTION_REFRESH_INTERVAL_MS);
     return () => clearInterval(refreshInterval);
-  }, [gameId, gameFlow?.current_question_id]);
+  }, [gameId, gameFlow, setCurrentQuestionData]);
 
-  // Handle player kicked event - redirect to join page
-  const handlePlayerKicked = useCallback(
-    (data: {
-      player_id: string;
-      player_name: string;
-      game_id: string;
-      kicked_by: string;
-      timestamp: string;
-    }) => {
-      // Check if the kicked player is the current player
-      if (data.player_id === playerId || data.game_id === gameId) {
-        console.log('Player was kicked during game:', data);
+  useEffect(() => {
+    const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
+    if (currentPhase === 'explanation' && gameId && currentQuestionId && !explanationData) {
+      const fetchExplanation = async () => {
+        try {
+          if (!currentQuestionId) return;
 
-        // Show notification
-        toast.error('ホストによってBANされました', {
-          icon: '🚫',
-          duration: 5000,
-        });
+          const { data, error } = await gameApi.getExplanation(gameId, currentQuestionId);
+          if (error) {
+            return;
+          } else if (data) {
+            const hasContent =
+              (data.explanation_text && data.explanation_text.trim() !== '') ||
+              (data.explanation_title && data.explanation_title.trim() !== '');
 
-        // Clear stored game data (try to get from URL or use gameId)
-        if (roomCode) {
-          sessionStorage.removeItem(`game_${roomCode}`);
+            if (!hasContent) {
+              return;
+            }
+            setExplanationData({
+              title: data.explanation_title,
+              text: data.explanation_text,
+              image_url: data.explanation_image_url,
+              show_time: data.show_explanation_time || DEFAULT_EXPLANATION_TIME_SECONDS,
+            });
+          }
+        } catch {
+          // Silent error - explanation is optional
         }
+      };
+      fetchExplanation();
+    }
+  }, [currentPhase, gameId, gameFlow, explanationData, setExplanationData]);
 
-        // Redirect to join page after a short delay
-        setTimeout(() => {
-          router.push('/join');
-        }, 2000);
-      }
-    },
-    [playerId, gameId, router, roomCode],
-  );
-
-  // Keep handlePlayerKicked ref in sync
   useEffect(() => {
-    handlePlayerKickedRef.current = handlePlayerKicked;
-  }, [handlePlayerKicked]);
-
-  // Restore countdown start timestamp from sessionStorage if available (for late joiners)
-  useEffect(() => {
-    if (currentPhase === 'countdown' && !countdownStartedAt) {
+    if (currentPhase === 'countdown' && !explanationData) {
       const stored = sessionStorage.getItem(`countdown_started_${gameId}`);
       if (stored) {
-        const timestamp = parseInt(stored, 10);
+        const timestamp = parseInt(stored, RADIX_DECIMAL);
         if (!isNaN(timestamp)) {
           setCountdownStartedAt(timestamp);
-          // Clean up after use
           sessionStorage.removeItem(`countdown_started_${gameId}`);
         }
       }
     }
-  }, [currentPhase, gameId, countdownStartedAt]);
+  }, [currentPhase, gameId, explanationData, setCountdownStartedAt]);
+}
 
-  // Join WebSocket room and listen for events
-  // Set up listeners as soon as socket is available, join room when connected
+/**
+ * Hook: usePlayerGamePhaseEffects
+ * Description:
+ * - Handles phase-related effects and transitions
+ */
+function usePlayerGamePhaseEffects({
+  currentPhase,
+  phaseParam,
+  gameFlow,
+  questionIndexParam,
+  currentQuestionData,
+  questions,
+  totalQuestions,
+  gameId,
+  playerId,
+  router,
+  refreshLeaderboard,
+  setCurrentPhase,
+  currentQuestion,
+  setCorrectAnswerIdState,
+}: {
+  currentPhase: PlayerPhase;
+  phaseParam: PlayerPhase;
+  gameFlow: unknown;
+  questionIndexParam: number;
+  currentQuestionData: CurrentQuestionData | null;
+  questions: QuestionWithAnswers[];
+  totalQuestions: number;
+  gameId: string;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+  refreshLeaderboard: (() => void) | undefined;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  currentQuestion: Question;
+  setCorrectAnswerIdState: React.Dispatch<React.SetStateAction<string | null>>;
+}) {
   useEffect(() => {
-    if (!gameId) return;
+    setCurrentPhase(phaseParam);
+  }, [phaseParam, setCurrentPhase]);
 
-    const currentSocket = socketRef.current;
-    if (!currentSocket) {
-      // Wait for socket to be available
-      const checkSocket = setInterval(() => {
-        if (socketRef.current) {
-          clearInterval(checkSocket);
-          // Re-run effect when socket becomes available
-          // This is handled by the socket dependency
-        }
-      }, 50);
-      return () => clearInterval(checkSocket);
-    }
-
-    // Set up event listeners FIRST (before room join)
-    // This ensures we don't miss events during navigation/page load
-    // Socket will queue events if not connected yet
-
-    const handleStatsUpdate = (data: {
-      roomId: string;
-      questionId: string;
-      counts: Record<string, number>;
-    }) => {
-      if (data.roomId === gameId && data.questionId === gameFlowRef.current?.current_question_id) {
-        // Only update stats if we're in answer_reveal phase or answering phase
-        // This prevents constant re-renders during other phases
-        const currentPhaseValue = currentPhaseRef.current;
-        if (currentPhaseValue === 'answer_reveal' || currentPhaseValue === 'answering') {
-          setAnswerStats((prev) => {
-            // Only update if values actually changed to prevent unnecessary re-renders
-            const hasChanged =
-              Object.keys(data.counts).some((key) => prev[key] !== data.counts[key]) ||
-              Object.keys(prev).some((key) => !(key in data.counts));
-            return hasChanged ? data.counts : prev;
-          });
-        }
-      }
-    };
-
-    const handleAnswerLocked = (data: {
-      roomId: string;
-      questionId: string;
-      counts?: Record<string, number>;
-    }) => {
-      if (data.roomId !== gameId) return;
-      if (data.counts && data.questionId === gameFlowRef.current?.current_question_id) {
-        // Always update stats when answer is locked (transitioning to reveal)
-        setAnswerStats(data.counts);
-      }
-      console.log('Player: Answer locked, moving to reveal');
-      setCurrentPhase('answer_reveal');
-      router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
-    };
-
-    // Listen for phase transitions from host
-    const handlePhaseChange = (data: {
-      roomId: string;
-      phase: PlayerPhase;
-      startedAt?: number;
-    }) => {
-      if (data.roomId !== gameId) return;
-
-      console.log('Player: Phase changed to', data.phase, 'startedAt:', data.startedAt);
-
-      // Prevent host events from forcing the player "backwards" in the flow.
-      // The most common case is `answering -> question` while the host still broadcasts `question`.
-      const current = currentPhaseRef.current;
-      if (data.phase !== 'waiting') {
-        const currentRank = phasePriority[current];
-        const nextRank = phasePriority[data.phase];
-        if (Number.isFinite(currentRank) && Number.isFinite(nextRank) && nextRank < currentRank) {
-          console.log(
-            '[Phase] Ignoring host phase downgrade:',
-            current,
-            '->',
-            data.phase,
-            '(keeping',
-            current,
-            ')',
-          );
-          return;
-        }
-      }
-
-      // Countdown should only be shown for the first question (index 0)
-      // For subsequent questions, skip countdown and wait for question start
-      if (data.phase === 'countdown') {
-        const currentQuestionIndex = gameFlowRef.current?.current_question_index ?? 0;
-        // Only show countdown for first question (index 0)
-        if (currentQuestionIndex > 0) {
-          console.log(
-            'Player: Skipping countdown for question',
-            currentQuestionIndex + 1,
-            '- waiting for question start',
-          );
-          // Don't transition to countdown, just wait for question start event
-          return;
-        }
-        // First question - proceed with countdown
-        setCountdownStartedAt(data.startedAt);
-        // Refresh game flow to get updated current_question_id when transitioning to countdown
-        // This ensures we have the correct question data for the next question
-        refreshFlow().catch((err) => {
-          console.error('Failed to refresh game flow after countdown phase change:', err);
-        });
-      }
-
-      setCurrentPhase(data.phase);
-
-      // If phase is 'waiting', redirect to join page to rejoin
-      if (data.phase === 'waiting') {
-        if (roomCode) {
-          router.push(`/join?code=${roomCode}`);
-        } else if (gameId) {
-          router.push(`/join?gameId=${gameId}`);
-        }
-        return;
-      }
-      router.replace(`/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId}`);
-    };
-
-    // Listen for game start (in case player joins after game has started)
-    const handleGameStarted = (data: { roomId?: string; gameId?: string; roomCode?: string }) => {
-      const targetGameId = data.gameId || data.roomId;
-      if (targetGameId === gameId) {
-        setCurrentPhase('countdown');
-        router.replace(`/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId}`);
-      }
-    };
-
-    // Listen for game pause event
-    const handleGamePause = (data: { gameId?: string; timestamp?: string }) => {
-      const targetGameId = data.gameId;
-      if (targetGameId === gameId) {
-        console.log('Player: Game paused');
-        // Timer will be paused by useGameFlow hook
-      }
-    };
-
-    // Listen for game resume event
-    const handleGameResume = (data: { gameId?: string; timestamp?: string }) => {
-      const targetGameId = data.gameId;
-      if (targetGameId === gameId) {
-        console.log('Player: Game resumed');
-        // Timer will be resumed by useGameFlow hook
-      }
-    };
-
-    // Listen for game end event
-    const handleGameEnd = (data: { gameId?: string; timestamp?: string }) => {
-      const targetGameId = data.gameId;
-      if (targetGameId === gameId) {
-        console.log('Player: Game ended');
-        setCurrentPhase('ended');
-        router.replace(`/game-player?gameId=${gameId}&phase=ended&playerId=${playerId}`);
-      }
-    };
-
-    // Set up listeners immediately (even before room join - socket will queue events)
-    // Stats events (support legacy and new naming)
-    currentSocket.on('game:answer:stats:update', handleStatsUpdate);
-    currentSocket.on('game:answer:stats', handleStatsUpdate);
-    currentSocket.on('game:answer:locked', handleAnswerLocked);
-    currentSocket.on('game:phase:change', handlePhaseChange);
-    currentSocket.on('game:player-kicked', (data) => handlePlayerKickedRef.current?.(data));
-    currentSocket.on('game:started', handleGameStarted);
-    currentSocket.on('game:pause', handleGamePause);
-    currentSocket.on('game:resume', handleGameResume);
-    currentSocket.on('game:end', handleGameEnd);
-
-    // Join room when connected (listeners are already set up above)
-    const joinRoomSafe = () => {
-      if (hasJoinedRoomRef.current) {
-        console.log('[GamePlayer] Already joined room, skipping duplicate join');
-        return;
-      }
-      if (isConnectedRef.current) {
-        console.log('[GamePlayer] Joining room:', gameId);
-        joinRoom(gameId);
-        hasJoinedRoomRef.current = true;
-      }
-    };
-
-    // Try to join immediately if already connected
-    joinRoomSafe();
-
-    // If not connected yet, wait for connection
-    if (!isConnectedRef.current) {
-      const onConnect = () => {
-        joinRoomSafe();
-        currentSocket.off('connect', onConnect);
-      };
-      currentSocket.on('connect', onConnect);
-
-      // Also check periodically as fallback
-      const checkConnection = setInterval(() => {
-        if (isConnectedRef.current && !hasJoinedRoomRef.current) {
-          joinRoomSafe();
-          clearInterval(checkConnection);
-          currentSocket.off('connect', onConnect);
-        }
-      }, 100);
-
-      // Cleanup after 5 seconds
-      const cleanupTimeout = setTimeout(() => {
-        clearInterval(checkConnection);
-        currentSocket.off('connect', onConnect);
-      }, 5000);
-
-      return () => {
-        clearInterval(checkConnection);
-        clearTimeout(cleanupTimeout);
-        currentSocket.off('connect', onConnect);
-        currentSocket.off('game:answer:stats:update', handleStatsUpdate);
-        currentSocket.off('game:answer:stats', handleStatsUpdate);
-        currentSocket.off('game:answer:locked', handleAnswerLocked);
-        currentSocket.off('game:phase:change', handlePhaseChange);
-        currentSocket.off('game:player-kicked');
-        currentSocket.off('game:started', handleGameStarted);
-        currentSocket.off('game:pause', handleGamePause);
-        currentSocket.off('game:resume', handleGameResume);
-        currentSocket.off('game:end', handleGameEnd);
-
-        // Leave room on unmount
-        if (gameId && hasJoinedRoomRef.current) {
-          console.log('[GamePlayer] Leaving room on unmount');
-          leaveRoom(gameId);
-          hasJoinedRoomRef.current = false;
-        }
-      };
-    }
-
-    // Cleanup for when socket is already connected
-    return () => {
-      currentSocket.off('game:answer:stats:update', handleStatsUpdate);
-      currentSocket.off('game:answer:stats', handleStatsUpdate);
-      currentSocket.off('game:answer:locked', handleAnswerLocked);
-      currentSocket.off('game:phase:change', handlePhaseChange);
-      currentSocket.off('game:player-kicked');
-      currentSocket.off('game:started', handleGameStarted);
-      currentSocket.off('game:pause', handleGamePause);
-      currentSocket.off('game:resume', handleGameResume);
-      currentSocket.off('game:end', handleGameEnd);
-      currentSocket.off('connect'); // Clean up any connect listeners
-
-      // Leave room on unmount
-      if (gameId && hasJoinedRoomRef.current) {
-        console.log('[GamePlayer] Leaving room on unmount');
-        leaveRoom(gameId);
-        hasJoinedRoomRef.current = false;
-      }
-    };
-  }, [gameId, playerId, router, joinRoom, leaveRoom, refreshFlow, roomCode, phasePriority]);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // Use current question from API if available, otherwise fallback to local quiz data
-  const currentQuestion: Question = useMemo(() => {
-    const durationFromFlowSeconds =
-      gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
-        ? Math.max(
-            1,
-            Math.round(
-              (new Date(gameFlow.current_question_end_time).getTime() -
-                new Date(gameFlow.current_question_start_time).getTime()) /
-                1000,
-            ),
-          )
-        : null;
-
-    // Prefer API data (has full metadata and server timestamps)
-    if (currentQuestionData?.question) {
-      return {
-        ...currentQuestionData.question,
-        timeLimit: durationFromFlowSeconds ?? currentQuestionData.question.timeLimit,
-      };
-    }
-
-    // Fallback to local quiz data
-    const idx = gameFlow?.current_question_index ?? questionIndexParam;
-    const questionData = questions[idx];
-    if (questionData) {
-      const showTimeSeconds = questionData.show_question_time || 10;
-      const answeringTimeSeconds = questionData.answering_time || 30;
-      return {
-        id: questionData.id,
-        text: questionData.question_text,
-        image: questionData.image_url || undefined,
-        timeLimit: durationFromFlowSeconds ?? showTimeSeconds + answeringTimeSeconds,
-        show_question_time: showTimeSeconds,
-        answering_time: answeringTimeSeconds,
-        choices: questionData.answers
-          .sort((a, b) => a.order_index - b.order_index)
-          .map((a, i) => ({
-            id: a.id,
-            text: a.answer_text,
-            letter: ['A', 'B', 'C', 'D'][i] || String.fromCharCode(65 + i),
-          })),
-        correctAnswerId: questionData.answers.find((a) => a.is_correct)?.id || '',
-        explanation: questionData.explanation_text || undefined,
-        type: questionData.question_type as Question['type'],
-      };
-    }
-    // Loading state
-    return {
-      id: gameFlow?.current_question_id || questionIdParam,
-      text:
-        questions.length === 0
-          ? 'クイズデータを読み込み中...'
-          : `問題 ${(idx ?? 0) + 1} を読み込み中...`,
-      image: undefined,
-      timeLimit: Math.max(5, Math.round((timerState?.remainingMs || 10000) / 1000)),
-      show_question_time: 10,
-      answering_time: 30,
-      choices: [
-        { id: 'loading-1', text: '読み込み中...', letter: 'A' },
-        { id: 'loading-2', text: '読み込み中...', letter: 'B' },
-        { id: 'loading-3', text: '読み込み中...', letter: 'C' },
-        { id: 'loading-4', text: '読み込み中...', letter: 'D' },
-      ],
-      correctAnswerId: 'loading-1',
-      explanation: undefined,
-      type: 'multiple_choice_4',
-    };
-  }, [
-    currentQuestionData,
-    gameFlow?.current_question_id,
-    gameFlow?.current_question_index,
-    gameFlow?.current_question_start_time,
-    gameFlow?.current_question_end_time,
-    questionIdParam,
-    questionIndexParam,
-    questions,
-    timerState?.remainingMs,
-  ]);
-
-  // Update correctAnswerId when currentQuestion changes
   useEffect(() => {
     if (currentQuestion?.correctAnswerId) {
       setCorrectAnswerIdState(currentQuestion.correctAnswerId);
     }
-  }, [currentQuestion?.correctAnswerId]);
+  }, [currentQuestion?.correctAnswerId, setCorrectAnswerIdState]);
 
-  const derivedRemainingMsFromFlow =
-    gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
-      ? Math.max(0, new Date(gameFlow.current_question_end_time).getTime() - Date.now())
-      : null;
-
-  // Validate and sanitize time values to prevent NaN
-  const showQuestionTime = Number.isFinite(currentQuestion.show_question_time)
-    ? currentQuestion.show_question_time
-    : 10; // Default fallback
-  const answeringTime = Number.isFinite(currentQuestion.answering_time)
-    ? currentQuestion.answering_time
-    : 30; // Default fallback
-
-  const viewingDurationMs = showQuestionTime * 1000;
-
-  // Calculate elapsed time for question phase based on actual start time
-  // Use timerState if available (more accurate), otherwise calculate from gameFlow
-  let questionElapsedMs = 0;
-  if (timerState?.startTime && currentPhase === 'question') {
-    // Use timerState for accurate elapsed time
-    questionElapsedMs = Math.max(0, Date.now() - timerState.startTime.getTime());
-  } else if (gameFlow?.current_question_start_time) {
-    // Fallback to gameFlow start time
-    questionElapsedMs = Math.max(
-      0,
-      Date.now() - new Date(gameFlow.current_question_start_time).getTime(),
-    );
-  }
-
-  // For question phase: calculate remaining time based only on show_question_time
-  // For answering phase: use total remaining time
-  const viewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
-
-  // Initialize questionRemainingMs when question phase starts (only once per question)
   useEffect(() => {
-    const currentQuestionId = gameFlow?.current_question_id;
-    const previousPhase = previousPhaseRef.current;
-
-    // Only reset timer when actually leaving question phase (not just when effect runs)
-    if (previousPhase === 'question' && currentPhase !== 'question') {
-      console.log('[Question Timer] Leaving question phase, resetting timer');
-      setQuestionRemainingMs(null);
-      questionTimerInitializedRef.current = null;
+    if (currentPhase === 'leaderboard' && gameId && refreshLeaderboard) {
+      refreshLeaderboard();
     }
+  }, [currentPhase, gameId, refreshLeaderboard]);
 
-    // Update previous phase ref
-    previousPhaseRef.current = currentPhase;
+  useEffect(() => {
+    if (currentPhase === 'leaderboard' && gameFlow) {
+      const questionIndex = (gameFlow as { current_question_index?: number | null })
+        ?.current_question_index;
+      const currentQuestionNum =
+        questionIndex !== null && questionIndex !== undefined && questionIndex >= 0
+          ? questionIndex + 1
+          : questionIndexParam + 1;
+      const totalQuestionsCount =
+        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
 
-    if (currentPhase === 'question' && currentQuestionId) {
-      // Check if we've already initialized for this question
-      if (questionTimerInitializedRef.current === currentQuestionId) {
-        // Already initialized - but check if timer was lost due to re-render
-        // If questionRemainingMs is null but we've initialized, restore it
-        if (questionRemainingMs === null) {
-          console.log('[Question Timer] Timer lost, restoring for question', currentQuestionId);
-          const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
-
-          if (currentViewingRemainingMs > 0) {
-            setQuestionRemainingMs(currentViewingRemainingMs);
-          } else {
-            // Timer expired, transition to answering
-            console.log(
-              '[Question Timer] Timer expired during restore, transitioning to answering',
-            );
-            setIsDisplayPhaseDone(true);
-            setAnswerDurationMs((answeringTime || 30) * 1000);
-            setAnswerRemainingMs((answeringTime || 30) * 1000);
-            answeringPhaseStartTimeRef.current = Date.now();
-            setCurrentPhase('answering');
-            router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
-          }
-        }
-        return; // Already initialized for this question
-      }
-
-      // Mark as initialized for this question
-      questionTimerInitializedRef.current = currentQuestionId;
-
-      // Calculate initial time
-      const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
-      const initialTime =
-        currentViewingRemainingMs > 0 ? currentViewingRemainingMs : viewingDurationMs;
-
-      console.log('[Question Timer] Initializing timer', {
-        questionId: currentQuestionId,
-        viewingRemainingMs: currentViewingRemainingMs,
-        viewingDurationMs,
-        initialTime,
-        questionElapsedMs,
-        showQuestionTime,
-      });
-
-      if (initialTime > 0) {
-        setQuestionRemainingMs(initialTime);
-      } else {
-        // If initial time is 0 or negative, immediately transition to answering
-        console.log('[Question Timer] Initial time is 0 or negative, transitioning to answering');
-        setIsDisplayPhaseDone(true);
-        setAnswerDurationMs((answeringTime || 30) * 1000);
-        setAnswerRemainingMs((answeringTime || 30) * 1000);
-        answeringPhaseStartTimeRef.current = Date.now();
-        setCurrentPhase('answering');
-        router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
+      if (isLastQuestion) {
+        setCurrentPhase('podium');
+        router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
       }
     }
-    // Note: viewingRemainingMs and questionRemainingMs are calculated inside the effect
-    // and don't need to be in dependencies. We use currentQuestionId to track initialization.
   }, [
     currentPhase,
-    gameFlow?.current_question_id,
-    viewingDurationMs,
-    questionElapsedMs,
-    showQuestionTime,
-    answeringTime,
+    gameFlow,
+    questionIndexParam,
+    currentQuestionData?.totalQuestions,
+    questions.length,
+    totalQuestions,
     gameId,
     playerId,
     router,
-    questionRemainingMs, // Add to detect when timer is lost
+    setCurrentPhase,
   ]);
+}
 
-  const totalRemainingMs =
-    timerState?.remainingMs ??
-    derivedRemainingMsFromFlow ??
-    (currentPhase === 'question' ? viewingRemainingMs : answeringTime * 1000);
-
-  const answeringRemainingMsDerived = Math.max(
-    0,
-    Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0,
-  );
-
-  // Use questionRemainingMs state for question phase (for smooth countdown), otherwise use calculated value
-  const displayRemainingMs =
-    currentPhase === 'question'
-      ? questionRemainingMs !== null
-        ? questionRemainingMs
-        : viewingRemainingMs
-      : answeringRemainingMsDerived;
-
-  const startAnsweringPhase = useCallback(() => {
-    if (isDisplayPhaseDone) return;
-    // Use validated answering time to prevent NaN
-    const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
-      ? currentQuestion.answering_time
-      : 30; // Default fallback
-    const durationMs = safeAnsweringTime * 1000;
-    setIsDisplayPhaseDone(true);
-    setAnswerDurationMs(durationMs);
-    setAnswerRemainingMs(durationMs);
-    answeringPhaseStartTimeRef.current = Date.now(); // Record exact start time for accurate time calculation
-
-    // Transition immediately to answering phase
-    setCurrentPhase('answering');
-    router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
-  }, [currentQuestion.answering_time, gameId, isDisplayPhaseDone, playerId, router]);
-
-  // Move to answering once the question display timer expires
+/**
+ * Hook: usePlayerGameTimerEffects
+ * Description:
+ * - Handles timer-related effects for question and answering phases
+ */
+function usePlayerGameTimerEffects({
+  currentPhase,
+  displayRemainingMs,
+  viewingRemainingMs,
+  questionRemainingMs,
+  answerRemainingMs,
+  answerDurationMs,
+  isDisplayPhaseDone,
+  currentQuestion,
+  setQuestionRemainingMs,
+  setAnswerRemainingMs,
+  startAnsweringPhase,
+  submitAnswer,
+  answerStatus,
+  setCurrentPhase,
+  gameId,
+  playerId,
+  router,
+  autoSubmittingRef,
+  hasTransitionedToRevealRef,
+}: {
+  currentPhase: PlayerPhase;
+  displayRemainingMs: number;
+  viewingRemainingMs: number;
+  questionRemainingMs: number | null;
+  answerRemainingMs: number | null;
+  answerDurationMs: number | null;
+  isDisplayPhaseDone: boolean;
+  currentQuestion: Question;
+  setQuestionRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  startAnsweringPhase: () => void;
+  submitAnswer: (answerId: string | null, responseTimeMs: number) => Promise<void>;
+  answerStatus: { hasAnswered: boolean; isProcessing: boolean };
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  gameId: string;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+  autoSubmittingRef: React.MutableRefObject<boolean>;
+  hasTransitionedToRevealRef: React.MutableRefObject<boolean>;
+}) {
   useEffect(() => {
     if (currentPhase !== 'question') return;
     if (displayRemainingMs <= 0 && !isDisplayPhaseDone) {
-      console.log('[Question Timer] Display time expired, transitioning to answering', {
-        displayRemainingMs,
-        isDisplayPhaseDone,
-        questionRemainingMs,
-        viewingRemainingMs,
-      });
       startAnsweringPhase();
     }
-    // displayRemainingMs is computed from questionRemainingMs and viewingRemainingMs,
-    // so when those change, displayRemainingMs will change and trigger this effect
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
 
-  // Client-side question phase countdown timer (decrements every second)
   useEffect(() => {
     if (currentPhase !== 'question') return;
     if (questionRemainingMs === null || questionRemainingMs <= 0) return;
 
-    // Set up interval to decrement timer every second
     const interval = setInterval(() => {
       setQuestionRemainingMs((prev) => {
         if (prev === null || prev <= 0) return 0;
-        const newRemaining = Math.max(0, prev - 1000);
-        return newRemaining;
+        return Math.max(0, prev - TIMER_DECREMENT_INTERVAL_MS);
       });
-    }, 1000);
+    }, TIMER_DECREMENT_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [currentPhase, questionRemainingMs]);
+  }, [currentPhase, questionRemainingMs, setQuestionRemainingMs]);
 
-  // Sync questionRemainingMs with viewingRemainingMs when it changes significantly
-  // (e.g., when gameFlow updates from server, but only if difference is large to avoid jitter)
   useEffect(() => {
     if (currentPhase === 'question' && questionRemainingMs !== null && viewingRemainingMs > 0) {
       const difference = Math.abs(questionRemainingMs - viewingRemainingMs);
-      // Only sync if difference is more than 2 seconds (to avoid constant micro-adjustments)
-      if (difference > 2000) {
+      if (difference > TIMER_SYNC_THRESHOLD_MS) {
         setQuestionRemainingMs(viewingRemainingMs);
       }
     }
-    // questionRemainingMs is intentionally in dependencies to sync when it changes
-  }, [currentPhase, viewingRemainingMs, questionRemainingMs]);
+  }, [currentPhase, viewingRemainingMs, questionRemainingMs, setQuestionRemainingMs]);
 
-  // Client-side answering countdown timer (decrements every second)
-  // Continue counting even after answer is submitted so player knows when phase ends
   useEffect(() => {
     if (currentPhase !== 'answering') return;
     if (answerDurationMs === null || answerRemainingMs === null) return;
-    // Removed check for hasAnswered - timer should continue to show phase end time
 
-    // Set up interval to decrement timer every second
     const interval = setInterval(() => {
       setAnswerRemainingMs((prev) => {
         if (prev === null) return null;
-        const newRemaining = Math.max(0, prev - 1000);
-        return newRemaining;
+        return Math.max(0, prev - TIMER_DECREMENT_INTERVAL_MS);
       });
-    }, 1000);
+    }, TIMER_DECREMENT_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [currentPhase, answerDurationMs, answerRemainingMs]);
+  }, [currentPhase, answerDurationMs, answerRemainingMs, setAnswerRemainingMs]);
 
-  // Calculate current time for display based on phase
-  const currentTimeSeconds = useMemo(() => {
-    if (currentPhase === 'question') {
-      const time = Number.isFinite(displayRemainingMs) ? displayRemainingMs : 0;
-      return Math.max(0, Math.round(time / 1000));
-    } else if (currentPhase === 'answering') {
-      // Use answerRemainingMs for answering phase timer
-      const time = Number.isFinite(answerRemainingMs) ? (answerRemainingMs ?? 0) : 0;
-      return Math.max(0, Math.round(time / 1000));
-    }
-    return 0;
-  }, [currentPhase, displayRemainingMs, answerRemainingMs]);
-
-  const handleAnswerSelect = (answerId: string) => {
-    setSelectedAnswer(answerId);
-  };
-
-  const handleAnswerSubmit = useCallback(
-    async (answerId?: string | null) => {
-      // Allow null for auto-submit (when no answer selected)
-      const targetAnswerId: string | null =
-        answerId !== undefined ? answerId : selectedAnswer || null;
-      if (!gameFlow?.current_question_id) return;
-      // Note: targetAnswerId can be null for auto-submit, so we don't check for it here
-
-      try {
-        // Calculate response time from answering phase start
-        // Use answerDurationMs and answerRemainingMs which are set when answering phase starts
-        const fallbackAnsweringTime = Number.isFinite(
-          currentQuestionForPoints?.answering_time ?? currentQuestion.answering_time,
-        )
-          ? (currentQuestionForPoints?.answering_time ?? currentQuestion.answering_time ?? 30)
-          : 30;
-        const durationMs: number =
-          answerDurationMs !== null && Number.isFinite(answerDurationMs)
-            ? answerDurationMs
-            : fallbackAnsweringTime * 1000;
-        const remainingMs: number =
-          answerRemainingMs !== null && Number.isFinite(answerRemainingMs)
-            ? answerRemainingMs
-            : durationMs;
-        // Calculate time taken using timestamp-based method for accuracy
-        // This is more accurate than relying on interval-decremented values
-        let responseTimeMs: number;
-        if (answerId === null) {
-          // Auto-submit: time_taken = full duration
-          responseTimeMs = durationMs;
-        } else if (answeringPhaseStartTimeRef.current !== null) {
-          // Calculate from actual timestamp for precision
-          const elapsedMs = Date.now() - answeringPhaseStartTimeRef.current;
-          responseTimeMs = Math.max(0, Math.min(durationMs, elapsedMs));
-        } else {
-          // Fallback to timer-based calculation if timestamp not available
-          responseTimeMs = Math.max(0, Math.min(durationMs, durationMs - remainingMs));
-        }
-
-        await submitAnswer(targetAnswerId, responseTimeMs);
-      } catch (err) {
-        console.error('Failed to submit answer:', err);
-      }
-    },
-    [
-      selectedAnswer,
-      gameFlow?.current_question_id,
-      answerDurationMs,
-      answerRemainingMs,
-      currentQuestionForPoints?.answering_time,
-      currentQuestion.answering_time,
-      submitAnswer,
-    ],
-  );
-
-  // Auto-submit timeout (no answer) when answering window expires
-  const autoSubmittingRef = useRef(false);
   useEffect(() => {
     if (currentPhase !== 'answering') return;
     if (autoSubmittingRef.current) return;
     if (answerStatus.hasAnswered) return;
     if (answerRemainingMs === null || answerRemainingMs > 0) return;
 
-    // Auto-submit with null answer when timer expires
-    // time_taken = full answering_time duration (as per documentation)
     const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
       ? currentQuestion.answering_time
-      : 30; // Default fallback
-    const durationMs = answerDurationMs ?? safeAnsweringTime * 1000;
+      : DEFAULT_ANSWERING_TIME_SECONDS;
+    const durationMs = answerDurationMs ?? safeAnsweringTime * MS_PER_SECOND;
     autoSubmittingRef.current = true;
     submitAnswer(null, durationMs).catch((err) => {
-      // Silently handle "already answered" errors (answer was submitted manually)
       const errorMsg = err instanceof Error ? err.message : String(err);
       if (!errorMsg.includes('already') && !errorMsg.includes('Already')) {
-        console.error('Auto-submit on timeout failed:', err);
-        autoSubmittingRef.current = false; // Allow retry on error (except already answered)
+        toast.error('自動送信に失敗しました');
+        autoSubmittingRef.current = false;
       }
     });
   }, [
@@ -1259,28 +921,443 @@ function PlayerGameContent() {
     answerDurationMs,
     currentQuestion.answering_time,
     submitAnswer,
+    autoSubmittingRef,
   ]);
 
-  // Transition to answer_reveal when answering timer expires
-  const hasTransitionedToRevealRef = useRef(false);
   useEffect(() => {
     if (currentPhase !== 'answering') {
-      // Reset transition flag when leaving answering phase
       hasTransitionedToRevealRef.current = false;
       return;
     }
     if (hasTransitionedToRevealRef.current) return;
     if (answerRemainingMs === null || answerRemainingMs > 0) return;
 
-    // Timer has expired, transition to answer_reveal
-    console.log('Player: Answering timer expired, transitioning to answer_reveal');
     hasTransitionedToRevealRef.current = true;
     setAnswerRemainingMs(0);
     setCurrentPhase('answer_reveal');
     router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
-  }, [currentPhase, answerRemainingMs, gameId, playerId, router]);
+  }, [
+    currentPhase,
+    answerRemainingMs,
+    gameId,
+    playerId,
+    router,
+    setCurrentPhase,
+    setAnswerRemainingMs,
+    hasTransitionedToRevealRef,
+  ]);
+}
 
-  // Memoize statistics separately to prevent unnecessary recalculations
+/**
+ * Hook: usePlayerGameTimer
+ * Description:
+ * - Manages timer calculations and phase transitions for player game
+ */
+function usePlayerGameTimer({
+  currentPhase,
+  gameFlow,
+  timerState,
+  currentQuestion,
+  questionRemainingMs,
+  answerRemainingMs,
+  setQuestionRemainingMs,
+  setAnswerRemainingMs,
+  setAnswerDurationMs,
+  setIsDisplayPhaseDone,
+  setCurrentPhase,
+  questionTimerInitializedRef,
+  previousPhaseRef,
+  answeringPhaseStartTimeRef,
+  gameId,
+  playerId,
+  router,
+}: {
+  currentPhase: PlayerPhase;
+  gameFlow: unknown;
+  timerState: { remainingMs?: number; startTime?: Date } | null;
+  currentQuestion: Question;
+  questionRemainingMs: number | null;
+  answerRemainingMs: number | null;
+  setQuestionRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerDurationMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setIsDisplayPhaseDone: React.Dispatch<React.SetStateAction<boolean>>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  questionTimerInitializedRef: React.MutableRefObject<string | null>;
+  previousPhaseRef: React.MutableRefObject<PlayerPhase | null>;
+  answeringPhaseStartTimeRef: React.MutableRefObject<number | null>;
+  gameId: string;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const derivedRemainingMsFromFlow =
+    (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
+      ?.current_question_start_time &&
+    (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
+      ?.current_question_end_time
+      ? Math.max(
+          0,
+          new Date(
+            (
+              gameFlow as {
+                current_question_start_time?: string;
+                current_question_end_time?: string;
+              }
+            ).current_question_end_time!,
+          ).getTime() - Date.now(),
+        )
+      : null;
+
+  const showQuestionTime = Number.isFinite(currentQuestion.show_question_time)
+    ? currentQuestion.show_question_time
+    : DEFAULT_SHOW_QUESTION_TIME_SECONDS;
+  const answeringTime = Number.isFinite(currentQuestion.answering_time)
+    ? currentQuestion.answering_time
+    : DEFAULT_ANSWERING_TIME_SECONDS;
+
+  const viewingDurationMs = showQuestionTime * MS_PER_SECOND;
+
+  let questionElapsedMs = 0;
+  if (timerState?.startTime && currentPhase === 'question') {
+    questionElapsedMs = Math.max(0, Date.now() - timerState.startTime.getTime());
+  } else if ((gameFlow as { current_question_start_time?: string })?.current_question_start_time) {
+    questionElapsedMs = Math.max(
+      0,
+      Date.now() -
+        new Date(
+          (gameFlow as { current_question_start_time?: string }).current_question_start_time!,
+        ).getTime(),
+    );
+  }
+
+  const viewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+
+  useEffect(() => {
+    const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
+    const previousPhase = previousPhaseRef.current;
+
+    if (previousPhase === 'question' && currentPhase !== 'question') {
+      setQuestionRemainingMs(null);
+      questionTimerInitializedRef.current = null;
+    }
+
+    previousPhaseRef.current = currentPhase;
+
+    if (currentPhase === 'question' && currentQuestionId) {
+      if (questionTimerInitializedRef.current === currentQuestionId) {
+        if (questionRemainingMs === null) {
+          const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+
+          if (currentViewingRemainingMs > 0) {
+            setQuestionRemainingMs(currentViewingRemainingMs);
+          } else {
+            setIsDisplayPhaseDone(true);
+            setAnswerDurationMs(answeringTime * MS_PER_SECOND);
+            setAnswerRemainingMs(answeringTime * MS_PER_SECOND);
+            answeringPhaseStartTimeRef.current = Date.now();
+            setCurrentPhase('answering');
+            router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
+          }
+        }
+        return;
+      }
+
+      questionTimerInitializedRef.current = currentQuestionId;
+
+      const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+      const initialTime =
+        currentViewingRemainingMs > 0 ? currentViewingRemainingMs : viewingDurationMs;
+
+      if (initialTime > 0) {
+        setQuestionRemainingMs(initialTime);
+      } else {
+        setIsDisplayPhaseDone(true);
+        setAnswerDurationMs(answeringTime * MS_PER_SECOND);
+        setAnswerRemainingMs(answeringTime * MS_PER_SECOND);
+        answeringPhaseStartTimeRef.current = Date.now();
+        setCurrentPhase('answering');
+        router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
+      }
+    }
+  }, [
+    currentPhase,
+    gameFlow,
+    viewingDurationMs,
+    questionElapsedMs,
+    showQuestionTime,
+    answeringTime,
+    questionRemainingMs,
+    setQuestionRemainingMs,
+    setAnswerRemainingMs,
+    setAnswerDurationMs,
+    setIsDisplayPhaseDone,
+    setCurrentPhase,
+    questionTimerInitializedRef,
+    previousPhaseRef,
+    answeringPhaseStartTimeRef,
+    gameId,
+    playerId,
+    router,
+  ]);
+
+  const totalRemainingMs =
+    timerState?.remainingMs ??
+    derivedRemainingMsFromFlow ??
+    (currentPhase === 'question' ? viewingRemainingMs : answeringTime * MS_PER_SECOND);
+
+  const answeringRemainingMsDerived = Math.max(
+    0,
+    Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0,
+  );
+
+  const displayRemainingMs =
+    currentPhase === 'question'
+      ? questionRemainingMs !== null
+        ? questionRemainingMs
+        : viewingRemainingMs
+      : answeringRemainingMsDerived;
+
+  const currentTimeSeconds = useMemo(() => {
+    if (currentPhase === 'question') {
+      const time = Number.isFinite(displayRemainingMs) ? displayRemainingMs : 0;
+      return Math.max(0, Math.round(time / MS_PER_SECOND));
+    } else if (currentPhase === 'answering') {
+      const time = Number.isFinite(answerRemainingMs) ? (answerRemainingMs ?? 0) : 0;
+      return Math.max(0, Math.round(time / MS_PER_SECOND));
+    }
+    return 0;
+  }, [currentPhase, displayRemainingMs, answerRemainingMs]);
+
+  return {
+    displayRemainingMs,
+    currentTimeSeconds,
+    viewingRemainingMs,
+  };
+}
+
+/**
+ * Function: getDurationFromFlow
+ * Description:
+ * - Calculates question duration from game flow timestamps
+ */
+function getDurationFromFlowSeconds(gameFlow: unknown): number | null {
+  const flow = gameFlow as {
+    current_question_start_time?: string;
+    current_question_end_time?: string;
+  };
+  if (!flow.current_question_start_time || !flow.current_question_end_time) {
+    return null;
+  }
+  const startTime = new Date(flow.current_question_start_time).getTime();
+  const endTime = new Date(flow.current_question_end_time).getTime();
+  const durationSeconds = Math.max(1, Math.round((endTime - startTime) / MS_PER_SECOND));
+  return durationSeconds;
+}
+
+/**
+ * Function: buildQuestionFromData
+ * Description:
+ * - Builds Question object from QuestionWithAnswers data
+ */
+function buildQuestionFromData(
+  questionData: QuestionWithAnswers,
+  durationFromFlowSeconds: number | null,
+): Question {
+  const showTimeSeconds = questionData.show_question_time || DEFAULT_SHOW_QUESTION_TIME_SECONDS;
+  const answeringTimeSeconds = questionData.answering_time || DEFAULT_ANSWERING_TIME_SECONDS;
+  const sortedAnswers = [...questionData.answers].sort((a, b) => a.order_index - b.order_index);
+
+  return {
+    id: questionData.id,
+    text: questionData.question_text,
+    image: questionData.image_url || undefined,
+    timeLimit: durationFromFlowSeconds ?? showTimeSeconds + answeringTimeSeconds,
+    show_question_time: showTimeSeconds,
+    answering_time: answeringTimeSeconds,
+    choices: sortedAnswers.map((a, i) => ({
+      id: a.id,
+      text: a.answer_text,
+      letter: ANSWER_LETTERS[i] || String.fromCharCode(65 + i),
+    })),
+    correctAnswerId: sortedAnswers.find((a) => a.is_correct)?.id || '',
+    explanation: questionData.explanation_text || undefined,
+    type: questionData.question_type as Question['type'],
+  };
+}
+
+/**
+ * Function: buildLoadingQuestion
+ * Description:
+ * - Builds a loading placeholder Question object
+ */
+function buildLoadingQuestion(
+  gameFlow: unknown,
+  questionIdParam: string,
+  questionIndexParam: number,
+  questions: QuestionWithAnswers[],
+  timerState: { remainingMs?: number } | null,
+): Question {
+  const currentQuestionId =
+    (gameFlow as { current_question_id?: string })?.current_question_id || questionIdParam;
+  const questionIndex =
+    (gameFlow as { current_question_index?: number })?.current_question_index ?? questionIndexParam;
+  const loadingText =
+    questions.length === 0
+      ? 'クイズデータを読み込み中...'
+      : `問題 ${(questionIndex ?? 0) + 1} を読み込み中...`;
+
+  return {
+    id: currentQuestionId,
+    text: loadingText,
+    image: undefined,
+    timeLimit: Math.max(
+      DEFAULT_MIN_TIME_LIMIT_SECONDS,
+      Math.round((timerState?.remainingMs || DEFAULT_FALLBACK_TIME_MS) / MS_PER_SECOND),
+    ),
+    show_question_time: DEFAULT_SHOW_QUESTION_TIME_SECONDS,
+    answering_time: DEFAULT_ANSWERING_TIME_SECONDS,
+    choices: [
+      { id: 'loading-1', text: '読み込み中...', letter: 'A' },
+      { id: 'loading-2', text: '読み込み中...', letter: 'B' },
+      { id: 'loading-3', text: '読み込み中...', letter: 'C' },
+      { id: 'loading-4', text: '読み込み中...', letter: 'D' },
+    ],
+    correctAnswerId: 'loading-1',
+    explanation: undefined,
+    type: 'multiple_choice_4',
+  };
+}
+
+/**
+ * Function: computeCurrentQuestion
+ * Description:
+ * - Computes the current question object from various data sources
+ */
+function computeCurrentQuestion({
+  currentQuestionData,
+  gameFlow,
+  questionIdParam,
+  questionIndexParam,
+  questions,
+  timerState,
+}: {
+  currentQuestionData: CurrentQuestionData | null;
+  gameFlow: unknown;
+  questionIdParam: string;
+  questionIndexParam: number;
+  questions: QuestionWithAnswers[];
+  timerState: { remainingMs?: number } | null;
+}): Question {
+  const durationFromFlowSeconds = getDurationFromFlowSeconds(gameFlow);
+
+  if (currentQuestionData?.question) {
+    return {
+      ...currentQuestionData.question,
+      timeLimit: durationFromFlowSeconds ?? currentQuestionData.question.timeLimit,
+    };
+  }
+
+  const questionIndex =
+    (gameFlow as { current_question_index?: number })?.current_question_index ?? questionIndexParam;
+  const questionData = questions[questionIndex];
+
+  if (questionData) {
+    return buildQuestionFromData(questionData, durationFromFlowSeconds);
+  }
+
+  return buildLoadingQuestion(gameFlow, questionIdParam, questionIndexParam, questions, timerState);
+}
+
+/**
+ * Hook: usePlayerGameParams
+ * Description:
+ * - Extracts and processes URL search parameters
+ */
+function usePlayerGameParams() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { deviceId } = useDeviceId();
+
+  const gameIdParam = searchParams.get('gameId') || '';
+  const roomCode = searchParams.get('code') || '';
+  const phaseParam = (searchParams.get('phase') as PlayerPhase) || DEFAULT_PHASE;
+  const questionIdParam = searchParams.get('questionId') || DEFAULT_PLACEHOLDER_QUESTION_ID;
+  const questionIndexParam = Number(
+    searchParams.get('questionIndex') || String(DEFAULT_QUESTION_INDEX),
+  );
+  const totalQuestions = Number(
+    searchParams.get('totalQuestions') || String(DEFAULT_TOTAL_QUESTIONS),
+  );
+  const playerParam = searchParams.get('playerId') || '';
+  const playerId = playerParam || deviceId || DEFAULT_ANONYMOUS_PLAYER;
+
+  return {
+    router,
+    gameIdParam,
+    roomCode,
+    phaseParam,
+    questionIdParam,
+    questionIndexParam,
+    totalQuestions,
+    playerId,
+  };
+}
+
+/**
+ * Hook: usePlayerGameComputedValues
+ * Description:
+ * - Computes derived values for player game
+ */
+function usePlayerGameComputedValues({
+  currentQuestionData,
+  gameFlow,
+  questions,
+  currentQuestion,
+  answerStats,
+  answerResult,
+  selectedAnswer,
+  leaderboard,
+}: {
+  currentQuestionData: CurrentQuestionData | null;
+  gameFlow: { current_question_id?: string | null; current_question_index?: number | null } | null;
+  questions: QuestionWithAnswers[];
+  currentQuestion: Question;
+  answerStats: Record<string, number>;
+  answerResult: { selectedOption?: string; isCorrect?: boolean } | null;
+  selectedAnswer: string | undefined;
+  leaderboard: unknown;
+}) {
+  const currentQuestionForPoints = useMemo(() => {
+    if (currentQuestionData) {
+      return {
+        points: currentQuestionData.points ?? DEFAULT_POINTS,
+        answering_time:
+          currentQuestionData.answeringTime ??
+          currentQuestionData.timeLimit ??
+          DEFAULT_ANSWERING_TIME_SECONDS,
+      };
+    }
+
+    if (!gameFlow?.current_question_id || !questions.length) return null;
+    const questionIndex = gameFlow.current_question_index ?? 0;
+    const questionData = questions[questionIndex];
+    if (questionData) {
+      return {
+        points: questionData.points ?? DEFAULT_POINTS,
+        answering_time:
+          questionData.answering_time ??
+          questionData.show_question_time ??
+          DEFAULT_ANSWERING_TIME_SECONDS,
+      };
+    }
+    return null;
+  }, [
+    currentQuestionData,
+    gameFlow?.current_question_id,
+    gameFlow?.current_question_index,
+    questions,
+  ]);
+
   const statisticsMemo = useMemo(() => {
     if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
       return [];
@@ -1296,9 +1373,7 @@ function PlayerGameContent() {
     });
   }, [currentQuestion.choices, answerStats]);
 
-  // Use answerResult from hook if available, otherwise construct from local state
   const revealPayload: AnswerResult = useMemo(() => {
-    // Safety check for empty choices
     if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
       return {
         question: currentQuestion,
@@ -1311,22 +1386,19 @@ function PlayerGameContent() {
       };
     }
 
-    // answerResult from hook contains partial data (questionId, selectedOption, isCorrect, etc.)
-    // We need to construct the full AnswerResult with question and statistics
     const playerChoice = answerResult?.selectedOption
       ? currentQuestion.choices.find((c) => c.id === answerResult.selectedOption)
       : selectedAnswer
         ? currentQuestion.choices.find((c) => c.id === selectedAnswer)
         : undefined;
 
-    // Determine if answer is correct
     const isCorrect =
       answerResult?.isCorrect ??
       (playerChoice ? playerChoice.id === currentQuestion.correctAnswerId : false);
 
     const correctAnswerChoice =
       currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId) ||
-      currentQuestion.choices[0]; // Fallback to first choice if not found
+      currentQuestion.choices[0];
 
     const totalAnswered = statisticsMemo.reduce((sum, stat) => sum + stat.count, 0);
 
@@ -1341,110 +1413,412 @@ function PlayerGameContent() {
     };
   }, [answerResult, currentQuestion, selectedAnswer, statisticsMemo, leaderboard]);
 
-  // Update phase when URL changes
-  useEffect(() => {
-    setCurrentPhase(phaseParam);
-  }, [phaseParam]);
+  return {
+    currentQuestionForPoints,
+    revealPayload,
+  };
+}
 
-  // Clear selected answer when question changes
-  useEffect(() => {
-    if (gameFlow?.current_question_id && gameFlow.current_question_id !== questionIdParam) {
-      setSelectedAnswer(undefined);
-    }
-  }, [gameFlow?.current_question_id, questionIdParam]);
-
-  // Phase rendering
+/**
+ * Component: PlayerGameLoadingStates
+ * Description:
+ * - Handles early return loading and error states
+ */
+const PlayerGameLoadingStates: React.FC<{
+  gameId: string;
+  gameFlow: unknown;
+  isConnected: boolean;
+  children: React.ReactNode;
+}> = ({ gameId, gameFlow, isConnected, children }) => {
   if (!gameId) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="p-6 text-red-600 text-xl">gameId が指定されていません。</div>
-      </div>
-    );
+    return <ErrorScreen message="gameId が指定されていません。" />;
   }
 
   if (!gameFlow) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-cyan-900 via-blue-900 to-purple-900">
-        <div className="text-center">
-          <div className="p-6 text-white text-xl mb-4">ゲーム状態を読み込み中...</div>
-          <div className="flex justify-center space-x-2">
-            <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce"></div>
-            <div
-              className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
-              style={{ animationDelay: '0.2s' }}
-            ></div>
-            <div
-              className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"
-              style={{ animationDelay: '0.4s' }}
-            ></div>
-          </div>
-        </div>
-      </div>
-    );
+    return <LoadingScreen message="ゲーム状態を読み込み中..." color="cyan" />;
   }
 
   if (!isConnected) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-cyan-900 via-blue-900 to-purple-900">
-        <div className="text-center">
-          <div className="p-6 text-yellow-400 text-xl mb-4">接続を確立中...</div>
-          <div className="flex justify-center space-x-2">
-            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-bounce"></div>
-            <div
-              className="w-2 h-2 bg-yellow-400 rounded-full animate-bounce"
-              style={{ animationDelay: '0.2s' }}
-            ></div>
-            <div
-              className="w-2 h-2 bg-yellow-400 rounded-full animate-bounce"
-              style={{ animationDelay: '0.4s' }}
-            ></div>
-          </div>
-        </div>
-      </div>
-    );
+    return <LoadingScreen message="接続を確立中..." color="yellow" />;
   }
+
+  return <>{children}</>;
+};
+
+/**
+ * Hook: usePlayerGameEventHandlers
+ * Description:
+ * - Creates event handlers for player game interactions
+ */
+function usePlayerGameEventHandlers({
+  gameId,
+  playerId,
+  router,
+  currentQuestion,
+  isDisplayPhaseDone,
+  selectedAnswer,
+  gameFlow,
+  answerDurationMs,
+  answerRemainingMs,
+  currentQuestionForPoints,
+  submitAnswer,
+  setIsDisplayPhaseDone,
+  setAnswerDurationMs,
+  setAnswerRemainingMs,
+  setCurrentPhase,
+  setSelectedAnswer,
+  answeringPhaseStartTimeRef,
+}: {
+  gameId: string;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+  currentQuestion: Question;
+  isDisplayPhaseDone: boolean;
+  selectedAnswer: string | undefined;
+  gameFlow: { current_question_id?: string | null } | null;
+  answerDurationMs: number | null;
+  answerRemainingMs: number | null;
+  currentQuestionForPoints: { points: number; answering_time: number } | null;
+  submitAnswer: (answerId: string | null, responseTimeMs: number) => Promise<void>;
+  setIsDisplayPhaseDone: React.Dispatch<React.SetStateAction<boolean>>;
+  setAnswerDurationMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  setSelectedAnswer: React.Dispatch<React.SetStateAction<string | undefined>>;
+  answeringPhaseStartTimeRef: React.MutableRefObject<number | null>;
+}) {
+  const handleAnswerSelect = useCallback(
+    (answerId: string) => {
+      setSelectedAnswer(answerId);
+    },
+    [setSelectedAnswer],
+  );
+
+  const startAnsweringPhase = useCallback(() => {
+    if (isDisplayPhaseDone) return;
+    const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
+      ? currentQuestion.answering_time
+      : DEFAULT_ANSWERING_TIME_SECONDS;
+    const durationMs = safeAnsweringTime * MS_PER_SECOND;
+    setIsDisplayPhaseDone(true);
+    setAnswerDurationMs(durationMs);
+    setAnswerRemainingMs(durationMs);
+    answeringPhaseStartTimeRef.current = Date.now();
+
+    setCurrentPhase('answering');
+    router.replace(`/game-player?gameId=${gameId}&phase=answering&playerId=${playerId}`);
+  }, [
+    currentQuestion.answering_time,
+    gameId,
+    isDisplayPhaseDone,
+    playerId,
+    router,
+    answeringPhaseStartTimeRef,
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setCurrentPhase,
+  ]);
+
+  const handleAnswerSubmit = useCallback(
+    async (answerId?: string | null) => {
+      const targetAnswerId: string | null =
+        answerId !== undefined ? answerId : selectedAnswer || null;
+      if (!gameFlow?.current_question_id) return;
+
+      try {
+        const fallbackAnsweringTime = Number.isFinite(
+          currentQuestionForPoints?.answering_time ?? currentQuestion.answering_time,
+        )
+          ? (currentQuestionForPoints?.answering_time ??
+            currentQuestion.answering_time ??
+            DEFAULT_ANSWERING_TIME_SECONDS)
+          : DEFAULT_ANSWERING_TIME_SECONDS;
+        const durationMs: number =
+          answerDurationMs !== null && Number.isFinite(answerDurationMs)
+            ? answerDurationMs
+            : fallbackAnsweringTime * MS_PER_SECOND;
+        const remainingMs: number =
+          answerRemainingMs !== null && Number.isFinite(answerRemainingMs)
+            ? answerRemainingMs
+            : durationMs;
+
+        let responseTimeMs: number;
+        if (answerId === null) {
+          responseTimeMs = durationMs;
+        } else if (answeringPhaseStartTimeRef.current !== null) {
+          const elapsedMs = Date.now() - answeringPhaseStartTimeRef.current;
+          responseTimeMs = Math.max(0, Math.min(durationMs, elapsedMs));
+        } else {
+          responseTimeMs = Math.max(0, Math.min(durationMs, durationMs - remainingMs));
+        }
+
+        await submitAnswer(targetAnswerId, responseTimeMs);
+      } catch {
+        toast.error('回答の送信に失敗しました');
+      }
+    },
+    [
+      selectedAnswer,
+      gameFlow?.current_question_id,
+      answerDurationMs,
+      answerRemainingMs,
+      currentQuestionForPoints?.answering_time,
+      currentQuestion.answering_time,
+      submitAnswer,
+      answeringPhaseStartTimeRef,
+    ],
+  );
+
+  return {
+    handleAnswerSelect,
+    startAnsweringPhase,
+    handleAnswerSubmit,
+  };
+}
+
+/**
+ * Hook: useGameFlowEvents
+ * Description:
+ * - Creates game flow event handlers
+ */
+function useGameFlowEvents({
+  gameId,
+  playerId,
+  router,
+  setIsDisplayPhaseDone,
+  setAnswerDurationMs,
+  setAnswerRemainingMs,
+  setQuestionRemainingMs,
+  setCurrentPhase,
+  setExplanationData,
+  currentPhaseRef,
+  lastQuestionStartIdRef,
+  answeringPhaseStartTimeRef,
+}: {
+  gameId: string;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+  setIsDisplayPhaseDone: React.Dispatch<React.SetStateAction<boolean>>;
+  setAnswerDurationMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setQuestionRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  setExplanationData: React.Dispatch<React.SetStateAction<ExplanationData | null>>;
+  currentPhaseRef: React.MutableRefObject<PlayerPhase>;
+  lastQuestionStartIdRef: React.MutableRefObject<string | null>;
+  answeringPhaseStartTimeRef: React.MutableRefObject<number | null>;
+}) {
+  const resetQuestionState = useCallback(() => {
+    setIsDisplayPhaseDone(false);
+    setAnswerDurationMs(null);
+    setAnswerRemainingMs(null);
+    setQuestionRemainingMs(null);
+    answeringPhaseStartTimeRef.current = null;
+  }, [
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setQuestionRemainingMs,
+    answeringPhaseStartTimeRef,
+  ]);
+
+  const handleQuestionStart = useCallback(
+    (qId: string | null, qIndex: number) => {
+      const isNewQuestionStart = qId && qId !== lastQuestionStartIdRef.current;
+      lastQuestionStartIdRef.current = qId || null;
+
+      const currentPhaseValue = currentPhaseRef.current;
+      if (
+        !isNewQuestionStart &&
+        (currentPhaseValue === 'answering' ||
+          currentPhaseValue === 'answer_reveal' ||
+          currentPhaseValue === 'leaderboard' ||
+          currentPhaseValue === 'explanation')
+      ) {
+        resetQuestionState();
+        return;
+      }
+
+      resetQuestionState();
+      setCurrentPhase('question');
+      router.replace(
+        `/game-player?gameId=${gameId}&phase=question&questionIndex=${qIndex}&playerId=${playerId}`,
+      );
+    },
+    [
+      gameId,
+      playerId,
+      router,
+      resetQuestionState,
+      setCurrentPhase,
+      currentPhaseRef,
+      lastQuestionStartIdRef,
+    ],
+  );
+
+  const handleQuestionEnd = useCallback(() => {
+    setAnswerRemainingMs(0);
+    setCurrentPhase('answer_reveal');
+    router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+  }, [gameId, playerId, router, setAnswerRemainingMs, setCurrentPhase]);
+
+  const handleAnswerReveal = useCallback(() => {
+    setCurrentPhase('answer_reveal');
+    router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+  }, [gameId, playerId, router, setCurrentPhase]);
+
+  const handleExplanationShow = useCallback(
+    (
+      questionId: string,
+      explanation: {
+        text: string | null;
+        title: string | null;
+        image_url: string | null;
+        show_time: number | null;
+      },
+    ) => {
+      const hasContent =
+        (explanation.text && explanation.text.trim() !== '') ||
+        (explanation.title && explanation.title.trim() !== '');
+
+      if (hasContent) {
+        setExplanationData({
+          title: explanation.title ?? null,
+          text: explanation.text ?? null,
+          image_url: explanation.image_url ?? null,
+          show_time: explanation.show_time ?? DEFAULT_EXPLANATION_TIME_SECONDS,
+        });
+        setCurrentPhase('explanation');
+        router.replace(`/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`);
+      }
+    },
+    [gameId, playerId, router, setExplanationData, setCurrentPhase],
+  );
+
+  const handleGameEnd = useCallback(() => {
+    setCurrentPhase('podium');
+    router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
+  }, [gameId, playerId, router, setCurrentPhase]);
+
+  return {
+    onQuestionStart: handleQuestionStart,
+    onQuestionEnd: handleQuestionEnd,
+    onAnswerReveal: handleAnswerReveal,
+    onExplanationShow: handleExplanationShow,
+    onExplanationHide: () => {},
+    onGameEnd: handleGameEnd,
+    onError: () => {},
+  };
+}
+
+/**
+ * Function: getQuestionNumber
+ * Description:
+ * - Calculates current question number from game flow or params
+ */
+function getQuestionNumber(
+  gameFlow: { current_question_index: number | null } | null,
+  questionIndexParam: number,
+): number {
+  if (
+    gameFlow &&
+    gameFlow.current_question_index !== null &&
+    gameFlow.current_question_index >= 0
+  ) {
+    return gameFlow.current_question_index + 1;
+  }
+  return questionIndexParam + 1;
+}
+
+/**
+ * Function: getTotalQuestions
+ * Description:
+ * - Calculates total questions count
+ */
+function getTotalQuestions(
+  currentQuestionData: CurrentQuestionData | null,
+  questions: QuestionWithAnswers[],
+  totalQuestions: number,
+): number {
+  return currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+}
+
+/**
+ * Component: PlayerGamePhaseRenderer
+ * Description:
+ * - Renders the appropriate screen based on current phase
+ */
+const PlayerGamePhaseRenderer: React.FC<{
+  currentPhase: PlayerPhase;
+  gameFlow: { current_question_index: number | null } | null;
+  questionIndexParam: number;
+  currentQuestionData: CurrentQuestionData | null;
+  questions: QuestionWithAnswers[];
+  totalQuestions: number;
+  currentQuestion: Question;
+  currentTimeSeconds: number;
+  countdownStartedAt: number | undefined;
+  isMobile: boolean;
+  answerStatus: { hasAnswered: boolean; isProcessing: boolean };
+  answerError: string | null;
+  revealPayload: AnswerResult;
+  explanationData: ExplanationData | null;
+  leaderboard: unknown;
+  timerState: { remainingMs?: number } | null;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+  onAnswerSelect: (answerId: string) => void;
+  onAnswerSubmit: (answerId?: string | null) => Promise<void>;
+}> = ({
+  currentPhase,
+  gameFlow,
+  questionIndexParam,
+  currentQuestionData,
+  questions,
+  totalQuestions,
+  currentQuestion,
+  currentTimeSeconds,
+  countdownStartedAt,
+  isMobile,
+  answerStatus,
+  answerError,
+  revealPayload,
+  explanationData,
+  leaderboard,
+  timerState,
+  playerId,
+  router,
+  onAnswerSelect,
+  onAnswerSubmit,
+}) => {
+  const questionNumber = getQuestionNumber(gameFlow, questionIndexParam);
+  const totalQuestionsCount = getTotalQuestions(currentQuestionData, questions, totalQuestions);
 
   switch (currentPhase) {
     case 'countdown':
       return (
         <PlayerCountdownScreen
-          countdownTime={3}
-          questionNumber={
-            gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-              ? gameFlow.current_question_index + 1
-              : questionIndexParam + 1
-          }
-          totalQuestions={
-            currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
-          }
+          countdownTime={COUNTDOWN_TIME_SECONDS}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestionsCount}
           isMobile={isMobile}
           startedAt={countdownStartedAt}
-          onCountdownComplete={() => {
-            // Countdown complete - phase will transition to question via WebSocket event
-            console.log('Countdown complete, waiting for question start');
-          }}
+          onCountdownComplete={() => {}}
         />
       );
     case 'question':
       return (
-        <>
-          <PlayerQuestionScreen
-            question={{
-              ...currentQuestion,
-              timeLimit: currentQuestion.show_question_time || 10, // Ensure we have a valid timeLimit
-            }}
-            currentTime={Math.max(0, currentTimeSeconds)} // Ensure non-negative
-            questionNumber={
-              gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-                ? gameFlow.current_question_index + 1
-                : questionIndexParam + 1
-            }
-            totalQuestions={
-              currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
-            }
-            isMobile={isMobile}
-          />
-        </>
+        <PlayerQuestionScreen
+          question={{
+            ...currentQuestion,
+            timeLimit: currentQuestion.show_question_time || DEFAULT_SHOW_QUESTION_TIME_SECONDS,
+          }}
+          currentTime={Math.max(0, currentTimeSeconds)}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestionsCount}
+          isMobile={isMobile}
+        />
       );
     case 'answering':
       return (
@@ -1454,19 +1828,10 @@ function PlayerGameContent() {
             timeLimit: currentQuestion.answering_time,
           }}
           currentTime={currentTimeSeconds}
-          questionNumber={
-            gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-              ? gameFlow.current_question_index + 1
-              : questionIndexParam + 1
-          }
-          totalQuestions={
-            currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
-          }
-          onAnswerSelect={handleAnswerSelect}
-          onAnswerSubmit={(answerId) => {
-            // Immediately submit when answer is clicked (as per documentation)
-            handleAnswerSubmit(answerId);
-          }}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestionsCount}
+          onAnswerSelect={onAnswerSelect}
+          onAnswerSubmit={onAnswerSubmit}
           isMobile={isMobile}
           isSubmitted={answerStatus.hasAnswered}
           isProcessing={answerStatus.isProcessing}
@@ -1477,169 +1842,705 @@ function PlayerGameContent() {
       return (
         <PlayerAnswerRevealScreen
           answerResult={revealPayload}
-          questionNumber={
-            gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-              ? gameFlow.current_question_index + 1
-              : questionIndexParam + 1
-          }
-          totalQuestions={
-            currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
-          }
-          timeLimit={5}
-          onTimeExpired={() => {
-            // IMPORTANT:
-            // Answer reveal must NOT auto-advance. We wait for the host to press "Next",
-            // which will broadcast `game:phase:change` to move everyone forward.
-            console.log('Player: Answer reveal time expired, waiting for host to advance');
-          }}
-        />
-      );
-    case 'leaderboard': {
-      // Check if this is the last question - if so, show loading while redirecting
-      const currentQuestionNum =
-        gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-          ? gameFlow.current_question_index + 1
-          : questionIndexParam + 1;
-      const totalQuestionsCount =
-        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
-      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
-
-      // Show loading if redirecting (useEffect will handle the redirect)
-      if (isLastQuestion) {
-        return (
-          <div className="flex items-center justify-center h-screen">
-            <div className="text-center">
-              <div className="p-6 text-white text-xl">リダイレクト中...</div>
-            </div>
-          </div>
-        );
-      }
-
-      // Transform leaderboard data
-      const leaderboardEntries = Array.isArray(leaderboard)
-        ? leaderboard.map((entry) => ({
-            playerId: entry.player_id,
-            playerName: entry.player_name,
-            score: entry.score,
-            rank: entry.rank,
-            previousRank: entry.previous_rank ?? entry.rank,
-            rankChange: (entry.rank_change || 'same') as 'up' | 'down' | 'same',
-            scoreChange: entry.score_change ?? 0,
-          }))
-        : [];
-
-      // Debug log
-      console.log('[Leaderboard Phase]', {
-        rawLeaderboard: leaderboard,
-        transformedEntries: leaderboardEntries,
-        loading: leaderboardLoading,
-        gameId,
-      });
-
-      return (
-        <PlayerLeaderboardScreen
-          leaderboardData={{
-            entries: leaderboardEntries,
-            questionNumber: currentQuestionNum,
-            totalQuestions: totalQuestionsCount,
-            timeRemaining: Math.max(0, Math.round((timerState?.remainingMs || 5000) / 1000)),
-            timeLimit: 5,
-          }}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestionsCount}
+          timeLimit={ANSWER_REVEAL_TIME_LIMIT_SECONDS}
           onTimeExpired={() => {}}
         />
       );
-    }
-    case 'explanation': {
-      const currentQuestionNum =
-        gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-          ? gameFlow.current_question_index + 1
-          : questionIndexParam + 1;
-      const totalQuestionsCount =
-        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
-
-      const handleExplanationTimeExpired = () => {
-        // Explanation timer expired - wait for host to manually advance via phase change event
-        // Do not auto-advance - player waits for host control
-        console.log('Player: Explanation time expired, waiting for host to advance');
-      };
-
+    case 'leaderboard':
       return (
-        <PlayerExplanationScreen
-          explanation={{
-            questionNumber: currentQuestionNum,
-            totalQuestions: totalQuestionsCount,
-            timeLimit:
-              currentQuestionData?.showExplanationTime ??
-              explanationData?.show_time ??
-              currentQuestion.show_explanation_time ??
-              10,
-            title: explanationData?.title || '解説',
-            body:
-              explanationData?.text || currentQuestion.explanation || '解説は近日追加されます。',
-            image: explanationData?.image_url || undefined,
-          }}
-          onTimeExpired={handleExplanationTimeExpired}
+        <LeaderboardContent
+          gameFlow={gameFlow || { current_question_index: null }}
+          questionIndexParam={questionIndexParam}
+          currentQuestionData={currentQuestionData}
+          questions={questions}
+          totalQuestions={totalQuestions}
+          leaderboard={leaderboard}
+          timerState={timerState}
         />
       );
-    }
+    case 'explanation':
+      return (
+        <ExplanationContent
+          gameFlow={gameFlow || { current_question_index: null }}
+          questionIndexParam={questionIndexParam}
+          currentQuestionData={currentQuestionData}
+          questions={questions}
+          totalQuestions={totalQuestions}
+          explanationData={explanationData}
+          currentQuestion={currentQuestion}
+        />
+      );
     case 'podium':
-      return (
-        <PlayerPodiumScreen
-          entries={
-            Array.isArray(leaderboard)
-              ? leaderboard.map((entry) => ({
-                  playerId: entry.player_id,
-                  playerName: entry.player_name,
-                  score: entry.score,
-                  rank: entry.rank,
-                  previousRank: entry.rank,
-                  rankChange: 'same' as const,
-                }))
-              : []
-          }
-        />
-      );
-    case 'ended': {
-      const playerEntry = Array.isArray(leaderboard)
-        ? leaderboard.find((entry) => entry.player_id === playerId)
-        : undefined;
-
-      const leaderboardEntries: LeaderboardEntry[] = Array.isArray(leaderboard)
-        ? leaderboard.map((entry) => ({
-            playerId: entry.player_id,
-            playerName: entry.player_name,
-            score: entry.score,
-            rank: entry.rank,
-            previousRank: entry.rank,
-            rankChange: 'same' as const,
-          }))
-        : [];
-
-      return (
-        <PlayerGameEndScreen
-          playerEntry={
-            playerEntry
-              ? {
-                  playerId: playerEntry.player_id,
-                  playerName: playerEntry.player_name,
-                  score: playerEntry.score,
-                  rank: playerEntry.rank,
-                  previousRank: playerEntry.rank,
-                  rankChange: 'same',
-                }
-              : undefined
-          }
-          entries={leaderboardEntries}
-          onReturnHome={() => router.push('/')}
-          onJoinNewGame={() => router.push('/')}
-        />
-      );
-    }
+      return <PodiumContent leaderboard={leaderboard} />;
+    case 'ended':
+      return <GameEndContent leaderboard={leaderboard} playerId={playerId} router={router} />;
     default:
       return <div className="p-6">次のステップを待機しています...</div>;
   }
+};
+
+/**
+ * Hook: usePlayerGameWebSocket
+ * Description:
+ * - Manages WebSocket connection and event handlers for player game
+ */
+function usePlayerGameWebSocket({
+  gameId,
+  roomCode,
+  playerId,
+  socket,
+  isConnected,
+  joinRoom,
+  leaveRoom,
+  router,
+  gameFlowRef,
+  currentPhaseRef,
+  refreshFlow,
+  setCurrentPhase,
+  setAnswerStats,
+  setCountdownStartedAt,
+  handlePlayerKickedRef,
+}: {
+  gameId: string;
+  roomCode: string;
+  playerId: string;
+  socket: ReturnType<typeof useSocket>['socket'];
+  isConnected: boolean;
+  joinRoom: (roomId: string) => void;
+  leaveRoom: (roomId: string) => void;
+  router: ReturnType<typeof useRouter>;
+  gameFlowRef: React.MutableRefObject<unknown>;
+  currentPhaseRef: React.MutableRefObject<PlayerPhase>;
+  refreshFlow: () => Promise<void>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  setAnswerStats: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  setCountdownStartedAt: React.Dispatch<React.SetStateAction<number | undefined>>;
+  handlePlayerKickedRef: React.MutableRefObject<((data: PlayerKickedData) => void) | undefined>;
+}) {
+  const hasJoinedRoomRef = useRef(false);
+  const socketRef = useRef(socket);
+  const isConnectedRef = useRef(isConnected);
+
+  useEffect(() => {
+    socketRef.current = socket;
+  }, [socket]);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  const handleStatsUpdate = useCallback(
+    (data: StatsUpdateData) => {
+      if (
+        data.roomId === gameId &&
+        data.questionId ===
+          (gameFlowRef.current as { current_question_id?: string })?.current_question_id
+      ) {
+        const currentPhaseValue = currentPhaseRef.current;
+        if (currentPhaseValue === 'answer_reveal' || currentPhaseValue === 'answering') {
+          setAnswerStats((prev) => {
+            const hasChanged =
+              Object.keys(data.counts).some((key) => prev[key] !== data.counts[key]) ||
+              Object.keys(prev).some((key) => !(key in data.counts));
+            return hasChanged ? data.counts : prev;
+          });
+        }
+      }
+    },
+    [gameId, gameFlowRef, currentPhaseRef, setAnswerStats],
+  );
+
+  const handleAnswerLocked = useCallback(
+    (data: AnswerLockedData) => {
+      if (data.roomId !== gameId) return;
+      if (
+        data.counts &&
+        data.questionId ===
+          (gameFlowRef.current as { current_question_id?: string })?.current_question_id
+      ) {
+        setAnswerStats(data.counts);
+      }
+      setCurrentPhase('answer_reveal');
+      router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+    },
+    [gameId, playerId, router, gameFlowRef, setAnswerStats, setCurrentPhase],
+  );
+
+  const handlePhaseChange = useCallback(
+    (data: PhaseChangeData) => {
+      if (data.roomId !== gameId) return;
+
+      const current = currentPhaseRef.current;
+      if (data.phase !== 'waiting') {
+        const currentRank = PHASE_PRIORITY[current];
+        const nextRank = PHASE_PRIORITY[data.phase];
+        if (Number.isFinite(currentRank) && Number.isFinite(nextRank) && nextRank < currentRank) {
+          return;
+        }
+      }
+
+      if (data.phase === 'countdown') {
+        const currentQuestionIndex =
+          (gameFlowRef.current as { current_question_index?: number })?.current_question_index ?? 0;
+        if (currentQuestionIndex > 0) {
+          return;
+        }
+        setCountdownStartedAt(data.startedAt);
+        refreshFlow().catch(() => {});
+      }
+
+      setCurrentPhase(data.phase);
+
+      if (data.phase === 'waiting') {
+        if (roomCode) {
+          router.push(`/join?code=${roomCode}`);
+        } else if (gameId) {
+          router.push(`/join?gameId=${gameId}`);
+        }
+        return;
+      }
+      router.replace(`/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId}`);
+    },
+    [
+      gameId,
+      playerId,
+      router,
+      roomCode,
+      gameFlowRef,
+      currentPhaseRef,
+      refreshFlow,
+      setCurrentPhase,
+      setCountdownStartedAt,
+    ],
+  );
+
+  const handleGameStarted = useCallback(
+    (data: GameEventData) => {
+      const targetGameId = data.gameId || data.roomId;
+      if (targetGameId === gameId) {
+        setCurrentPhase('countdown');
+        router.replace(`/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId}`);
+      }
+    },
+    [gameId, playerId, router, setCurrentPhase],
+  );
+
+  const handleGamePause = useCallback(() => {}, []);
+  const handleGameResume = useCallback(() => {}, []);
+
+  const handleGameEnd = useCallback(
+    (data: GameEventData) => {
+      const targetGameId = data.gameId;
+      if (targetGameId === gameId) {
+        setCurrentPhase('ended');
+        router.replace(`/game-player?gameId=${gameId}&phase=ended&playerId=${playerId}`);
+      }
+    },
+    [gameId, playerId, router, setCurrentPhase],
+  );
+
+  const setupSocketListeners = useCallback(
+    (currentSocket: typeof socket) => {
+      if (!currentSocket) return () => {};
+
+      currentSocket.on('game:answer:stats:update', handleStatsUpdate);
+      currentSocket.on('game:answer:stats', handleStatsUpdate);
+      currentSocket.on('game:answer:locked', handleAnswerLocked);
+      currentSocket.on('game:phase:change', handlePhaseChange);
+      currentSocket.on('game:player-kicked', (data) => handlePlayerKickedRef.current?.(data));
+      currentSocket.on('game:started', handleGameStarted);
+      currentSocket.on('game:pause', handleGamePause);
+      currentSocket.on('game:resume', handleGameResume);
+      currentSocket.on('game:end', handleGameEnd);
+
+      return () => {
+        currentSocket.off('game:answer:stats:update', handleStatsUpdate);
+        currentSocket.off('game:answer:stats', handleStatsUpdate);
+        currentSocket.off('game:answer:locked', handleAnswerLocked);
+        currentSocket.off('game:phase:change', handlePhaseChange);
+        currentSocket.off('game:player-kicked');
+        currentSocket.off('game:started', handleGameStarted);
+        currentSocket.off('game:pause', handleGamePause);
+        currentSocket.off('game:resume', handleGameResume);
+        currentSocket.off('game:end', handleGameEnd);
+      };
+    },
+    [
+      handleStatsUpdate,
+      handleAnswerLocked,
+      handlePhaseChange,
+      handleGameStarted,
+      handleGamePause,
+      handleGameResume,
+      handleGameEnd,
+      handlePlayerKickedRef,
+    ],
+  );
+
+  const joinRoomSafe = useCallback(() => {
+    if (hasJoinedRoomRef.current) {
+      return;
+    }
+    if (isConnectedRef.current) {
+      joinRoom(gameId);
+      hasJoinedRoomRef.current = true;
+    }
+  }, [gameId, joinRoom]);
+
+  useEffect(() => {
+    if (!gameId) return;
+
+    const currentSocket = socketRef.current;
+    if (!currentSocket) {
+      const checkSocket = setInterval(() => {
+        if (socketRef.current) {
+          clearInterval(checkSocket);
+        }
+      }, SOCKET_CHECK_INTERVAL_MS);
+      return () => clearInterval(checkSocket);
+    }
+
+    const cleanupListeners = setupSocketListeners(currentSocket);
+    joinRoomSafe();
+
+    if (!isConnectedRef.current) {
+      const onConnect = () => {
+        joinRoomSafe();
+        currentSocket.off('connect', onConnect);
+      };
+      currentSocket.on('connect', onConnect);
+
+      const checkConnection = setInterval(() => {
+        if (isConnectedRef.current && !hasJoinedRoomRef.current) {
+          joinRoomSafe();
+          clearInterval(checkConnection);
+          currentSocket.off('connect', onConnect);
+        }
+      }, CONNECTION_CHECK_INTERVAL_MS);
+
+      const cleanupTimeout = setTimeout(() => {
+        clearInterval(checkConnection);
+        currentSocket.off('connect', onConnect);
+      }, CONNECTION_CHECK_TIMEOUT_MS);
+
+      return () => {
+        clearInterval(checkConnection);
+        clearTimeout(cleanupTimeout);
+        currentSocket.off('connect', onConnect);
+        cleanupListeners();
+
+        if (gameId && hasJoinedRoomRef.current) {
+          leaveRoom(gameId);
+          hasJoinedRoomRef.current = false;
+        }
+      };
+    }
+
+    return () => {
+      cleanupListeners();
+      currentSocket.off('connect');
+
+      if (gameId && hasJoinedRoomRef.current) {
+        leaveRoom(gameId);
+        hasJoinedRoomRef.current = false;
+      }
+    };
+  }, [gameId, joinRoom, leaveRoom, joinRoomSafe, setupSocketListeners]);
 }
 
+//----------------------------------------------------
+// 11. Main Page Content Component
+//----------------------------------------------------
+/**
+ * Component: PlayerGameContent
+ * Description:
+ * - Main player game interface component
+ * - Manages all game phases and real-time synchronization
+ *
+ * Features:
+ * - Real-time WebSocket synchronization
+ * - Complex timer management for questions and answers
+ * - Auto-submit answers when timer expires
+ * - Phase transition management
+ * - Answer statistics tracking
+ * - Leaderboard updates
+ *
+ * Incomplete Features:
+ * - None identified
+ */
+function PlayerGameContent() {
+  //----------------------------------------------------
+  // 11.1. URL Parameters & Setup
+  //----------------------------------------------------
+  const {
+    router,
+    gameIdParam,
+    roomCode,
+    phaseParam,
+    questionIdParam,
+    questionIndexParam,
+    totalQuestions,
+    playerId,
+  } = usePlayerGameParams();
+
+  //----------------------------------------------------
+  // 11.2. State Management
+  //----------------------------------------------------
+  const state = usePlayerGameState(gameIdParam, phaseParam);
+  const {
+    gameId,
+    setGameId,
+    currentPhase,
+    setCurrentPhase,
+    countdownStartedAt,
+    setCountdownStartedAt,
+    explanationData,
+    setExplanationData,
+    questions,
+    setQuestions,
+    quizPlaySettings,
+    setQuizPlaySettings,
+    currentQuestionData,
+    setCurrentQuestionData,
+    isDisplayPhaseDone,
+    setIsDisplayPhaseDone,
+    answerDurationMs,
+    setAnswerDurationMs,
+    answerRemainingMs,
+    setAnswerRemainingMs,
+    questionRemainingMs,
+    setQuestionRemainingMs,
+    answerStats,
+    setAnswerStats,
+    selectedAnswer,
+    setSelectedAnswer,
+    isMobile,
+    setIsMobile,
+    correctAnswerIdState,
+    setCorrectAnswerIdState,
+  } = state;
+
+  //----------------------------------------------------
+  // 11.3. Refs
+  //----------------------------------------------------
+  const gameFlowRef = useRef<typeof gameFlow>(null);
+  const handlePlayerKickedRef = useRef<typeof handlePlayerKicked | undefined>(undefined);
+  const currentPhaseRef = useRef<PlayerPhase>(phaseParam);
+  const lastQuestionStartIdRef = useRef<string | null>(null);
+  const answeringPhaseStartTimeRef = useRef<number | null>(null);
+  const questionTimerInitializedRef = useRef<string | null>(null);
+  const previousPhaseRef = useRef<PlayerPhase | null>(null);
+  const autoSubmittingRef = useRef(false);
+  const hasTransitionedToRevealRef = useRef(false);
+
+  //----------------------------------------------------
+  // 11.4. Custom Hooks
+  //----------------------------------------------------
+  const gameFlowEvents = useGameFlowEvents({
+    gameId,
+    playerId,
+    router,
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setQuestionRemainingMs,
+    setCurrentPhase,
+    setExplanationData,
+    currentPhaseRef,
+    lastQuestionStartIdRef,
+    answeringPhaseStartTimeRef,
+  });
+
+  const { gameFlow, timerState, isConnected, refreshFlow } = useGameFlow({
+    gameId,
+    autoSync: true,
+    triggerOnQuestionEndOnTimer: false,
+    events: gameFlowEvents,
+  });
+
+  const currentQuestion: Question = useMemo(
+    () =>
+      computeCurrentQuestion({
+        currentQuestionData,
+        gameFlow,
+        questionIdParam,
+        questionIndexParam,
+        questions,
+        timerState,
+      }),
+    [currentQuestionData, gameFlow, questionIdParam, questionIndexParam, questions, timerState],
+  );
+
+  const { currentQuestionForPoints } = usePlayerGameComputedValues({
+    currentQuestionData,
+    gameFlow,
+    questions,
+    currentQuestion,
+    answerStats: {},
+    answerResult: null,
+    selectedAnswer,
+    leaderboard: null,
+  });
+
+  const {
+    answerStatus,
+    answerResult,
+    submitAnswer,
+    error: answerError,
+  } = useGameAnswer({
+    gameId,
+    playerId,
+    questionId: gameFlow?.current_question_id || null,
+    questionNumber:
+      gameFlow && gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
+        ? gameFlow.current_question_index + 1
+        : undefined,
+    correctAnswerId: correctAnswerIdState || undefined,
+    autoReveal: false,
+    questionPoints: currentQuestionForPoints?.points ?? DEFAULT_POINTS,
+    answeringTime: currentQuestionForPoints?.answering_time ?? DEFAULT_ANSWERING_TIME_SECONDS,
+    timeBonusEnabled: quizPlaySettings?.time_bonus ?? false,
+    streakBonusEnabled: quizPlaySettings?.streak_bonus ?? false,
+    events: {
+      onAnswerSubmitted: () => {},
+      onError: () => {},
+    },
+  });
+
+  const { leaderboard, refreshLeaderboard } = useGameLeaderboard({
+    gameId,
+    playerId,
+    autoRefresh: true,
+  });
+
+  const { revealPayload } = usePlayerGameComputedValues({
+    currentQuestionData,
+    gameFlow,
+    questions,
+    currentQuestion,
+    answerStats,
+    answerResult,
+    selectedAnswer,
+    leaderboard,
+  });
+
+  const { socket, joinRoom, leaveRoom } = useSocket();
+
+  //----------------------------------------------------
+  // 11.6. Effects
+  //----------------------------------------------------
+  useEffect(() => {
+    gameFlowRef.current = gameFlow;
+  }, [gameFlow]);
+
+  useEffect(() => {
+    currentPhaseRef.current = currentPhase;
+  }, [currentPhase]);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT_PX);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, [setIsMobile]);
+
+  usePlayerGameDataEffects({
+    gameId,
+    roomCode,
+    gameFlow,
+    currentPhase,
+    explanationData,
+    setGameId,
+    setQuestions,
+    setQuizPlaySettings,
+    setCurrentQuestionData,
+    setExplanationData,
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setSelectedAnswer,
+    setCorrectAnswerIdState,
+    setCountdownStartedAt,
+    phaseParam,
+  });
+
+  // Phase management effects
+  usePlayerGamePhaseEffects({
+    currentPhase,
+    phaseParam,
+    gameFlow,
+    questionIndexParam,
+    currentQuestionData,
+    questions,
+    totalQuestions,
+    gameId,
+    playerId,
+    router,
+    refreshLeaderboard,
+    setCurrentPhase,
+    currentQuestion,
+    setCorrectAnswerIdState,
+  });
+
+  const handlePlayerKicked = useCallback(
+    (data: PlayerKickedData) => {
+      if (data.player_id === playerId || data.game_id === gameId) {
+        toast.error('ホストによってBANされました', {
+          icon: '🚫',
+          duration: TOAST_DURATION_MS,
+        });
+
+        if (roomCode) {
+          sessionStorage.removeItem(`game_${roomCode}`);
+        }
+
+        setTimeout(() => {
+          router.push('/join');
+        }, PLAYER_KICKED_DELAY_MS);
+      }
+    },
+    [playerId, gameId, router, roomCode],
+  );
+
+  useEffect(() => {
+    handlePlayerKickedRef.current = handlePlayerKicked;
+  }, [handlePlayerKicked]);
+
+  //----------------------------------------------------
+  // 11.8. WebSocket Setup
+  //----------------------------------------------------
+  usePlayerGameWebSocket({
+    gameId,
+    roomCode,
+    playerId,
+    socket,
+    isConnected,
+    joinRoom,
+    leaveRoom,
+    router,
+    gameFlowRef,
+    currentPhaseRef,
+    refreshFlow,
+    setCurrentPhase,
+    setAnswerStats,
+    setCountdownStartedAt,
+    handlePlayerKickedRef,
+  });
+
+  //----------------------------------------------------
+  // 11.9. Timer Management
+  //----------------------------------------------------
+  const { displayRemainingMs, currentTimeSeconds, viewingRemainingMs } = usePlayerGameTimer({
+    currentPhase,
+    gameFlow,
+    timerState,
+    currentQuestion,
+    questionRemainingMs,
+    answerRemainingMs,
+    setQuestionRemainingMs,
+    setAnswerRemainingMs,
+    setAnswerDurationMs,
+    setIsDisplayPhaseDone,
+    setCurrentPhase,
+    questionTimerInitializedRef,
+    previousPhaseRef,
+    answeringPhaseStartTimeRef,
+    gameId,
+    playerId,
+    router,
+  });
+
+  //----------------------------------------------------
+  // 11.10. Event Handlers
+  //----------------------------------------------------
+  const { handleAnswerSelect, startAnsweringPhase, handleAnswerSubmit } =
+    usePlayerGameEventHandlers({
+      gameId,
+      playerId,
+      router,
+      currentQuestion,
+      isDisplayPhaseDone,
+      selectedAnswer,
+      gameFlow,
+      answerDurationMs,
+      answerRemainingMs,
+      currentQuestionForPoints,
+      submitAnswer,
+      setIsDisplayPhaseDone,
+      setAnswerDurationMs,
+      setAnswerRemainingMs,
+      setCurrentPhase,
+      setSelectedAnswer,
+      answeringPhaseStartTimeRef,
+    });
+
+  usePlayerGameTimerEffects({
+    currentPhase,
+    displayRemainingMs,
+    viewingRemainingMs,
+    questionRemainingMs,
+    answerRemainingMs,
+    answerDurationMs,
+    isDisplayPhaseDone,
+    currentQuestion,
+    setQuestionRemainingMs,
+    setAnswerRemainingMs,
+    startAnsweringPhase,
+    submitAnswer,
+    answerStatus,
+    setCurrentPhase,
+    gameId,
+    playerId,
+    router,
+    autoSubmittingRef,
+    hasTransitionedToRevealRef,
+  });
+
+  //----------------------------------------------------
+  // 11.12. Main Render
+  //----------------------------------------------------
+  return (
+    <PlayerGameLoadingStates gameId={gameId} gameFlow={gameFlow} isConnected={isConnected}>
+      <PlayerGamePhaseRenderer
+        currentPhase={currentPhase}
+        gameFlow={gameFlow}
+        questionIndexParam={questionIndexParam}
+        currentQuestionData={currentQuestionData}
+        questions={questions}
+        totalQuestions={totalQuestions}
+        currentQuestion={currentQuestion}
+        currentTimeSeconds={currentTimeSeconds}
+        countdownStartedAt={countdownStartedAt}
+        isMobile={isMobile}
+        answerStatus={answerStatus}
+        answerError={answerError}
+        revealPayload={revealPayload}
+        explanationData={explanationData}
+        leaderboard={leaderboard}
+        timerState={timerState}
+        playerId={playerId}
+        router={router}
+        onAnswerSelect={handleAnswerSelect}
+        onAnswerSubmit={handleAnswerSubmit}
+      />
+    </PlayerGameLoadingStates>
+  );
+}
+
+//----------------------------------------------------
+// 12. Main Page Component (with Providers)
+//----------------------------------------------------
+/**
+ * Component: GamePlayerPage
+ * Description:
+ * - Wraps PlayerGameContent with Suspense boundary
+ * - Handles loading state for search params
+ *
+ * Returns:
+ * - JSX: Page with Suspense wrapper
+ */
 export default function GamePlayerPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>

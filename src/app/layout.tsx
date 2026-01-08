@@ -1,10 +1,56 @@
-import '../styles/globals.css';
+// ====================================================
+// File Name   : layout.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-19
+// Last Update : 2026-01-05
+//
+// Description:
+// - Root layout component for the Next.js application
+// - Provides global providers and metadata configuration
+// - Sets up authentication, animation, and socket providers
+//
+// Notes:
+// - This is the root layout that wraps all pages
+// - Contains SEO metadata and viewport configuration
+// - Provides context providers for the entire app
+// ====================================================
+
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import type { Metadata, Viewport } from 'next';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
+// (No external libraries needed)
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
 import { SocketProvider } from '../components/providers/SocketProvider';
 import { AnimationProvider } from './AnimationController';
 import { AuthProvider } from '@/components/ui';
+
+//----------------------------------------------------
+// 4. Service & Hook Imports
+//----------------------------------------------------
+// (No service or hook imports)
+
+//----------------------------------------------------
+// 5. Config & Type Imports
+//----------------------------------------------------
 import { SITE_CONFIG, SEO_CONFIG } from '@/config/constants';
 
+//----------------------------------------------------
+// 6. Style Imports
+//----------------------------------------------------
+import '../styles/globals.css';
+
+//----------------------------------------------------
+// 7. Metadata Configuration
+//----------------------------------------------------
 export const metadata: Metadata = {
   title: {
     default: SEO_CONFIG.DEFAULT_TITLE,
@@ -68,7 +114,6 @@ export const metadata: Metadata = {
     apple: [{ url: '/logo.png', sizes: '180x180' }],
   },
   manifest: '/manifest.json',
-
   other: {
     'theme-color': '#bff098',
     'msapplication-TileColor': '#bff098',
@@ -78,6 +123,9 @@ export const metadata: Metadata = {
   },
 };
 
+//----------------------------------------------------
+// 8. Viewport Configuration
+//----------------------------------------------------
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -86,6 +134,16 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
+//----------------------------------------------------
+// 9. Main Component
+//----------------------------------------------------
+/**
+ * Component: RootLayout
+ * Description:
+ * - Root layout component that wraps all pages
+ * - Provides global context providers (Auth, Animation, Socket)
+ * - Configures metadata and viewport settings
+ */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">

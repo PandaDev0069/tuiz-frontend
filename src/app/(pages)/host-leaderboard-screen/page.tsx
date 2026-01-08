@@ -1,16 +1,70 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-27
+// Last Update : 2025-12-29
+//
+// Description:
+// - Host leaderboard screen component
+// - Displays player rankings and scores
+// - Handles navigation to next phase or podium
+//
+// Notes:
+// - Uses game flow hook for real-time game state
+// - Fetches leaderboard data with auto-refresh
+// - Supports automatic navigation on time expiry
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { Suspense, useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. Component Imports
+//----------------------------------------------------
 import { HostLeaderboardScreen } from '@/components/game';
-import { LeaderboardData } from '@/types/game';
+
+//----------------------------------------------------
+// 3. Hook Imports
+//----------------------------------------------------
 import { useGameFlow } from '@/hooks/useGameFlow';
 import { useGameLeaderboard } from '@/hooks/useGameLeaderboard';
+
+//----------------------------------------------------
+// 4. Service Imports
+//----------------------------------------------------
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
+
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
+import { LeaderboardData } from '@/types/game';
 import type { QuestionWithAnswers } from '@/types/quiz';
 
+//----------------------------------------------------
+// 6. Utility Imports
+//----------------------------------------------------
+import toast from 'react-hot-toast';
+
+//----------------------------------------------------
+// 7. Main Component
+//----------------------------------------------------
+/**
+ * Component: HostLeaderboardScreenContent
+ * Description:
+ * - Displays player rankings and scores
+ * - Handles navigation to next phase or podium
+ */
 function HostLeaderboardScreenContent() {
+  //----------------------------------------------------
+  // 7.1. URL Parameters & Setup
+  //----------------------------------------------------
   const router = useRouter();
   const searchParams = useSearchParams();
   const gameIdParam = searchParams.get('gameId') || '';
@@ -18,7 +72,32 @@ function HostLeaderboardScreenContent() {
   const [gameId, setGameId] = useState<string>(gameIdParam);
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
 
-  // Get gameId from room code if not provided
+  //----------------------------------------------------
+  // 7.2. Game Flow & State
+  //----------------------------------------------------
+  const { gameFlow, timerState } = useGameFlow({
+    gameId: gameId || '',
+    isHost: false,
+    autoSync: true,
+    events: {
+      onQuestionStart: () => {},
+      onQuestionEnd: () => {},
+      onAnswerReveal: () => {},
+      onGameEnd: () => {},
+      onError: (err) => {
+        console.error('HostLeaderboardScreen GameFlow Error:', err);
+      },
+    },
+  });
+
+  const { leaderboard, loading } = useGameLeaderboard({
+    gameId: gameId || '',
+    autoRefresh: true,
+  });
+
+  //----------------------------------------------------
+  // 7.3. Effects
+  //----------------------------------------------------
   useEffect(() => {
     if (gameId || !roomCode) return;
 
@@ -32,20 +111,19 @@ function HostLeaderboardScreenContent() {
 
         const { data: game, error } = await gameApi.getGameByCode(roomCode);
         if (error || !game) {
-          console.error('Failed to get game by code:', error);
+          toast.error('ゲーム情報の取得に失敗しました');
           return;
         }
         setGameId(game.id);
         sessionStorage.setItem(`game_${roomCode}`, game.id);
-      } catch (err) {
-        console.error('Failed to get game ID:', err);
+      } catch {
+        toast.error('ゲームIDの取得に失敗しました');
       }
     };
 
     getGameIdFromCode();
   }, [roomCode, gameId]);
 
-  // Load quiz data to get total questions
   useEffect(() => {
     if (!gameId) return;
     const loadQuiz = async () => {
@@ -57,38 +135,21 @@ function HostLeaderboardScreenContent() {
           const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
           setQuestions(sorted);
         }
-      } catch (err) {
-        console.error('Failed to load quiz for game', err);
+      } catch {
+        console.error('Failed to load quiz for game');
       }
     };
     loadQuiz();
   }, [gameId]);
 
-  const { gameFlow, timerState } = useGameFlow({
-    gameId: gameId || '',
-    isHost: false,
-    autoSync: true,
-    events: {
-      onQuestionStart: () => {},
-      onQuestionEnd: () => {},
-      onAnswerReveal: () => {},
-      onGameEnd: () => {},
-      onError: (err) => console.error('HostLeaderboardScreen GameFlow Error:', err),
-    },
-  });
-
-  const { leaderboard, loading } = useGameLeaderboard({
-    gameId: gameId || '',
-    autoRefresh: true,
-  });
-
-  // Transform backend LeaderboardEntry to frontend LeaderboardEntry
+  //----------------------------------------------------
+  // 7.4. Computed Values
+  //----------------------------------------------------
   const entries = useMemo(() => {
     if (!Array.isArray(leaderboard) || leaderboard.length === 0) {
       return [];
     }
 
-    // Store previous ranks for comparison (simplified - in real app, you'd track this)
     const previousRanks = new Map<string, number>();
 
     return leaderboard.map((entry) => {
@@ -115,13 +176,12 @@ function HostLeaderboardScreenContent() {
   const totalQuestions = questions.length || 10;
   const questionNumber = currentQuestionIndex + 1;
 
-  // Calculate time remaining from timer state
   const timeRemaining = useMemo(() => {
     if (!timerState?.remainingMs) return 0;
     return Math.max(0, Math.ceil(timerState.remainingMs / 1000));
   }, [timerState?.remainingMs]);
 
-  const timeLimit = 5; // Default leaderboard display time
+  const timeLimit = 5;
 
   const leaderboardData: LeaderboardData = useMemo(
     () => ({
@@ -134,6 +194,9 @@ function HostLeaderboardScreenContent() {
     [entries, questionNumber, totalQuestions, timeRemaining],
   );
 
+  //----------------------------------------------------
+  // 7.5. Event Handlers
+  //----------------------------------------------------
   const handleTimeExpired = () => {
     const isLastQuestion = questionNumber >= totalQuestions;
     if (isLastQuestion) {
@@ -143,6 +206,9 @@ function HostLeaderboardScreenContent() {
     }
   };
 
+  //----------------------------------------------------
+  // 7.6. Main Render
+  //----------------------------------------------------
   if (!gameId) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -177,6 +243,9 @@ function HostLeaderboardScreenContent() {
   );
 }
 
+//----------------------------------------------------
+// 8. Page Wrapper Component
+//----------------------------------------------------
 export default function HostLeaderboardScreenPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>

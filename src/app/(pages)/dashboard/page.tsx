@@ -1,9 +1,39 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-22
+// Last Update : 2025-12-22
+//
+// Description:
+// - Main dashboard page for quiz management
+// - Displays user's draft and published quizzes
+// - Provides search, filtering, and quick actions
+// - Handles quiz creation, editing, starting games, and deletion
+//
+// Notes:
+// - Uses custom hooks for state management and data fetching
+// - Supports real-time search with debouncing
+// - Horizontal scrollable quiz cards with navigation
+// ====================================================
+
 'use client';
 
-import React, { useState } from 'react';
-import { QueryClientProvider } from '@tanstack/react-query';
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
+import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { queryClient } from '@/lib/queryClient';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
+import { QueryClientProvider } from '@tanstack/react-query';
+import { PenTool, Gamepad2, BarChart3, Library, Loader2, AlertCircle } from 'lucide-react';
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
 import {
   Container,
   Button,
@@ -15,129 +45,84 @@ import {
   DashboardMessage,
 } from '@/components/ui';
 import { QuizCard } from '@/components/ui/data-display/quiz-card';
-import { FilterState } from '@/components/ui/overlays/sidebar-filter';
-import { ProfileData } from '@/components/ui/overlays/profile-settings-modal';
-import { QuizSet } from '@/types/quiz';
-import { PenTool, Gamepad2, BarChart3, Library, Loader2, AlertCircle } from 'lucide-react';
 import { StructuredData } from '@/components/SEO';
+import { AuthGuard } from '@/components/auth/AuthGuard';
+
+//----------------------------------------------------
+// 4. Service & Hook Imports
+//----------------------------------------------------
 import { useDraftQuizzes, usePublishedQuizzes } from '@/hooks/useDashboard';
 import { useQuizDeletion } from '@/hooks/useQuizDeletion';
 import { useQuizSearch, useRecentSearches, useSearchSuggestions } from '@/hooks/useQuizSearch';
-import { AuthGuard } from '@/components/auth/AuthGuard';
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
 import { useDeviceId } from '@/hooks/useDeviceId';
 import { useAuthStore } from '@/state/useAuthStore';
+import { queryClient } from '@/lib/queryClient';
 
-// Custom hook for dashboard state management
-const useDashboardState = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState<FilterState>({
-    status: [],
-    difficulty: [],
-    category: [],
-    sortBy: 'newest',
-    viewMode: 'grid',
-    dateRange: 'all',
-    questionCount: 'all',
-    playCount: 'all',
-    tags: [],
-  });
-  const [isCreatingGame, setIsCreatingGame] = useState(false);
-  const [creatingQuizId, setCreatingQuizId] = useState<string | null>(null);
-  const [gameCreationError, setGameCreationError] = useState<string | null>(null);
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
+import type { QuizSet } from '@/types/quiz';
+import type { FilterState } from '@/components/ui/overlays/sidebar-filter';
+import type { ProfileData } from '@/components/ui/overlays/profile-settings-modal';
 
-  return {
-    sidebarOpen,
-    setSidebarOpen,
-    profileModalOpen,
-    setProfileModalOpen,
-    searchQuery,
-    setSearchQuery,
-    filters,
-    setFilters,
-    isCreatingGame,
-    setIsCreatingGame,
-    creatingQuizId,
-    setCreatingQuizId,
-    gameCreationError,
-    setGameCreationError,
-  };
+//----------------------------------------------------
+// 6. Constants / Configuration
+//----------------------------------------------------
+const SCROLL_AMOUNT_PX = 320;
+const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_LIMIT = 50;
+const DEFAULT_MAX_PLAYERS = 200;
+
+const DEFAULT_PLAY_SETTINGS = {
+  show_question_only: true,
+  show_explanation: true,
+  time_bonus: true,
+  streak_bonus: true,
+  show_correct_answer: false,
+  max_players: DEFAULT_MAX_PLAYERS,
+} as const;
+
+const DEFAULT_FILTER_STATE: FilterState = {
+  status: [],
+  difficulty: [],
+  category: [],
+  sortBy: 'newest',
+  viewMode: 'grid',
+  dateRange: 'all',
+  questionCount: 'all',
+  playCount: 'all',
+  tags: [],
 };
 
-// Custom hook for search functionality
-const useDashboardSearch = (searchQuery: string) => {
-  const { recentSearches, addRecentSearch } = useRecentSearches();
-  const searchSuggestions = useSearchSuggestions(searchQuery, recentSearches);
+//----------------------------------------------------
+// 7. Query Client Instance
+//----------------------------------------------------
+// (Using global queryClient from @/lib/queryClient)
 
-  const {
-    draftQuizzes: searchDraftQuizzes,
-    publishedQuizzes: searchPublishedQuizzes,
-    isLoading: isSearchLoading,
-    error: searchError,
-  } = useQuizSearch({
-    searchQuery,
-    debounceMs: 300,
-    limit: 50,
-  });
+//----------------------------------------------------
+// 8. Types / Interfaces
+//----------------------------------------------------
+// (Types imported from @/types and @/components)
 
-  const handleSearch = (query: string) => {
-    if (query.trim()) {
-      addRecentSearch(query);
-    }
-  };
-
-  const handleSearchSuggestionClick = (suggestion: string) => {
-    addRecentSearch(suggestion);
-  };
-
-  return {
-    recentSearches,
-    searchSuggestions,
-    searchDraftQuizzes,
-    searchPublishedQuizzes,
-    isSearchLoading,
-    searchError,
-    handleSearch,
-    handleSearchSuggestionClick,
-  };
-};
-
-// Custom hook for quiz data management
-const useQuizData = (
-  isSearchActive: boolean,
-  searchDraftQuizzes: QuizSet[],
-  searchPublishedQuizzes: QuizSet[],
-  isSearchLoading: boolean,
-  searchError: Error | null,
-) => {
-  const { data: draftData, isLoading: isLoadingDrafts, error: draftError } = useDraftQuizzes();
-  const {
-    data: publishedData,
-    isLoading: isLoadingPublished,
-    error: publishedError,
-  } = usePublishedQuizzes();
-
-  const draftQuizzes = isSearchActive ? searchDraftQuizzes : draftData?.data || [];
-  const publishedQuizzes = isSearchActive ? searchPublishedQuizzes : publishedData?.data || [];
-  const isLoadingDraftsFinal = isSearchActive ? isSearchLoading : isLoadingDrafts;
-  const isLoadingPublishedFinal = isSearchActive ? isSearchLoading : isLoadingPublished;
-  const draftErrorFinal = isSearchActive ? searchError : draftError;
-  const publishedErrorFinal = isSearchActive ? searchError : publishedError;
-
-  return {
-    draftQuizzes,
-    publishedQuizzes,
-    isLoadingDraftsFinal,
-    isLoadingPublishedFinal,
-    draftErrorFinal,
-    publishedErrorFinal,
-  };
-};
-
-// Quick Actions component
+//----------------------------------------------------
+// 9. Helper Components
+//----------------------------------------------------
+/**
+ * Component: QuickActions
+ * Description:
+ * - Displays quick action buttons for common dashboard operations
+ * - Includes create quiz, join quiz, analytics, and library buttons
+ *
+ * Props:
+ * - onCreateQuiz (() => void): Handler for creating new quiz
+ * - onJoinQuiz (() => void): Handler for joining a quiz
+ * - onLibrary (() => void): Handler for opening library
+ *
+ * Incomplete Features:
+ * - Analytics Button: "分析表示" button has no onClick handler, needs implementation
+ */
 const QuickActions: React.FC<{
   onCreateQuiz: () => void;
   onJoinQuiz: () => void;
@@ -197,7 +182,23 @@ const QuickActions: React.FC<{
   </div>
 );
 
-// Search and Filter Section component
+/**
+ * Component: SearchSection
+ * Description:
+ * - Search and filter section for quiz discovery
+ * - Includes search bar with suggestions and sidebar filter
+ *
+ * Props:
+ * - searchQuery (string): Current search query
+ * - onSearch ((query: string) => void): Search handler
+ * - onClearSearch (() => void): Clear search handler
+ * - onFilterToggle (() => void): Toggle filter sidebar
+ * - sidebarOpen (boolean): Whether filter sidebar is open
+ * - searchSuggestions (string[]): Search suggestions
+ * - onSuggestionClick ((suggestion: string) => void): Suggestion click handler
+ * - filters (FilterState): Current filter state
+ * - onFiltersChange ((filters: FilterState) => void): Filter change handler
+ */
 const SearchSection: React.FC<{
   searchQuery: string;
   onSearch: (query: string) => void;
@@ -248,14 +249,21 @@ const SearchSection: React.FC<{
   </div>
 );
 
-// Scroll navigation utility
+/**
+ * Function: scrollContainer
+ * Description:
+ * - Utility function for scrolling quiz card containers
+ *
+ * Parameters:
+ * - direction ('left' | 'right'): Scroll direction
+ * - containerId (string): ID of container element to scroll
+ */
 const scrollContainer = (direction: 'left' | 'right', containerId: string) => {
   const container = document.getElementById(containerId);
   if (container) {
-    const scrollAmount = 320; // Width of one card + gap
     const currentScroll = container.scrollLeft;
     const newScroll =
-      direction === 'left' ? currentScroll - scrollAmount : currentScroll + scrollAmount;
+      direction === 'left' ? currentScroll - SCROLL_AMOUNT_PX : currentScroll + SCROLL_AMOUNT_PX;
 
     container.scrollTo({
       left: newScroll,
@@ -264,7 +272,14 @@ const scrollContainer = (direction: 'left' | 'right', containerId: string) => {
   }
 };
 
-// Scroll Navigation Arrows component
+/**
+ * Component: ScrollNavigation
+ * Description:
+ * - Navigation arrows for horizontal scrolling quiz containers
+ *
+ * Props:
+ * - containerId (string): ID of container to scroll
+ */
 const ScrollNavigation: React.FC<{
   containerId: string;
 }> = ({ containerId }) => (
@@ -290,9 +305,29 @@ const ScrollNavigation: React.FC<{
   </div>
 );
 
-// Using global query client from @/lib/queryClient
-
-// Quiz Section component for displaying quiz lists
+/**
+ * Component: QuizSection
+ * Description:
+ * - Displays a section of quiz cards with loading, error, and empty states
+ * - Supports horizontal scrolling with navigation arrows
+ *
+ * Props:
+ * - title (string): Section title
+ * - quizzes (QuizSet[]): Array of quizzes to display
+ * - isLoading (boolean): Loading state
+ * - error (Error | null): Error state
+ * - onEdit ((id: string) => void): Edit handler
+ * - onStart ((id: string) => void): Start quiz handler
+ * - onDelete ((id: string) => void): Delete handler
+ * - isDeleting (boolean): Deletion in progress
+ * - isCreatingGame (boolean, optional): Game creation in progress
+ * - creatingQuizId (string | null, optional): ID of quiz being started
+ * - onCreateQuiz (() => void, optional): Create quiz handler
+ * - containerId (string): Container ID for scrolling
+ * - showCreateButton (boolean, optional): Show create button in empty state
+ * - emptyMessage (string, optional): Empty state message
+ * - emptySubMessage (string, optional): Empty state sub-message
+ */
 const QuizSection: React.FC<{
   title: string;
   quizzes: QuizSet[];
@@ -392,11 +427,178 @@ const QuizSection: React.FC<{
   </div>
 );
 
-// Dashboard content component
+//----------------------------------------------------
+// 10. Custom Hooks
+//----------------------------------------------------
+/**
+ * Hook: useDashboardState
+ * Description:
+ * - Manages dashboard UI state (sidebar, modals, search, filters)
+ * - Handles game creation state and errors
+ *
+ * Returns:
+ * - Object: Dashboard state and setters
+ */
+const useDashboardState = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTER_STATE);
+  const [isCreatingGame, setIsCreatingGame] = useState(false);
+  const [creatingQuizId, setCreatingQuizId] = useState<string | null>(null);
+  const [gameCreationError, setGameCreationError] = useState<string | null>(null);
+
+  return {
+    sidebarOpen,
+    setSidebarOpen,
+    profileModalOpen,
+    setProfileModalOpen,
+    searchQuery,
+    setSearchQuery,
+    filters,
+    setFilters,
+    isCreatingGame,
+    setIsCreatingGame,
+    creatingQuizId,
+    setCreatingQuizId,
+    gameCreationError,
+    setGameCreationError,
+  };
+};
+
+/**
+ * Hook: useDashboardSearch
+ * Description:
+ * - Manages search functionality with debouncing and suggestions
+ * - Tracks recent searches
+ *
+ * Parameters:
+ * - searchQuery (string): Current search query
+ *
+ * Returns:
+ * - Object: Search state, results, and handlers
+ */
+const useDashboardSearch = (searchQuery: string) => {
+  const { recentSearches, addRecentSearch } = useRecentSearches();
+  const searchSuggestions = useSearchSuggestions(searchQuery, recentSearches);
+
+  const {
+    draftQuizzes: searchDraftQuizzes,
+    publishedQuizzes: searchPublishedQuizzes,
+    isLoading: isSearchLoading,
+    error: searchError,
+  } = useQuizSearch({
+    searchQuery,
+    debounceMs: SEARCH_DEBOUNCE_MS,
+    limit: SEARCH_LIMIT,
+  });
+
+  const handleSearch = useCallback(
+    (query: string) => {
+      if (query.trim()) {
+        addRecentSearch(query);
+      }
+    },
+    [addRecentSearch],
+  );
+
+  const handleSearchSuggestionClick = useCallback(
+    (suggestion: string) => {
+      addRecentSearch(suggestion);
+    },
+    [addRecentSearch],
+  );
+
+  return {
+    recentSearches,
+    searchSuggestions,
+    searchDraftQuizzes,
+    searchPublishedQuizzes,
+    isSearchLoading,
+    searchError,
+    handleSearch,
+    handleSearchSuggestionClick,
+  };
+};
+
+/**
+ * Hook: useQuizData
+ * Description:
+ * - Manages quiz data fetching and combines search results with regular data
+ * - Returns appropriate data based on search state
+ *
+ * Parameters:
+ * - isSearchActive (boolean): Whether search is active
+ * - searchDraftQuizzes (QuizSet[]): Draft quizzes from search
+ * - searchPublishedQuizzes (QuizSet[]): Published quizzes from search
+ * - isSearchLoading (boolean): Search loading state
+ * - searchError (Error | null): Search error state
+ *
+ * Returns:
+ * - Object: Combined quiz data, loading, and error states
+ */
+const useQuizData = (
+  isSearchActive: boolean,
+  searchDraftQuizzes: QuizSet[],
+  searchPublishedQuizzes: QuizSet[],
+  isSearchLoading: boolean,
+  searchError: Error | null,
+) => {
+  const { data: draftData, isLoading: isLoadingDrafts, error: draftError } = useDraftQuizzes();
+  const {
+    data: publishedData,
+    isLoading: isLoadingPublished,
+    error: publishedError,
+  } = usePublishedQuizzes();
+
+  const draftQuizzes = isSearchActive ? searchDraftQuizzes : draftData?.data || [];
+  const publishedQuizzes = isSearchActive ? searchPublishedQuizzes : publishedData?.data || [];
+  const isLoadingDraftsFinal = isSearchActive ? isSearchLoading : isLoadingDrafts;
+  const isLoadingPublishedFinal = isSearchActive ? isSearchLoading : isLoadingPublished;
+  const draftErrorFinal = isSearchActive ? searchError : draftError;
+  const publishedErrorFinal = isSearchActive ? searchError : publishedError;
+
+  return {
+    draftQuizzes,
+    publishedQuizzes,
+    isLoadingDraftsFinal,
+    isLoadingPublishedFinal,
+    draftErrorFinal,
+    publishedErrorFinal,
+  };
+};
+
+//----------------------------------------------------
+// 11. Main Page Content Component
+//----------------------------------------------------
+/**
+ * Component: DashboardContent
+ * Description:
+ * - Main dashboard content component
+ * - Displays user's quizzes with search, filtering, and management features
+ * - Handles quiz creation, editing, starting games, and deletion
+ *
+ * Features:
+ * - Quick Actions: Create quiz, join quiz, analytics, library
+ * - Search & Filter: Real-time search with suggestions and advanced filtering
+ * - Quiz Sections: Draft and published quiz displays with horizontal scrolling
+ * - Game Creation: Start games from quizzes with proper error handling
+ * - Profile Management: Profile settings modal
+ *
+ * Incomplete Features:
+ * - Analytics Button: "分析表示" button in QuickActions has no onClick handler
+ * - handleFiltersChange: Currently only updates state, could add analytics/logging
+ * - handleProfileSave: Currently only closes modal, could add success feedback
+ */
 function DashboardContent() {
+  //----------------------------------------------------
+  // 11.1. Hooks & Router Setup
+  //----------------------------------------------------
   const router = useRouter();
 
-  // Use custom hooks for state management
+  //----------------------------------------------------
+  // 11.2. State Management
+  //----------------------------------------------------
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -414,7 +616,9 @@ function DashboardContent() {
     setGameCreationError,
   } = useDashboardState();
 
-  // Use custom hooks for search functionality
+  //----------------------------------------------------
+  // 11.3. Custom Hooks
+  //----------------------------------------------------
   const {
     searchSuggestions,
     searchDraftQuizzes,
@@ -425,10 +629,8 @@ function DashboardContent() {
     handleSearchSuggestionClick,
   } = useDashboardSearch(searchQuery);
 
-  // Determine search state
   const isSearchActive = searchQuery.trim().length > 0;
 
-  // Use custom hook for quiz data
   const {
     draftQuizzes,
     publishedQuizzes,
@@ -445,139 +647,251 @@ function DashboardContent() {
   );
 
   const { confirmDeleteQuiz, isDeleting, WarningModalComponent } = useQuizDeletion();
-
-  // Get device ID for host player creation
   const { deviceId } = useDeviceId();
 
-  // Event handlers
-  const handleSearchWithQuery = (query: string) => {
-    setSearchQuery(query);
-    handleSearch(query);
-  };
+  //----------------------------------------------------
+  // 11.4. Effects
+  //----------------------------------------------------
+  // (No effects needed)
 
-  const handleClearSearch = () => {
+  //----------------------------------------------------
+  // 11.5. Event Handlers
+  //----------------------------------------------------
+  const handleSearchWithQuery = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      handleSearch(query);
+    },
+    [setSearchQuery, handleSearch],
+  );
+
+  const handleClearSearch = useCallback(() => {
     setSearchQuery('');
-  };
+  }, [setSearchQuery]);
 
-  const handleFilterToggle = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+  const handleFilterToggle = useCallback(() => {
+    setSidebarOpen((prev) => !prev);
+  }, [setSidebarOpen]);
 
-  const handleFiltersChange = (newFilters: FilterState) => {
-    setFilters(newFilters);
-    console.log('Filters updated:', newFilters);
-  };
+  const handleFiltersChange = useCallback(
+    (newFilters: FilterState) => {
+      setFilters(newFilters);
+    },
+    [setFilters],
+  );
 
-  const handleProfileSave = (updatedProfile: ProfileData) => {
-    console.log('Profile updated:', updatedProfile);
-    setProfileModalOpen(false);
-  };
+  const handleProfileSave = useCallback(
+    (updatedProfile: ProfileData) => {
+      void updatedProfile; // Parameter required by interface but not used
+      setProfileModalOpen(false);
+    },
+    [setProfileModalOpen],
+  );
 
-  const handleEditQuiz = (id: string) => {
-    router.push(`/create/edit/${id}`);
-  };
+  const handleEditQuiz = useCallback(
+    (id: string) => {
+      router.push(`/create/edit/${id}`);
+    },
+    [router],
+  );
 
-  const handleStartQuiz = async (id: string) => {
-    // Prevent multiple simultaneous game creations
-    if (isCreatingGame) {
-      return;
-    }
+  //----------------------------------------------------
+  // Helper Functions for Game Creation
+  //----------------------------------------------------
+  /**
+   * Function: getHostPlayerName
+   * Description:
+   * - Extracts host player name from user data
+   * - Falls back to email username or 'Host' if unavailable
+   */
+  const getHostPlayerName = useCallback((): string => {
+    const { user } = useAuthStore.getState();
+    return user?.username || user?.email?.split('@')[0] || 'Host';
+  }, []);
 
-    try {
-      setIsCreatingGame(true);
-      setCreatingQuizId(id);
-      setGameCreationError(null);
+  /**
+   * Function: buildGameSettings
+   * Description:
+   * - Builds game settings from quiz play settings
+   * - Applies defaults for missing values
+   */
+  const buildGameSettings = useCallback(
+    (playSettings: {
+      show_question_only?: boolean;
+      show_explanation?: boolean;
+      time_bonus?: boolean;
+      streak_bonus?: boolean;
+      show_correct_answer?: boolean;
+      max_players?: number;
+    }) => ({
+      show_question_only: playSettings?.show_question_only ?? true,
+      show_explanation: playSettings?.show_explanation ?? true,
+      time_bonus: playSettings?.time_bonus ?? true,
+      streak_bonus: playSettings?.streak_bonus ?? true,
+      show_correct_answer: playSettings?.show_correct_answer ?? false,
+      max_players: playSettings?.max_players ?? DEFAULT_MAX_PLAYERS,
+    }),
+    [],
+  );
 
-      // Get user info for host player creation
-      const { user } = useAuthStore.getState();
-      const hostPlayerName = user?.username || user?.email?.split('@')[0] || 'Host';
-
-      // Fetch quiz set to get play_settings
-      const quizSet = await quizService.getQuiz(id);
-
-      // Extract play_settings from quiz set
-      // The backend will fetch the quiz again and extract the code from play_settings
-      // We pass the play_settings as game_settings so they're used for the game
-      const playSettings = quizSet.play_settings || {
-        show_question_only: true,
-        show_explanation: true,
-        time_bonus: true,
-        streak_bonus: true,
-        show_correct_answer: false,
-        max_players: 400,
-      };
-
-      // Prepare game settings from play_settings (excluding code - backend handles that)
-      const gameSettings = {
-        show_question_only: playSettings.show_question_only ?? true,
-        show_explanation: playSettings.show_explanation ?? true,
-        time_bonus: playSettings.time_bonus ?? true,
-        streak_bonus: playSettings.streak_bonus ?? true,
-        show_correct_answer: playSettings.show_correct_answer ?? false,
-        max_players: playSettings.max_players ?? 400,
-      };
-
-      // Create the game via API - this creates both games and game_flows records
-      // Backend will fetch the quiz, extract code from play_settings, and use game_settings for game config
-      // Also creates host player if device_id is provided
+  /**
+   * Function: createGameSession
+   * Description:
+   * - Creates a new game session via API
+   * - Returns game data or error
+   */
+  const createGameSession = useCallback(
+    async (
+      quizId: string,
+      gameSettings: ReturnType<typeof buildGameSettings>,
+      deviceId: string | undefined,
+      hostPlayerName: string,
+    ) => {
       const { data: newGame, error: createError } = await gameApi.createGame(
-        id,
+        quizId,
         gameSettings,
-        deviceId || undefined,
+        deviceId,
         hostPlayerName,
       );
 
       if (createError || !newGame) {
-        const errorMessage = createError?.message || 'ゲームの作成に失敗しました';
-        setGameCreationError(errorMessage);
-        console.error('Failed to create game:', createError);
+        return {
+          success: false,
+          error: createError?.message || 'ゲームの作成に失敗しました',
+          game: null,
+        };
+      }
+
+      const gameCode = newGame.game_code || newGame.room_code || '';
+      if (!gameCode) {
+        return {
+          success: false,
+          error: 'Game created but no game_code returned from backend',
+          game: null,
+        };
+      }
+
+      return {
+        success: true,
+        error: null,
+        game: { ...newGame, game_code: gameCode },
+      };
+    },
+    [],
+  );
+
+  /**
+   * Function: navigateToWaitingRoom
+   * Description:
+   * - Stores game session in sessionStorage
+   * - Navigates to host waiting room
+   */
+  const navigateToWaitingRoom = useCallback(
+    (gameCode: string, gameId: string, quizId: string) => {
+      sessionStorage.setItem(`game_${gameCode}`, gameId);
+      router.push(`/host-waiting-room?code=${gameCode}&quizId=${quizId}&gameId=${gameId}`);
+    },
+    [router],
+  );
+
+  const handleStartQuiz = useCallback(
+    async (id: string) => {
+      if (isCreatingGame) {
         return;
       }
 
-      // Get the authoritative game_code from backend
-      const gameCode = newGame.game_code || newGame.room_code || '';
-      if (!gameCode) {
-        throw new Error('Game created but no game_code returned from backend');
+      try {
+        setIsCreatingGame(true);
+        setCreatingQuizId(id);
+        setGameCreationError(null);
+
+        const hostPlayerName = getHostPlayerName();
+        const quizSet = await quizService.getQuiz(id);
+        const playSettings = quizSet.play_settings || DEFAULT_PLAY_SETTINGS;
+        const gameSettings = buildGameSettings(
+          playSettings as {
+            show_question_only?: boolean;
+            show_explanation?: boolean;
+            time_bonus?: boolean;
+            streak_bonus?: boolean;
+            show_correct_answer?: boolean;
+            max_players?: number;
+          },
+        );
+
+        const result = await createGameSession(
+          id,
+          gameSettings,
+          deviceId || undefined,
+          hostPlayerName,
+        );
+
+        if (!result.success) {
+          setGameCreationError(result.error || 'ゲームの作成に失敗しました');
+          return;
+        }
+
+        navigateToWaitingRoom(result.game!.game_code, result.game!.id, id);
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : 'ゲームの作成中にエラーが発生しました';
+        setGameCreationError(errorMessage);
+      } finally {
+        setIsCreatingGame(false);
+        setCreatingQuizId(null);
       }
+    },
+    [
+      isCreatingGame,
+      deviceId,
+      setIsCreatingGame,
+      setCreatingQuizId,
+      setGameCreationError,
+      getHostPlayerName,
+      buildGameSettings,
+      createGameSession,
+      navigateToWaitingRoom,
+    ],
+  );
 
-      // Store gameId in sessionStorage for player join flow
-      sessionStorage.setItem(`game_${gameCode}`, newGame.id);
+  const handleDeleteQuiz = useCallback(
+    (id: string) => {
+      const quiz = [...draftQuizzes, ...publishedQuizzes].find((q) => q.id === id);
+      if (quiz) {
+        confirmDeleteQuiz(quiz);
+      }
+    },
+    [draftQuizzes, publishedQuizzes, confirmDeleteQuiz],
+  );
 
-      // Navigate to waiting room with both quizId and gameId
-      router.push(`/host-waiting-room?code=${gameCode}&quizId=${id}&gameId=${newGame.id}`);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'ゲームの作成中にエラーが発生しました';
-      setGameCreationError(errorMessage);
-      console.error('Error creating game:', err);
-    } finally {
-      setIsCreatingGame(false);
-      setCreatingQuizId(null);
-    }
-  };
-
-  const handleDeleteQuiz = (id: string) => {
-    const quiz = [...draftQuizzes, ...publishedQuizzes].find((q) => q.id === id);
-    if (quiz) {
-      confirmDeleteQuiz(quiz);
-    }
-  };
-
-  const handleCreateQuiz = () => {
+  const handleCreateQuiz = useCallback(() => {
     router.push('/create');
-  };
+  }, [router]);
 
-  const handleJoinQuiz = () => {
+  const handleJoinQuiz = useCallback(() => {
     router.push('/join');
-  };
+  }, [router]);
 
-  const handleLibrary = () => {
+  const handleLibrary = useCallback(() => {
     router.push('/dashboard/library');
-  };
+  }, [router]);
 
+  //----------------------------------------------------
+  // 11.6. Loading State
+  //----------------------------------------------------
+  // (Loading states handled by QuizSection components)
+
+  //----------------------------------------------------
+  // 11.7. Error State
+  //----------------------------------------------------
+  // (Error states handled by QuizSection components and error banner)
+
+  //----------------------------------------------------
+  // 11.8. Main Render
+  //----------------------------------------------------
   return (
     <>
-      {/* Structured Data for SEO */}
+      {/* SEO Structured Data */}
       <StructuredData type="quiz" />
       <StructuredData type="software" />
 
@@ -671,7 +985,18 @@ function DashboardContent() {
   );
 }
 
-// Main dashboard page with QueryClientProvider and AuthGuard
+//----------------------------------------------------
+// 12. Main Page Component (with Providers)
+//----------------------------------------------------
+/**
+ * Component: DashboardPage
+ * Description:
+ * - Wraps DashboardContent with necessary providers
+ * - Provides QueryClient and authentication guard
+ *
+ * Returns:
+ * - JSX: Page with all required providers
+ */
 export default function DashboardPage() {
   return (
     <AuthGuard>

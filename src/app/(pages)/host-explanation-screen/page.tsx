@@ -1,15 +1,69 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-27
+// Last Update : 2025-12-30
+//
+// Description:
+// - Host explanation screen component
+// - Displays question explanations with timing
+// - Handles navigation to next question or podium
+//
+// Notes:
+// - Uses game flow hook for real-time game state
+// - Fetches explanation data from API with fallback
+// - Supports automatic navigation on time expiry
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { Suspense, useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. Component Imports
+//----------------------------------------------------
 import { HostExplanationScreen } from '@/components/game';
-import { ExplanationData } from '@/types/game';
+
+//----------------------------------------------------
+// 3. Hook Imports
+//----------------------------------------------------
 import { useGameFlow } from '@/hooks/useGameFlow';
+
+//----------------------------------------------------
+// 4. Service Imports
+//----------------------------------------------------
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
+
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
+import { ExplanationData } from '@/types/game';
 import type { QuestionWithAnswers } from '@/types/quiz';
 
+//----------------------------------------------------
+// 6. Utility Imports
+//----------------------------------------------------
+import toast from 'react-hot-toast';
+
+//----------------------------------------------------
+// 7. Main Component
+//----------------------------------------------------
+/**
+ * Component: HostExplanationScreenContent
+ * Description:
+ * - Displays question explanations with timing
+ * - Handles navigation to next question or podium
+ */
 function HostExplanationScreenContent() {
+  //----------------------------------------------------
+  // 7.1. URL Parameters & Setup
+  //----------------------------------------------------
   const router = useRouter();
   const searchParams = useSearchParams();
   const gameIdParam = searchParams.get('gameId') || '';
@@ -17,8 +71,34 @@ function HostExplanationScreenContent() {
   const [gameId, setGameId] = useState<string>(gameIdParam);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionWithAnswers | null>(null);
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
+  const [explanationData, setExplanationData] = useState<{
+    title: string | null;
+    text: string | null;
+    image_url: string | null;
+    show_time: number;
+  } | null>(null);
 
-  // Get gameId from room code if not provided
+  //----------------------------------------------------
+  // 7.2. Game Flow & State
+  //----------------------------------------------------
+  const { gameFlow } = useGameFlow({
+    gameId: gameId || '',
+    isHost: false,
+    autoSync: true,
+    events: {
+      onQuestionStart: () => {},
+      onQuestionEnd: () => {},
+      onAnswerReveal: () => {},
+      onGameEnd: () => {},
+      onError: (err) => {
+        console.error('HostExplanationScreen GameFlow Error:', err);
+      },
+    },
+  });
+
+  //----------------------------------------------------
+  // 7.3. Effects
+  //----------------------------------------------------
   useEffect(() => {
     if (gameId || !roomCode) return;
 
@@ -32,20 +112,19 @@ function HostExplanationScreenContent() {
 
         const { data: game, error } = await gameApi.getGameByCode(roomCode);
         if (error || !game) {
-          console.error('Failed to get game by code:', error);
+          toast.error('ゲーム情報の取得に失敗しました');
           return;
         }
         setGameId(game.id);
         sessionStorage.setItem(`game_${roomCode}`, game.id);
-      } catch (err) {
-        console.error('Failed to get game ID:', err);
+      } catch {
+        toast.error('ゲームIDの取得に失敗しました');
       }
     };
 
     getGameIdFromCode();
   }, [roomCode, gameId]);
 
-  // Load quiz data to get questions
   useEffect(() => {
     if (!gameId) return;
     const loadQuiz = async () => {
@@ -57,51 +136,24 @@ function HostExplanationScreenContent() {
           const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
           setQuestions(sorted);
         }
-      } catch (err) {
-        console.error('Failed to load quiz for game', err);
+      } catch {
+        console.error('Failed to load quiz for game');
       }
     };
     loadQuiz();
   }, [gameId]);
 
-  const { gameFlow } = useGameFlow({
-    gameId: gameId || '',
-    isHost: false,
-    autoSync: true,
-    events: {
-      onQuestionStart: () => {},
-      onQuestionEnd: () => {},
-      onAnswerReveal: () => {},
-      onGameEnd: () => {},
-      onError: (err) => console.error('HostExplanationScreen GameFlow Error:', err),
-    },
-  });
-
-  // Update current question from questions array when it changes
   useEffect(() => {
     if (questions.length > 0 && gameFlow && gameFlow.current_question_index !== null) {
       const idx = gameFlow.current_question_index;
       setCurrentQuestion(questions[idx] || null);
     } else if (gameFlow?.current_question_id && questions.length > 0) {
-      // Fallback: find by question ID
       const question = questions.find((q) => q.id === gameFlow.current_question_id);
       if (question) {
         setCurrentQuestion(question);
       }
     }
   }, [questions, gameFlow]);
-
-  const currentQuestionIndex = gameFlow?.current_question_index ?? 0;
-  const totalQuestions = questions.length || 10;
-  const questionNumber = currentQuestionIndex + 1;
-
-  // Fetch explanation data from API
-  const [explanationData, setExplanationData] = useState<{
-    title: string | null;
-    text: string | null;
-    image_url: string | null;
-    show_time: number;
-  } | null>(null);
 
   useEffect(() => {
     if (gameId && gameFlow?.current_question_id) {
@@ -112,8 +164,6 @@ function HostExplanationScreenContent() {
 
           const { data, error } = await gameApi.getExplanation(gameId, questionId);
           if (error) {
-            console.error('Failed to fetch explanation:', error);
-            // Fallback to question data
             setExplanationData({
               title: currentQuestion?.explanation_title || null,
               text: currentQuestion?.explanation_text || null,
@@ -128,9 +178,8 @@ function HostExplanationScreenContent() {
               show_time: data.show_explanation_time || 10,
             });
           }
-        } catch (err) {
-          console.error('Error fetching explanation:', err);
-          // Fallback to question data
+        } catch {
+          toast.error('解説データの取得に失敗しました');
           setExplanationData({
             title: currentQuestion?.explanation_title || null,
             text: currentQuestion?.explanation_text || null,
@@ -142,6 +191,13 @@ function HostExplanationScreenContent() {
       fetchExplanation();
     }
   }, [gameId, gameFlow?.current_question_id, currentQuestion]);
+
+  //----------------------------------------------------
+  // 7.4. Computed Values
+  //----------------------------------------------------
+  const currentQuestionIndex = gameFlow?.current_question_index ?? 0;
+  const totalQuestions = questions.length || 10;
+  const questionNumber = currentQuestionIndex + 1;
 
   const explanation: ExplanationData = useMemo(
     () => ({
@@ -156,16 +212,21 @@ function HostExplanationScreenContent() {
     [questionNumber, totalQuestions, explanationData, currentQuestion],
   );
 
+  //----------------------------------------------------
+  // 7.5. Event Handlers
+  //----------------------------------------------------
   const handleTimeExpired = () => {
     const isLastQuestion = questionNumber >= totalQuestions;
     if (isLastQuestion) {
       router.push(`/host-podium-screen?gameId=${gameId}&code=${roomCode}`);
     } else {
-      // Move to next question (countdown phase)
       router.push(`/game-host?gameId=${gameId}&phase=countdown&code=${roomCode}`);
     }
   };
 
+  //----------------------------------------------------
+  // 7.6. Main Render
+  //----------------------------------------------------
   if (!gameId) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -198,6 +259,9 @@ function HostExplanationScreenContent() {
   return <HostExplanationScreen explanation={explanation} onTimeExpired={handleTimeExpired} />;
 }
 
+//----------------------------------------------------
+// 8. Page Wrapper Component
+//----------------------------------------------------
 export default function HostExplanationScreenPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>

@@ -1,9 +1,41 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-19
+// Last Update : 2025-09-01
+//
+// Description:
+// - Home page component for TUIZ platform
+// - Landing page with features, login, and join options
+// - Includes SEO structured data and keywords
+//
+// Notes:
+// - Main entry point for the application
+// - Provides links to dashboard (if logged in) or login
+// - Includes TUIZ参加 (join game) functionality
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useAuthStore } from '@/state/useAuthStore';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
+import { AiFillDashboard } from 'react-icons/ai';
+import { IoLogoGameControllerB } from 'react-icons/io';
+import { FaBolt, FaGraduationCap, FaLightbulb } from 'react-icons/fa';
+import { MdSchool, MdColorLens } from 'react-icons/md';
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
 import {
   Button,
   AnimatedHeading,
@@ -17,23 +49,38 @@ import {
   Container,
 } from '@/components/ui';
 import { StructuredData, SEOKeywords } from '@/components/SEO';
-import { AiFillDashboard } from 'react-icons/ai';
-import { IoLogoGameControllerB } from 'react-icons/io';
-import { FaBolt, FaGraduationCap, FaLightbulb } from 'react-icons/fa';
-import { MdSchool, MdColorLens } from 'react-icons/md';
 
+//----------------------------------------------------
+// 4. Service & Hook Imports
+//----------------------------------------------------
+import { useAuthStore } from '@/state/useAuthStore';
+
+//----------------------------------------------------
+// 5. Main Component
+//----------------------------------------------------
+/**
+ * Component: Page
+ * Description:
+ * - Home page component for TUIZ platform
+ * - Landing page with features, login, and join options
+ * - Includes SEO structured data and keywords
+ */
 export default function Page() {
+  //----------------------------------------------------
+  // 5.1. Setup & State
+  //----------------------------------------------------
   const { user } = useAuthStore();
 
+  //----------------------------------------------------
+  // 5.2. Main Render
+  //----------------------------------------------------
   return (
     <>
-      {/* Structured Data for SEO */}
       <StructuredData type="website" />
       <StructuredData type="organization" />
       <StructuredData type="software" />
       <StructuredData type="quiz" />
 
-      {/* SEO Keywords - Hidden from users but discoverable by search engines */}
       <SEOKeywords
         keywords={[
           'Quiz',
@@ -179,7 +226,6 @@ export default function Page() {
               </div>
             </section>
 
-            {/* Enhanced Feature Cards with SEO Content */}
             <section className="mt-16" aria-labelledby="platform-features">
               <h2
                 id="platform-features"
@@ -189,7 +235,6 @@ export default function Page() {
               </h2>
               <div className="max-w-6xl mx-auto">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Left Column - Platform Description */}
                   <div className="space-y-6">
                     <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
                       <CardContent className="p-6">
@@ -222,7 +267,6 @@ export default function Page() {
                     </Card>
                   </div>
 
-                  {/* Right Column - Use Cases and Benefits */}
                   <div className="space-y-6">
                     <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-100">
                       <CardContent className="p-6">

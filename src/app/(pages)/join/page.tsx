@@ -1,9 +1,39 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-23
+// Last Update : 2025-09-23
+//
+// Description:
+// - Join page component for players to enter game
+// - Collects player name and room code
+// - Validates input and redirects to waiting room
+//
+// Notes:
+// - Form validation for name and 6-digit room code
+// - Redirects to waiting room with query parameters
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
+import { FaUser } from 'react-icons/fa';
+import { MdPin } from 'react-icons/md';
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
 import {
   PageContainer,
   Header,
@@ -15,16 +45,26 @@ import {
   Text,
   AuthCard,
 } from '@/components/ui';
-import { FaUser } from 'react-icons/fa';
-import { MdPin } from 'react-icons/md';
 
+//----------------------------------------------------
+// 4. Main Component
+//----------------------------------------------------
+/**
+ * Component: JoinPage
+ * Description:
+ * - Join page component for players to enter game
+ * - Collects player name and room code
+ * - Validates input and redirects to waiting room
+ */
 export default function Page() {
   const router = useRouter();
   const [name, setName] = React.useState('');
   const [code, setCode] = React.useState('');
   const [touched, setTouched] = React.useState({ name: false, code: false });
 
-  // Check if name is valid
+  const nameId = React.useId();
+  const codeId = React.useId();
+
   const nameError = React.useMemo(() => {
     const v = name.trim();
     if (!touched.name) return '';
@@ -42,10 +82,6 @@ export default function Page() {
 
   const isFormValid =
     !nameError && !codeError && name.trim().length >= 1 && /^[0-9]{6}$/.test(code);
-
-  // stable ids for inputs so labels can reference them
-  const nameId = React.useId();
-  const codeId = React.useId();
 
   return (
     <PageContainer
@@ -83,7 +119,6 @@ export default function Page() {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (isFormValid) {
-                  // Redirect to waiting room with name and code as query params
                   router.push(`/waiting-room?name=${encodeURIComponent(name.trim())}&code=${code}`);
                 } else {
                   setTouched({ name: true, code: true });
@@ -123,14 +158,12 @@ export default function Page() {
                 placeholder="123456"
                 value={code}
                 onChange={(e) => {
-                  // allow only digits in state
                   const digits = e.target.value.replace(/[^0-9]/g, '');
                   setCode(digits.slice(0, 6));
                 }}
                 onBlur={() => setTouched((s) => ({ ...s, code: true }))}
                 error={codeError || undefined}
                 required
-                // mobile numeric keyboard
                 inputMode="numeric"
                 pattern="[0-9]*"
                 maxLength={6}
@@ -148,7 +181,6 @@ export default function Page() {
               </div>
             </form>
           </AuthCard>
-          {/* Back to Home Link */}
           <div className="mt-8 text-center">
             <Link
               href="/"

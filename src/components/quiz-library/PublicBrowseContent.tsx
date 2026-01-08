@@ -1,3 +1,24 @@
+// ====================================================
+// File Name   : PublicBrowseContent.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-17
+// Last Update : 2025-09-17
+//
+// Description:
+// - Content component for public-browse tab view
+// - Manages public quiz browsing with filters and pagination
+// - Handles quiz cloning with progress modal
+// - Provides quiz preview functionality
+// - Syncs props with Zustand store
+//
+// Notes:
+// - Client-only component (requires 'use client')
+// - Uses Zustand store for state management
+// - Uses React Query for data fetching
+// - Manages clone and preview modal states
+// ====================================================
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -8,6 +29,34 @@ import { CloneProgressModal } from './CloneProgressModal';
 import { PreviewQuizModal } from './PreviewQuizModal';
 import { usePublicBrowse, useCloneQuiz, useQuizPreview } from '@/hooks/useQuizLibrary';
 import { usePublicBrowseState, useQuizLibraryActions } from '@/state/useQuizLibraryStore';
+
+const FILTER_TYPE_PUBLIC_BROWSE = 'public-browse';
+const EMPTY_STATE_ICON_SEARCH = 'search';
+const MIN_TOTAL_FOR_STORE_PAGINATION = 0;
+const FIRST_PAGE = 1;
+const EDIT_QUIZ_PATH_PREFIX = '/create/edit/';
+
+const CLONE_MODAL_INITIAL_STATE = {
+  isOpen: false,
+  status: 'idle' as const,
+};
+
+const PREVIEW_MODAL_INITIAL_STATE = {
+  isOpen: false,
+};
+
+interface CloneModalState {
+  isOpen: boolean;
+  status: 'idle' | 'cloning' | 'success' | 'error';
+  originalQuizTitle?: string;
+  clonedQuizId?: string;
+  error?: string;
+}
+
+interface PreviewModalState {
+  isOpen: boolean;
+  quizId?: string;
+}
 
 type PublicBrowseFilters = {
   category?: string;
@@ -27,6 +76,45 @@ interface PublicBrowseProps {
   onPreviewQuiz: (id: string) => void;
 }
 
+/**
+ * Component: PublicBrowseContent
+ * Description:
+ * - Main content component for public-browse tab
+ * - Manages public quiz browsing with filters, search, and pagination
+ * - Handles quiz cloning with progress tracking and modal display
+ * - Provides quiz preview functionality with modal
+ * - Syncs component props with Zustand store
+ * - Fetches quiz data using React Query
+ *
+ * Parameters:
+ * - searchQuery (string): Current search query
+ * - filters (PublicBrowseFilters): Current filter values
+ * - pagination (object): Pagination configuration with page and limit
+ * - onFiltersChange (function): Callback when filters change
+ * - onPageChange (function): Callback when page changes
+ * - onSearchChange (function): Callback when search query changes
+ * - onCloneQuiz (function): Callback when quiz is cloned
+ * - onCloneSuccess (function, optional): Callback when clone succeeds
+ * - onPreviewQuiz (function): Callback when quiz preview is requested
+ *
+ * Returns:
+ * - React.ReactElement: The public browse content component
+ *
+ * Example:
+ * ```tsx
+ * <PublicBrowseContent
+ *   searchQuery={searchQuery}
+ *   filters={filters}
+ *   pagination={{ page: 1, limit: 12 }}
+ *   onFiltersChange={(filters) => setFilters(filters)}
+ *   onPageChange={(page) => setPage(page)}
+ *   onSearchChange={(query) => setSearchQuery(query)}
+ *   onCloneQuiz={(id) => handleClone(id)}
+ *   onCloneSuccess={(id, title) => handleCloneSuccess(id, title)}
+ *   onPreviewQuiz={(id) => handlePreview(id)}
+ * />
+ * ```
+ */
 export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
   searchQuery,
   filters,
@@ -38,50 +126,38 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
   onCloneSuccess,
   onPreviewQuiz,
 }) => {
-  // Get state from Zustand store
   const { quizzes, pagination: storePagination, loading, error } = usePublicBrowseState();
-
-  // Get actions from Zustand store
   const { setPublicBrowseFilters, setPublicBrowsePagination } = useQuizLibraryActions();
 
-  // Clone progress modal state
-  const [cloneModalState, setCloneModalState] = useState<{
-    isOpen: boolean;
-    status: 'idle' | 'cloning' | 'success' | 'error';
-    originalQuizTitle?: string;
-    clonedQuizId?: string;
-    error?: string;
-  }>({
-    isOpen: false,
-    status: 'idle',
-  });
+  const [cloneModalState, setCloneModalState] =
+    useState<CloneModalState>(CLONE_MODAL_INITIAL_STATE);
+  const [previewModalState, setPreviewModalState] = useState<PreviewModalState>(
+    PREVIEW_MODAL_INITIAL_STATE,
+  );
 
-  // Preview modal state
-  const [previewModalState, setPreviewModalState] = useState<{
-    isOpen: boolean;
-    quizId?: string;
-  }>({
-    isOpen: false,
-  });
-
-  // Quiz preview data
   const {
     data: previewData,
     isLoading: previewLoading,
     error: previewError,
   } = useQuizPreview(previewModalState.quizId || '', previewModalState.isOpen);
 
-  // Handle preview quiz
+  /**
+   * Function: handlePreviewQuiz
+   * Description:
+   * - Opens preview modal for the specified quiz
+   * - Calls parent handler for additional logic
+   *
+   * Parameters:
+   * - quizId (string): ID of quiz to preview
+   */
   const handlePreviewQuiz = (quizId: string) => {
     setPreviewModalState({
       isOpen: true,
       quizId,
     });
-    // Also call the parent handler for any additional logic
     onPreviewQuiz(quizId);
   };
 
-  // Prepare API request parameters
   const apiParams = {
     page: pagination.page,
     limit: pagination.limit,
@@ -91,13 +167,10 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
     ...(searchQuery && { search: searchQuery }),
   };
 
-  // Fetch data using React Query
   usePublicBrowse(apiParams);
 
-  // Clone mutation
   const cloneQuizMutation = useCloneQuiz();
 
-  // Sync props with store when they change
   useEffect(() => {
     setPublicBrowseFilters(filters);
   }, [filters, setPublicBrowseFilters]);
@@ -106,9 +179,19 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
     setPublicBrowsePagination(pagination);
   }, [pagination, setPublicBrowsePagination]);
 
-  // Handle clone quiz
+  /**
+   * Function: handleCloneQuiz
+   * Description:
+   * - Handles quiz cloning with progress tracking
+   * - Shows cloning modal during operation
+   * - Updates modal state based on clone result
+   * - Calls parent handlers on success
+   * - Handles errors and displays error message
+   *
+   * Parameters:
+   * - id (string): ID of quiz to clone
+   */
   const handleCloneQuiz = async (id: string) => {
-    // Find the quiz being cloned for the success callback
     const quizToClone = (quizzes || []).find((q) => q.id === id);
 
     if (!quizToClone) {
@@ -116,7 +199,6 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
       return;
     }
 
-    // Show cloning modal
     setCloneModalState({
       isOpen: true,
       status: 'cloning',
@@ -126,26 +208,22 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
     try {
       const result = await cloneQuizMutation.mutateAsync(id);
 
-      // Check if result is valid and has the expected structure
       if (!result || !result.clonedQuiz || !result.clonedQuiz.id) {
         throw new Error('Invalid response from clone API');
       }
 
-      // Update modal to success state
       setCloneModalState((prev) => ({
         ...prev,
         status: 'success',
         clonedQuizId: result.clonedQuiz.id,
       }));
 
-      // Call parent success handler if provided
       if (onCloneSuccess && result) {
         onCloneSuccess(result.clonedQuiz.id, quizToClone.title);
       }
 
-      onCloneQuiz(id); // Call parent handler for any additional logic
+      onCloneQuiz(id);
     } catch (error) {
-      // Update modal to error state
       setCloneModalState((prev) => ({
         ...prev,
         status: 'error',
@@ -155,14 +233,12 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
     }
   };
 
-  // Get available categories from current quizzes
   const availableCategories = Array.from(
     new Set((quizzes || []).map((q) => q.category).filter(Boolean)),
   ) as string[];
 
-  // Use store pagination if available, otherwise fall back to props
   const paginationInfo =
-    storePagination.total > 0
+    storePagination.total > MIN_TOTAL_FOR_STORE_PAGINATION
       ? storePagination
       : {
           page: pagination.page,
@@ -170,16 +246,16 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
           total: (quizzes || []).length,
           total_pages: Math.ceil((quizzes || []).length / pagination.limit),
           has_next: pagination.page < Math.ceil((quizzes || []).length / pagination.limit),
-          has_prev: pagination.page > 1,
+          has_prev: pagination.page > FIRST_PAGE,
         };
 
   return (
     <div>
       <LibraryFilters
-        type="public-browse"
+        type={FILTER_TYPE_PUBLIC_BROWSE}
         filters={{
           ...filters,
-          status: undefined, // Not used in public browse
+          status: undefined,
         }}
         categories={availableCategories}
         onFiltersChange={onFiltersChange}
@@ -203,7 +279,7 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
           />
         )}
         emptyState={{
-          icon: 'search',
+          icon: EMPTY_STATE_ICON_SEARCH,
           message: searchQuery ? 'クイズが見つかりません' : '該当するクイズが見つかりません',
           description: searchQuery
             ? '検索条件を変更してもう一度お試しください'
@@ -211,7 +287,6 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
         }}
       />
 
-      {/* Clone Progress Modal */}
       <CloneProgressModal
         isOpen={cloneModalState.isOpen}
         onClose={() => setCloneModalState((prev) => ({ ...prev, isOpen: false }))}
@@ -221,19 +296,17 @@ export const PublicBrowseContent: React.FC<PublicBrowseProps> = ({
         error={cloneModalState.error}
         onEditClonedQuiz={() => {
           if (cloneModalState.clonedQuizId) {
-            window.location.href = `/create/edit/${cloneModalState.clonedQuizId}`;
+            window.location.href = `${EDIT_QUIZ_PATH_PREFIX}${cloneModalState.clonedQuizId}`;
           }
         }}
         onViewMyLibrary={() => {
           setCloneModalState((prev) => ({ ...prev, isOpen: false }));
-          // The parent component will handle switching to My Library tab
           if (onCloneSuccess && cloneModalState.clonedQuizId && cloneModalState.originalQuizTitle) {
             onCloneSuccess(cloneModalState.clonedQuizId, cloneModalState.originalQuizTitle);
           }
         }}
       />
 
-      {/* Preview Quiz Modal */}
       <PreviewQuizModal
         isOpen={previewModalState.isOpen}
         onClose={() => setPreviewModalState({ isOpen: false })}

@@ -1,3 +1,23 @@
+// ====================================================
+// File Name   : BasicInfoStep.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-02
+// Last Update : 2025-09-13
+//
+// Description:
+// - First step component in quiz creation/editing flow
+// - Handles basic information input (title, description, difficulty, category)
+// - Manages thumbnail upload and visibility settings
+// - Validates form data before proceeding to next step
+// - Supports both creating new quizzes and editing existing ones
+//
+// Notes:
+// - Client-only component (requires 'use client')
+// - Creates or updates quiz before proceeding to question creation
+// - Handles thumbnail upload separately after quiz creation
+// ====================================================
+
 'use client';
 
 import React, { useState } from 'react';
@@ -11,18 +31,69 @@ import { VisibilitySettings } from './BasicInfoStep/VisibilitySettings';
 import { TagsManager } from './BasicInfoStep/TagsManager';
 import { useCreateQuiz, useUpdateQuiz, useStartEditQuiz } from '@/hooks/useQuizMutation';
 import { useFileUpload } from '@/lib/uploadService';
-import { debugLog } from '@/components/debug';
 import { Loader2 } from 'lucide-react';
+
+import { cn } from '@/lib/utils';
+
+const BUTTON_VARIANT_GRADIENT2 = 'gradient2';
+
+const ICON_SIZE_SMALL = 'w-4 h-4';
+const ICON_ANIMATION = 'animate-spin';
+const ICON_MARGIN = 'mr-2';
+
+const BUTTON_PADDING_CLASSES = 'px-6 md:px-8 text-sm md:text-base';
+const CONTAINER_SPACING_CLASSES = 'space-y-4 md:space-y-6';
+const GRID_LAYOUT_CLASSES = 'grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6';
+const MAIN_FORM_COLUMN_CLASSES = 'lg:col-span-2 space-y-4 md:space-y-6';
+const NAVIGATION_CONTAINER_CLASSES = 'flex justify-end pt-4 md:pt-6 border-gray-500';
+
+const PROCESSING_INDICATOR_CLASSES =
+  'flex items-center justify-center p-2 bg-blue-50 border border-blue-200 rounded-lg';
+const PROCESSING_ICON_CLASSES = 'text-blue-600';
+const PROCESSING_TEXT_CLASSES = 'text-sm text-blue-700';
 
 interface BasicInfoStepProps {
   formData: Partial<CreateQuizSetForm>;
   onFormDataChange: (data: Partial<CreateQuizSetForm>) => void;
-  onNext: (quizId: string) => void; // Now passes quiz ID to parent
+  onNext: (quizId: string) => void;
   errors?: FormErrors<CreateQuizSetForm>;
-  quizId?: string; // For editing existing quiz
+  quizId?: string;
   isLoading?: boolean;
 }
 
+/**
+ * Component: BasicInfoStep
+ * Description:
+ * - First step in quiz creation/editing workflow
+ * - Collects basic quiz information (title, description, difficulty, category)
+ * - Handles thumbnail upload and visibility settings
+ * - Validates form before allowing progression to question creation
+ * - Creates new quiz or updates existing quiz based on quizId prop
+ * - Shows processing indicator during save operations
+ *
+ * Parameters:
+ * - formData (Partial<CreateQuizSetForm>): Current form data
+ * - onFormDataChange (function): Callback when form data changes
+ * - onNext (function): Callback when proceeding to next step, receives quiz ID
+ * - errors (FormErrors<CreateQuizSetForm>, optional): Form validation errors
+ * - quizId (string, optional): ID of quiz being edited, undefined for new quiz
+ * - isLoading (boolean, optional): External loading state
+ *
+ * Returns:
+ * - React.ReactElement: The basic info step component
+ *
+ * Example:
+ * ```tsx
+ * <BasicInfoStep
+ *   formData={formData}
+ *   onFormDataChange={(data) => setFormData(data)}
+ *   onNext={(quizId) => navigateToQuestions(quizId)}
+ *   errors={errors}
+ *   quizId={existingQuizId}
+ *   isLoading={false}
+ * />
+ * ```
+ */
 export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   formData,
   onFormDataChange,
@@ -37,6 +108,15 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
   const startEditMutation = useStartEditQuiz();
   const { uploadQuizThumbnail } = useFileUpload();
 
+  /**
+   * Function: isFormValid
+   * Description:
+   * - Validates that all required form fields are filled
+   * - Checks title, description, difficulty_level, and category
+   *
+   * Returns:
+   * - boolean: True if form is valid, false otherwise
+   */
   const isFormValid = () => {
     return (
       formData.title?.trim() &&
@@ -46,90 +126,68 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
     );
   };
 
+  /**
+   * Function: handleNext
+   * Description:
+   * - Handles form submission and navigation to next step
+   * - Creates new quiz or updates existing quiz based on quizId
+   * - Uploads thumbnail if provided for new quizzes
+   * - Updates quiz with thumbnail URL after upload
+   * - Calls onNext with quiz ID on success
+   *
+   * Returns:
+   * - Promise<void>
+   */
   const handleNext = async () => {
     if (!isFormValid()) {
       return;
     }
 
     setIsSaving(true);
-    debugLog.info('Starting quiz save process', { quizId, hasFormData: !!formData });
 
     try {
       let resultQuizId: string;
 
       if (quizId) {
-        // Quiz already exists, start edit mode and update it
-        debugLog.info('Starting edit mode for existing quiz', { quizId });
-
-        // First, set quiz status to draft
         await startEditMutation.mutateAsync(quizId);
-        debugLog.info('Quiz set to draft status', { quizId });
 
-        // Then update the quiz data
         const updatedQuiz = await updateQuizMutation.mutateAsync({
           id: quizId,
           data: formData as CreateQuizSetForm,
         });
         resultQuizId = updatedQuiz.id;
-        debugLog.success('Quiz updated successfully', { quizId: resultQuizId });
       } else {
-        // No quiz ID, create new quiz
-        debugLog.info('Creating new quiz', { title: formData.title });
-        // Create a copy of form data without the temporary file and blob URL for API call
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { _thumbnailFile, thumbnail_url, ...quizFormData } = formData;
+        const { _thumbnailFile, ...quizFormData } = formData;
         const newQuiz = await createQuizMutation.mutateAsync(quizFormData as CreateQuizSetForm);
         resultQuizId = newQuiz.id;
-        debugLog.success('Quiz created successfully', { quizId: resultQuizId });
 
-        // If there's a pending thumbnail file, upload it now
         if (_thumbnailFile) {
-          debugLog.info('Uploading pending thumbnail', {
-            fileName: _thumbnailFile.name,
-            size: _thumbnailFile.size,
-          });
           const thumbnailUrl = await uploadQuizThumbnail(_thumbnailFile, resultQuizId);
 
           if (thumbnailUrl) {
-            debugLog.success('Thumbnail uploaded successfully', { url: thumbnailUrl });
-
-            // Update the quiz with the actual thumbnail URL
             try {
               await updateQuizMutation.mutateAsync({
                 id: resultQuizId,
                 data: { thumbnail_url: thumbnailUrl } as CreateQuizSetForm,
               });
-              debugLog.success('Quiz updated with thumbnail URL', { url: thumbnailUrl });
             } catch (error) {
-              debugLog.error('Failed to update quiz with thumbnail URL', { error });
+              console.error('Failed to update quiz with thumbnail URL:', error);
             }
 
-            // Update local form data
             onFormDataChange({
               ...formData,
               thumbnail_url: thumbnailUrl,
               _thumbnailFile: undefined,
             });
-          } else {
-            debugLog.warning('Thumbnail upload returned no URL');
           }
         }
       }
 
-      debugLog.success('Proceeding to next step', { quizId: resultQuizId });
-      // Move to next step with quiz ID
       onNext(resultQuizId);
     } catch (error) {
-      debugLog.error('Failed to save quiz', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      // Error is already handled by mutation hooks (toast notification)
       console.error('Failed to save quiz:', error);
 
-      // If we have a quizId but update failed, still try to proceed
-      // This handles cases where the quiz data hasn't actually changed
       if (quizId) {
-        debugLog.warning('Update failed but proceeding with existing quiz ID', { quizId });
         onNext(quizId);
       }
     } finally {
@@ -145,20 +203,20 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
     isLoading;
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className={CONTAINER_SPACING_CLASSES}>
       <FormHeader title="基本情報を入力" description="クイズの基本情報を設定してください" />
 
-      {/* Auto-save indicator */}
       {isProcessing && (
-        <div className="flex items-center justify-center p-2 bg-blue-50 border border-blue-200 rounded-lg">
-          <Loader2 className="w-4 h-4 animate-spin text-blue-600 mr-2" />
-          <span className="text-sm text-blue-700">{isSaving ? '保存中...' : '処理中...'}</span>
+        <div className={PROCESSING_INDICATOR_CLASSES}>
+          <Loader2
+            className={cn(ICON_SIZE_SMALL, ICON_ANIMATION, PROCESSING_ICON_CLASSES, ICON_MARGIN)}
+          />
+          <span className={PROCESSING_TEXT_CLASSES}>{isSaving ? '保存中...' : '処理中...'}</span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        {/* Main Form */}
-        <div className="lg:col-span-2 space-y-4 md:space-y-6">
+      <div className={GRID_LAYOUT_CLASSES}>
+        <div className={MAIN_FORM_COLUMN_CLASSES}>
           <TitleDescriptionForm
             formData={formData}
             onFormDataChange={onFormDataChange}
@@ -171,29 +229,27 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
           />
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-4 md:space-y-6">
+        <div className={CONTAINER_SPACING_CLASSES}>
           <ThumbnailUpload
             formData={formData}
             onFormDataChange={onFormDataChange}
-            quizId={quizId} // Pass quiz ID for image upload
+            quizId={quizId}
           />
           <VisibilitySettings formData={formData} onFormDataChange={onFormDataChange} />
           <TagsManager formData={formData} onFormDataChange={onFormDataChange} />
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="flex justify-end pt-4 md:pt-6 border-gray-500">
+      <div className={NAVIGATION_CONTAINER_CLASSES}>
         <Button
-          variant="gradient2"
+          variant={BUTTON_VARIANT_GRADIENT2}
           onClick={handleNext}
           disabled={!isFormValid() || isProcessing}
-          className="px-6 md:px-8 text-sm md:text-base"
+          className={BUTTON_PADDING_CLASSES}
         >
           {isProcessing ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              <Loader2 className={cn(ICON_SIZE_SMALL, ICON_ANIMATION, ICON_MARGIN)} />
               {isSaving ? '保存中...' : '処理中...'}
             </>
           ) : (
