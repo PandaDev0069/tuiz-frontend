@@ -1136,6 +1136,99 @@ function usePlayerGameTimer({
 }
 
 /**
+ * Function: getDurationFromFlow
+ * Description:
+ * - Calculates question duration from game flow timestamps
+ */
+function getDurationFromFlowSeconds(gameFlow: unknown): number | null {
+  const flow = gameFlow as {
+    current_question_start_time?: string;
+    current_question_end_time?: string;
+  };
+  if (!flow.current_question_start_time || !flow.current_question_end_time) {
+    return null;
+  }
+  const startTime = new Date(flow.current_question_start_time).getTime();
+  const endTime = new Date(flow.current_question_end_time).getTime();
+  const durationSeconds = Math.max(1, Math.round((endTime - startTime) / MS_PER_SECOND));
+  return durationSeconds;
+}
+
+/**
+ * Function: buildQuestionFromData
+ * Description:
+ * - Builds Question object from QuestionWithAnswers data
+ */
+function buildQuestionFromData(
+  questionData: QuestionWithAnswers,
+  durationFromFlowSeconds: number | null,
+): Question {
+  const showTimeSeconds = questionData.show_question_time || DEFAULT_SHOW_QUESTION_TIME_SECONDS;
+  const answeringTimeSeconds = questionData.answering_time || DEFAULT_ANSWERING_TIME_SECONDS;
+  const sortedAnswers = [...questionData.answers].sort((a, b) => a.order_index - b.order_index);
+
+  return {
+    id: questionData.id,
+    text: questionData.question_text,
+    image: questionData.image_url || undefined,
+    timeLimit: durationFromFlowSeconds ?? showTimeSeconds + answeringTimeSeconds,
+    show_question_time: showTimeSeconds,
+    answering_time: answeringTimeSeconds,
+    choices: sortedAnswers.map((a, i) => ({
+      id: a.id,
+      text: a.answer_text,
+      letter: ANSWER_LETTERS[i] || String.fromCharCode(65 + i),
+    })),
+    correctAnswerId: sortedAnswers.find((a) => a.is_correct)?.id || '',
+    explanation: questionData.explanation_text || undefined,
+    type: questionData.question_type as Question['type'],
+  };
+}
+
+/**
+ * Function: buildLoadingQuestion
+ * Description:
+ * - Builds a loading placeholder Question object
+ */
+function buildLoadingQuestion(
+  gameFlow: unknown,
+  questionIdParam: string,
+  questionIndexParam: number,
+  questions: QuestionWithAnswers[],
+  timerState: { remainingMs?: number } | null,
+): Question {
+  const currentQuestionId =
+    (gameFlow as { current_question_id?: string })?.current_question_id || questionIdParam;
+  const questionIndex =
+    (gameFlow as { current_question_index?: number })?.current_question_index ?? questionIndexParam;
+  const loadingText =
+    questions.length === 0
+      ? 'クイズデータを読み込み中...'
+      : `問題 ${(questionIndex ?? 0) + 1} を読み込み中...`;
+
+  return {
+    id: currentQuestionId,
+    text: loadingText,
+    image: undefined,
+    timeLimit: Math.max(
+      DEFAULT_MIN_TIME_LIMIT_SECONDS,
+      Math.round((timerState?.remainingMs || DEFAULT_FALLBACK_TIME_MS) / MS_PER_SECOND),
+    ),
+    show_question_time: DEFAULT_SHOW_QUESTION_TIME_SECONDS,
+    answering_time: DEFAULT_ANSWERING_TIME_SECONDS,
+    choices: [
+      { id: 'loading-1', text: '読み込み中...', letter: 'A' },
+      { id: 'loading-2', text: '読み込み中...', letter: 'B' },
+      { id: 'loading-3', text: '読み込み中...', letter: 'C' },
+      { id: 'loading-4', text: '読み込み中...', letter: 'D' },
+    ],
+    correctAnswerId: 'loading-1',
+    explanation: undefined,
+    type: 'multiple_choice_4',
+  };
+}
+
+/**
  * Function: computeCurrentQuestion
  * Description:
  * - Computes the current question object from various data sources
@@ -1155,34 +1248,7 @@ function computeCurrentQuestion({
   questions: QuestionWithAnswers[];
   timerState: { remainingMs?: number } | null;
 }): Question {
-  const durationFromFlowSeconds =
-    (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
-      ?.current_question_start_time &&
-    (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
-      ?.current_question_end_time
-      ? Math.max(
-          1,
-          Math.round(
-            (new Date(
-              (
-                gameFlow as {
-                  current_question_start_time?: string;
-                  current_question_end_time?: string;
-                }
-              ).current_question_end_time!,
-            ).getTime() -
-              new Date(
-                (
-                  gameFlow as {
-                    current_question_start_time?: string;
-                    current_question_end_time?: string;
-                  }
-                ).current_question_start_time!,
-              ).getTime()) /
-              MS_PER_SECOND,
-          ),
-        )
-      : null;
+  const durationFromFlowSeconds = getDurationFromFlowSeconds(gameFlow);
 
   if (currentQuestionData?.question) {
     return {
@@ -1191,56 +1257,320 @@ function computeCurrentQuestion({
     };
   }
 
-  const idx =
+  const questionIndex =
     (gameFlow as { current_question_index?: number })?.current_question_index ?? questionIndexParam;
-  const questionData = questions[idx];
+  const questionData = questions[questionIndex];
+
   if (questionData) {
-    const showTimeSeconds = questionData.show_question_time || DEFAULT_SHOW_QUESTION_TIME_SECONDS;
-    const answeringTimeSeconds = questionData.answering_time || DEFAULT_ANSWERING_TIME_SECONDS;
-    return {
-      id: questionData.id,
-      text: questionData.question_text,
-      image: questionData.image_url || undefined,
-      timeLimit: durationFromFlowSeconds ?? showTimeSeconds + answeringTimeSeconds,
-      show_question_time: showTimeSeconds,
-      answering_time: answeringTimeSeconds,
-      choices: questionData.answers
-        .sort((a, b) => a.order_index - b.order_index)
-        .map((a, i) => ({
-          id: a.id,
-          text: a.answer_text,
-          letter: ANSWER_LETTERS[i] || String.fromCharCode(65 + i),
-        })),
-      correctAnswerId: questionData.answers.find((a) => a.is_correct)?.id || '',
-      explanation: questionData.explanation_text || undefined,
-      type: questionData.question_type as Question['type'],
-    };
+    return buildQuestionFromData(questionData, durationFromFlowSeconds);
   }
 
-  return {
-    id: (gameFlow as { current_question_id?: string })?.current_question_id || questionIdParam,
-    text:
-      questions.length === 0
-        ? 'クイズデータを読み込み中...'
-        : `問題 ${(idx ?? 0) + 1} を読み込み中...`,
-    image: undefined,
-    timeLimit: Math.max(
-      DEFAULT_MIN_TIME_LIMIT_SECONDS,
-      Math.round((timerState?.remainingMs || DEFAULT_FALLBACK_TIME_MS) / MS_PER_SECOND),
-    ),
-    show_question_time: DEFAULT_SHOW_QUESTION_TIME_SECONDS,
-    answering_time: DEFAULT_ANSWERING_TIME_SECONDS,
-    choices: [
-      { id: 'loading-1', text: '読み込み中...', letter: 'A' },
-      { id: 'loading-2', text: '読み込み中...', letter: 'B' },
-      { id: 'loading-3', text: '読み込み中...', letter: 'C' },
-      { id: 'loading-4', text: '読み込み中...', letter: 'D' },
+  return buildLoadingQuestion(gameFlow, questionIdParam, questionIndexParam, questions, timerState);
+}
+
+/**
+ * Hook: useGameFlowEvents
+ * Description:
+ * - Creates game flow event handlers
+ */
+function useGameFlowEvents({
+  gameId,
+  playerId,
+  router,
+  setIsDisplayPhaseDone,
+  setAnswerDurationMs,
+  setAnswerRemainingMs,
+  setQuestionRemainingMs,
+  setCurrentPhase,
+  setExplanationData,
+  currentPhaseRef,
+  lastQuestionStartIdRef,
+  answeringPhaseStartTimeRef,
+}: {
+  gameId: string;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+  setIsDisplayPhaseDone: React.Dispatch<React.SetStateAction<boolean>>;
+  setAnswerDurationMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setQuestionRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  setExplanationData: React.Dispatch<React.SetStateAction<ExplanationData | null>>;
+  currentPhaseRef: React.MutableRefObject<PlayerPhase>;
+  lastQuestionStartIdRef: React.MutableRefObject<string | null>;
+  answeringPhaseStartTimeRef: React.MutableRefObject<number | null>;
+}) {
+  const resetQuestionState = useCallback(() => {
+    setIsDisplayPhaseDone(false);
+    setAnswerDurationMs(null);
+    setAnswerRemainingMs(null);
+    setQuestionRemainingMs(null);
+    answeringPhaseStartTimeRef.current = null;
+  }, [
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setQuestionRemainingMs,
+    answeringPhaseStartTimeRef,
+  ]);
+
+  const handleQuestionStart = useCallback(
+    (qId: string | null, qIndex: number) => {
+      const isNewQuestionStart = qId && qId !== lastQuestionStartIdRef.current;
+      lastQuestionStartIdRef.current = qId || null;
+
+      const currentPhaseValue = currentPhaseRef.current;
+      if (
+        !isNewQuestionStart &&
+        (currentPhaseValue === 'answering' ||
+          currentPhaseValue === 'answer_reveal' ||
+          currentPhaseValue === 'leaderboard' ||
+          currentPhaseValue === 'explanation')
+      ) {
+        resetQuestionState();
+        return;
+      }
+
+      resetQuestionState();
+      setCurrentPhase('question');
+      router.replace(
+        `/game-player?gameId=${gameId}&phase=question&questionIndex=${qIndex}&playerId=${playerId}`,
+      );
+    },
+    [
+      gameId,
+      playerId,
+      router,
+      resetQuestionState,
+      setCurrentPhase,
+      currentPhaseRef,
+      lastQuestionStartIdRef,
     ],
-    correctAnswerId: 'loading-1',
-    explanation: undefined,
-    type: 'multiple_choice_4',
+  );
+
+  const handleQuestionEnd = useCallback(() => {
+    setAnswerRemainingMs(0);
+    setCurrentPhase('answer_reveal');
+    router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+  }, [gameId, playerId, router, setAnswerRemainingMs, setCurrentPhase]);
+
+  const handleAnswerReveal = useCallback(() => {
+    setCurrentPhase('answer_reveal');
+    router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+  }, [gameId, playerId, router, setCurrentPhase]);
+
+  const handleExplanationShow = useCallback(
+    (
+      questionId: string,
+      explanation: {
+        text: string | null;
+        title: string | null;
+        image_url: string | null;
+        show_time: number | null;
+      },
+    ) => {
+      const hasContent =
+        (explanation.text && explanation.text.trim() !== '') ||
+        (explanation.title && explanation.title.trim() !== '');
+
+      if (hasContent) {
+        setExplanationData({
+          title: explanation.title ?? null,
+          text: explanation.text ?? null,
+          image_url: explanation.image_url ?? null,
+          show_time: explanation.show_time ?? DEFAULT_EXPLANATION_TIME_SECONDS,
+        });
+        setCurrentPhase('explanation');
+        router.replace(`/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`);
+      }
+    },
+    [gameId, playerId, router, setExplanationData, setCurrentPhase],
+  );
+
+  const handleGameEnd = useCallback(() => {
+    setCurrentPhase('podium');
+    router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
+  }, [gameId, playerId, router, setCurrentPhase]);
+
+  return {
+    onQuestionStart: handleQuestionStart,
+    onQuestionEnd: handleQuestionEnd,
+    onAnswerReveal: handleAnswerReveal,
+    onExplanationShow: handleExplanationShow,
+    onExplanationHide: () => {},
+    onGameEnd: handleGameEnd,
+    onError: () => {},
   };
 }
+
+/**
+ * Function: getQuestionNumber
+ * Description:
+ * - Calculates current question number from game flow or params
+ */
+function getQuestionNumber(
+  gameFlow: { current_question_index: number | null } | null,
+  questionIndexParam: number,
+): number {
+  if (
+    gameFlow &&
+    gameFlow.current_question_index !== null &&
+    gameFlow.current_question_index >= 0
+  ) {
+    return gameFlow.current_question_index + 1;
+  }
+  return questionIndexParam + 1;
+}
+
+/**
+ * Function: getTotalQuestions
+ * Description:
+ * - Calculates total questions count
+ */
+function getTotalQuestions(
+  currentQuestionData: CurrentQuestionData | null,
+  questions: QuestionWithAnswers[],
+  totalQuestions: number,
+): number {
+  return currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+}
+
+/**
+ * Component: PlayerGamePhaseRenderer
+ * Description:
+ * - Renders the appropriate screen based on current phase
+ */
+const PlayerGamePhaseRenderer: React.FC<{
+  currentPhase: PlayerPhase;
+  gameFlow: { current_question_index: number | null } | null;
+  questionIndexParam: number;
+  currentQuestionData: CurrentQuestionData | null;
+  questions: QuestionWithAnswers[];
+  totalQuestions: number;
+  currentQuestion: Question;
+  currentTimeSeconds: number;
+  countdownStartedAt: number | undefined;
+  isMobile: boolean;
+  answerStatus: { hasAnswered: boolean; isProcessing: boolean };
+  answerError: string | null;
+  revealPayload: AnswerResult;
+  explanationData: ExplanationData | null;
+  leaderboard: unknown;
+  timerState: { remainingMs?: number } | null;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+  onAnswerSelect: (answerId: string) => void;
+  onAnswerSubmit: (answerId?: string | null) => Promise<void>;
+}> = ({
+  currentPhase,
+  gameFlow,
+  questionIndexParam,
+  currentQuestionData,
+  questions,
+  totalQuestions,
+  currentQuestion,
+  currentTimeSeconds,
+  countdownStartedAt,
+  isMobile,
+  answerStatus,
+  answerError,
+  revealPayload,
+  explanationData,
+  leaderboard,
+  timerState,
+  playerId,
+  router,
+  onAnswerSelect,
+  onAnswerSubmit,
+}) => {
+  const questionNumber = getQuestionNumber(gameFlow, questionIndexParam);
+  const totalQuestionsCount = getTotalQuestions(currentQuestionData, questions, totalQuestions);
+
+  switch (currentPhase) {
+    case 'countdown':
+      return (
+        <PlayerCountdownScreen
+          countdownTime={COUNTDOWN_TIME_SECONDS}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestionsCount}
+          isMobile={isMobile}
+          startedAt={countdownStartedAt}
+          onCountdownComplete={() => {}}
+        />
+      );
+    case 'question':
+      return (
+        <PlayerQuestionScreen
+          question={{
+            ...currentQuestion,
+            timeLimit: currentQuestion.show_question_time || DEFAULT_SHOW_QUESTION_TIME_SECONDS,
+          }}
+          currentTime={Math.max(0, currentTimeSeconds)}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestionsCount}
+          isMobile={isMobile}
+        />
+      );
+    case 'answering':
+      return (
+        <PlayerAnswerScreen
+          question={{
+            ...currentQuestion,
+            timeLimit: currentQuestion.answering_time,
+          }}
+          currentTime={currentTimeSeconds}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestionsCount}
+          onAnswerSelect={onAnswerSelect}
+          onAnswerSubmit={onAnswerSubmit}
+          isMobile={isMobile}
+          isSubmitted={answerStatus.hasAnswered}
+          isProcessing={answerStatus.isProcessing}
+          error={answerError}
+        />
+      );
+    case 'answer_reveal':
+      return (
+        <PlayerAnswerRevealScreen
+          answerResult={revealPayload}
+          questionNumber={questionNumber}
+          totalQuestions={totalQuestionsCount}
+          timeLimit={ANSWER_REVEAL_TIME_LIMIT_SECONDS}
+          onTimeExpired={() => {}}
+        />
+      );
+    case 'leaderboard':
+      return (
+        <LeaderboardContent
+          gameFlow={gameFlow || { current_question_index: null }}
+          questionIndexParam={questionIndexParam}
+          currentQuestionData={currentQuestionData}
+          questions={questions}
+          totalQuestions={totalQuestions}
+          leaderboard={leaderboard}
+          timerState={timerState}
+        />
+      );
+    case 'explanation':
+      return (
+        <ExplanationContent
+          gameFlow={gameFlow || { current_question_index: null }}
+          questionIndexParam={questionIndexParam}
+          currentQuestionData={currentQuestionData}
+          questions={questions}
+          totalQuestions={totalQuestions}
+          explanationData={explanationData}
+          currentQuestion={currentQuestion}
+        />
+      );
+    case 'podium':
+      return <PodiumContent leaderboard={leaderboard} />;
+    case 'ended':
+      return <GameEndContent leaderboard={leaderboard} playerId={playerId} router={router} />;
+    default:
+      return <div className="p-6">次のステップを待機しています...</div>;
+  }
+};
 
 /**
  * Hook: usePlayerGameWebSocket
@@ -1589,75 +1919,41 @@ function PlayerGameContent() {
   } = state;
 
   //----------------------------------------------------
-  // 11.3. Custom Hooks
+  // 11.3. Refs
   //----------------------------------------------------
+  const gameFlowRef = useRef<typeof gameFlow>(null);
+  const handlePlayerKickedRef = useRef<typeof handlePlayerKicked | undefined>(undefined);
+  const currentPhaseRef = useRef<PlayerPhase>(phaseParam);
+  const lastQuestionStartIdRef = useRef<string | null>(null);
+  const answeringPhaseStartTimeRef = useRef<number | null>(null);
+  const questionTimerInitializedRef = useRef<string | null>(null);
+  const previousPhaseRef = useRef<PlayerPhase | null>(null);
+  const autoSubmittingRef = useRef(false);
+  const hasTransitionedToRevealRef = useRef(false);
+
+  //----------------------------------------------------
+  // 11.4. Custom Hooks
+  //----------------------------------------------------
+  const gameFlowEvents = useGameFlowEvents({
+    gameId,
+    playerId,
+    router,
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setQuestionRemainingMs,
+    setCurrentPhase,
+    setExplanationData,
+    currentPhaseRef,
+    lastQuestionStartIdRef,
+    answeringPhaseStartTimeRef,
+  });
+
   const { gameFlow, timerState, isConnected, refreshFlow } = useGameFlow({
     gameId,
     autoSync: true,
     triggerOnQuestionEndOnTimer: false,
-    events: {
-      onQuestionStart: (qId, qIndex) => {
-        const isNewQuestionStart = qId && qId !== lastQuestionStartIdRef.current;
-        lastQuestionStartIdRef.current = qId || null;
-
-        const currentPhaseValue = currentPhaseRef.current;
-        if (
-          !isNewQuestionStart &&
-          (currentPhaseValue === 'answering' ||
-            currentPhaseValue === 'answer_reveal' ||
-            currentPhaseValue === 'leaderboard' ||
-            currentPhaseValue === 'explanation')
-        ) {
-          setIsDisplayPhaseDone(false);
-          setAnswerDurationMs(null);
-          setAnswerRemainingMs(null);
-          setQuestionRemainingMs(null);
-          answeringPhaseStartTimeRef.current = null;
-          return;
-        }
-
-        setIsDisplayPhaseDone(false);
-        setAnswerDurationMs(null);
-        setAnswerRemainingMs(null);
-        setQuestionRemainingMs(null);
-        answeringPhaseStartTimeRef.current = null;
-        setCurrentPhase('question');
-        router.replace(
-          `/game-player?gameId=${gameId}&phase=question&questionIndex=${qIndex}&playerId=${playerId}`,
-        );
-      },
-      onQuestionEnd: () => {
-        setAnswerRemainingMs(0);
-        setCurrentPhase('answer_reveal');
-        router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
-      },
-      onAnswerReveal: () => {
-        setCurrentPhase('answer_reveal');
-        router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
-      },
-      onExplanationShow: (questionId, explanation) => {
-        const hasContent =
-          (explanation.text && explanation.text.trim() !== '') ||
-          (explanation.title && explanation.title.trim() !== '');
-
-        if (hasContent) {
-          setExplanationData({
-            title: explanation.title,
-            text: explanation.text,
-            image_url: explanation.image_url,
-            show_time: explanation.show_time || DEFAULT_EXPLANATION_TIME_SECONDS,
-          });
-          setCurrentPhase('explanation');
-          router.replace(`/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`);
-        }
-      },
-      onExplanationHide: () => {},
-      onGameEnd: () => {
-        setCurrentPhase('podium');
-        router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
-      },
-      onError: () => {},
-    },
+    events: gameFlowEvents,
   });
 
   // Compute currentQuestionForPoints before useGameAnswer hook
@@ -1726,7 +2022,7 @@ function PlayerGameContent() {
   const { socket, joinRoom, leaveRoom } = useSocket();
 
   //----------------------------------------------------
-  // 11.4. Computed Values
+  // 11.5. Computed Values
   //----------------------------------------------------
   const currentQuestion: Question = useMemo(
     () =>
@@ -1740,19 +2036,6 @@ function PlayerGameContent() {
       }),
     [currentQuestionData, gameFlow, questionIdParam, questionIndexParam, questions, timerState],
   );
-
-  //----------------------------------------------------
-  // 11.5. Refs
-  //----------------------------------------------------
-  const gameFlowRef = useRef(gameFlow);
-  const handlePlayerKickedRef = useRef<typeof handlePlayerKicked | undefined>(undefined);
-  const currentPhaseRef = useRef<PlayerPhase>(phaseParam);
-  const lastQuestionStartIdRef = useRef<string | null>(null);
-  const answeringPhaseStartTimeRef = useRef<number | null>(null);
-  const questionTimerInitializedRef = useRef<string | null>(null);
-  const previousPhaseRef = useRef<PlayerPhase | null>(null);
-  const autoSubmittingRef = useRef(false);
-  const hasTransitionedToRevealRef = useRef(false);
 
   //----------------------------------------------------
   // 11.6. Effects
@@ -2068,118 +2351,30 @@ function PlayerGameContent() {
   //----------------------------------------------------
   // 11.13. Main Render
   //----------------------------------------------------
-  switch (currentPhase) {
-    case 'countdown':
-      return (
-        <PlayerCountdownScreen
-          countdownTime={COUNTDOWN_TIME_SECONDS}
-          questionNumber={
-            gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-              ? gameFlow.current_question_index + 1
-              : questionIndexParam + 1
-          }
-          totalQuestions={
-            currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
-          }
-          isMobile={isMobile}
-          startedAt={countdownStartedAt}
-          onCountdownComplete={() => {
-            // Countdown complete - phase will transition to question via WebSocket event
-          }}
-        />
-      );
-    case 'question':
-      return (
-        <PlayerQuestionScreen
-          question={{
-            ...currentQuestion,
-            timeLimit: currentQuestion.show_question_time || DEFAULT_SHOW_QUESTION_TIME_SECONDS,
-          }}
-          currentTime={Math.max(0, currentTimeSeconds)}
-          questionNumber={
-            gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-              ? gameFlow.current_question_index + 1
-              : questionIndexParam + 1
-          }
-          totalQuestions={
-            currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
-          }
-          isMobile={isMobile}
-        />
-      );
-    case 'answering':
-      return (
-        <PlayerAnswerScreen
-          question={{
-            ...currentQuestion,
-            timeLimit: currentQuestion.answering_time,
-          }}
-          currentTime={currentTimeSeconds}
-          questionNumber={
-            gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-              ? gameFlow.current_question_index + 1
-              : questionIndexParam + 1
-          }
-          totalQuestions={
-            currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
-          }
-          onAnswerSelect={handleAnswerSelect}
-          onAnswerSubmit={(answerId) => {
-            handleAnswerSubmit(answerId);
-          }}
-          isMobile={isMobile}
-          isSubmitted={answerStatus.hasAnswered}
-          isProcessing={answerStatus.isProcessing}
-          error={answerError}
-        />
-      );
-    case 'answer_reveal':
-      return (
-        <PlayerAnswerRevealScreen
-          answerResult={revealPayload}
-          questionNumber={
-            gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-              ? gameFlow.current_question_index + 1
-              : questionIndexParam + 1
-          }
-          totalQuestions={
-            currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
-          }
-          timeLimit={ANSWER_REVEAL_TIME_LIMIT_SECONDS}
-          onTimeExpired={() => {}}
-        />
-      );
-    case 'leaderboard':
-      return (
-        <LeaderboardContent
-          gameFlow={gameFlow}
-          questionIndexParam={questionIndexParam}
-          currentQuestionData={currentQuestionData}
-          questions={questions}
-          totalQuestions={totalQuestions}
-          leaderboard={leaderboard}
-          timerState={timerState}
-        />
-      );
-    case 'explanation':
-      return (
-        <ExplanationContent
-          gameFlow={gameFlow}
-          questionIndexParam={questionIndexParam}
-          currentQuestionData={currentQuestionData}
-          questions={questions}
-          totalQuestions={totalQuestions}
-          explanationData={explanationData}
-          currentQuestion={currentQuestion}
-        />
-      );
-    case 'podium':
-      return <PodiumContent leaderboard={leaderboard} />;
-    case 'ended':
-      return <GameEndContent leaderboard={leaderboard} playerId={playerId} router={router} />;
-    default:
-      return <div className="p-6">次のステップを待機しています...</div>;
-  }
+  return (
+    <PlayerGamePhaseRenderer
+      currentPhase={currentPhase}
+      gameFlow={gameFlow}
+      questionIndexParam={questionIndexParam}
+      currentQuestionData={currentQuestionData}
+      questions={questions}
+      totalQuestions={totalQuestions}
+      currentQuestion={currentQuestion}
+      currentTimeSeconds={currentTimeSeconds}
+      countdownStartedAt={countdownStartedAt}
+      isMobile={isMobile}
+      answerStatus={answerStatus}
+      answerError={answerError}
+      revealPayload={revealPayload}
+      explanationData={explanationData}
+      leaderboard={leaderboard}
+      timerState={timerState}
+      playerId={playerId}
+      router={router}
+      onAnswerSelect={handleAnswerSelect}
+      onAnswerSubmit={handleAnswerSubmit}
+    />
+  );
 }
 
 //----------------------------------------------------
