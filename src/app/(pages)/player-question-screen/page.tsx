@@ -3,7 +3,7 @@
 // Project     : TUIZ
 // Author      : PandaDev0069 / Panta Aashish
 // Created     : 2025-09-21
-// Last Update : 2025-12-29
+// Last Update : 2026-01-08
 //
 // Description:
 // - Player question screen component
@@ -50,7 +50,12 @@ import { Question, AnswerResult } from '@/types/game';
 import type { QuestionWithAnswers } from '@/types/quiz';
 
 //----------------------------------------------------
-// 6. Helper Functions
+// 6. Utility Imports
+//----------------------------------------------------
+import toast from 'react-hot-toast';
+
+//----------------------------------------------------
+// 7. Helper Functions
 //----------------------------------------------------
 /**
  * Extracts URL parameters and device ID
@@ -250,7 +255,7 @@ const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
 );
 
 //----------------------------------------------------
-// 7. Main Component
+// 8. Main Component
 //----------------------------------------------------
 /**
  * Component: PlayerQuestionScreenContent
@@ -260,14 +265,14 @@ const LoadingScreen: React.FC<{ message: string }> = ({ message }) => (
  */
 function PlayerQuestionScreenContent() {
   //----------------------------------------------------
-  // 7.1. URL Parameters & Setup
+  // 8.1. URL Parameters & Setup
   //----------------------------------------------------
   const { gameId, playerIdentifier, playerParam, deviceId } = usePlayerQuestionParams();
   const isMobile = useMobileDetection();
   const { questions, quizPlaySettings } = useQuizData(gameId);
 
   //----------------------------------------------------
-  // 7.2. Game Flow & State
+  // 8.2. Game Flow & State
   //----------------------------------------------------
   const { gameFlow, timerState } = useGameFlow({
     gameId,
@@ -277,7 +282,7 @@ function PlayerQuestionScreenContent() {
   const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
 
   //----------------------------------------------------
-  // 7.3. Computed Values
+  // 8.3. Computed Values
   //----------------------------------------------------
   const currentQuestionForPoints = useMemo(() => {
     if (!gameFlow?.current_question_id || !questions.length) return null;
@@ -302,7 +307,7 @@ function PlayerQuestionScreenContent() {
   );
 
   //----------------------------------------------------
-  // 7.4. Answer Handling
+  // 8.4. Answer Handling
   //----------------------------------------------------
   const questionNumber = useMemo(() => getQuestionNumber(gameFlow), [gameFlow]);
 
@@ -327,8 +332,8 @@ function PlayerQuestionScreenContent() {
     try {
       const responseTimeMs = calculateResponseTime(timerState, currentQuestion.timeLimit);
       await submitAnswer(selectedAnswer, responseTimeMs);
-    } catch (err) {
-      console.error(err);
+    } catch {
+      toast.error('回答の送信に失敗しました');
     }
   }, [
     selectedAnswer,
@@ -344,7 +349,7 @@ function PlayerQuestionScreenContent() {
   );
 
   //----------------------------------------------------
-  // 7.5. Validation & Rendering
+  // 8.5. Validation & Rendering
   //----------------------------------------------------
   const shouldReveal = !timerState?.isActive || answerStatus.hasAnswered;
 
@@ -383,7 +388,7 @@ function PlayerQuestionScreenContent() {
 }
 
 //----------------------------------------------------
-// 8. Page Wrapper Component
+// 9. Page Wrapper Component
 //----------------------------------------------------
 
 export default function PlayerQuestionScreenPage() {
