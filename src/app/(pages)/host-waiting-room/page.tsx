@@ -2,8 +2,8 @@
 // File Name   : page.tsx
 // Project     : TUIZ
 // Author      : PandaDev0069 / Panta Aashish
-// Created     : 2025-09-21
-// Last Update : 2025-12-29
+// Created     : 2025-09-18
+// Last Update : 2026-01-08
 //
 // Description:
 // - Host waiting room page before game starts
@@ -129,46 +129,37 @@ function HostWaitingRoomContent() {
       const { data: playersResponse, error } = await gameApi.getPlayers(gameId);
 
       if (error || !playersResponse) {
-        console.error('Failed to fetch players:', error);
         return;
       }
 
-      // Backend returns PlayersResponse with { players: Player[], total: number, ... }
       const playersResponseTyped = playersResponse as PlayersResponse;
       const playersArray = playersResponseTyped.players || [];
 
-      // Map backend Player format to frontend format
-      // Backend returns player_name, created_at (not display_name, joined_at)
-      // Filter out hosts from the player list (they shouldn't be displayed)
-      // Deduplicate by device_id - if multiple players have the same device_id, keep only the first one (by created_at)
       const deviceIdMap = new Map<string, (typeof playersArray)[0]>();
 
       playersArray
-        .filter((player) => !player.is_host) // Exclude hosts from player list
+        .filter((player) => !player.is_host)
         .forEach((player) => {
           if (player.device_id) {
             const existing = deviceIdMap.get(player.device_id);
-            // Keep the first player (earliest created_at) for each device_id
             if (!existing || new Date(player.created_at) < new Date(existing.created_at)) {
               deviceIdMap.set(player.device_id, player);
             }
           } else {
-            // If no device_id, include the player (shouldn't happen, but handle it)
             deviceIdMap.set(player.id, player);
           }
         });
 
       const mappedPlayers = Array.from(deviceIdMap.values()).map((player) => ({
         id: player.id,
-        name: player.player_name, // Backend uses player_name
-        joinedAt: new Date(player.created_at), // Backend uses created_at
-        isBanned: false, // is_kicked not implemented in backend
+        name: player.player_name,
+        joinedAt: new Date(player.created_at),
+        isBanned: false,
         isHost: player.is_host,
       }));
 
       setPlayers(mappedPlayers);
-    } catch (err) {
-      console.error('Error fetching players:', err);
+    } catch {
     } finally {
       setIsLoadingPlayers(false);
     }
@@ -197,7 +188,6 @@ function HostWaitingRoomContent() {
       }
 
       if (gameError || !game) {
-        console.error('Failed to fetch game data:', gameError);
         return { success: false, error: 'ゲームデータの取得に失敗しました' };
       }
 
@@ -260,9 +250,8 @@ function HostWaitingRoomContent() {
 
         await fetchAndSyncQuizSettings(quizId, isMounted);
         await fetchPlayers();
-      } catch (err) {
+      } catch {
         if (!isMounted) return;
-        console.error('Error initializing game data:', err);
         setGameIdError('ゲームの初期化に失敗しました');
       } finally {
         if (isMounted) {
@@ -273,7 +262,6 @@ function HostWaitingRoomContent() {
 
     initializeGameData();
 
-    // Set up polling to refresh player list every 3 seconds
     const pollInterval = setInterval(() => {
       if (gameId && isMounted) {
         fetchPlayers();
@@ -291,22 +279,17 @@ function HostWaitingRoomContent() {
   //----------------------------------------------------
   useEffect(() => {
     if (!socket || !gameId || !socket.connected || isNavigatingRef.current) {
-      // Wait for socket connection or skip if navigating away
       return;
     }
 
-    // Track socket connection state to prevent re-runs on socket object reference changes
     const currentSocketId = socket.id || null;
     const isSocketConnected = socket.connected;
     const previousGameId = currentRoomGameIdRef.current;
     const wasInDifferentRoom =
       hasJoinedRoomRef.current && previousGameId && previousGameId !== gameId;
 
-    // If socket ID changed or disconnected, reset join state
     if (socketIdRef.current !== currentSocketId || !isSocketConnected) {
       if (socketIdRef.current && socketIdRef.current !== currentSocketId) {
-        console.log('[HostWaitingRoom] Socket ID changed, resetting room state');
-        // Leave previous room if we were in one
         if (hasJoinedRoomRef.current && previousGameId) {
           socketLeaveRoom(previousGameId);
         }
@@ -317,62 +300,43 @@ function HostWaitingRoomContent() {
       socketConnectedRef.current = isSocketConnected;
     }
 
-    // If we were in a different room, leave it first (only if gameId actually changed)
     if (wasInDifferentRoom) {
-      console.log('[HostWaitingRoom] Leaving previous room:', previousGameId);
       socketLeaveRoom(previousGameId);
       hasJoinedRoomRef.current = false;
     }
 
-    // Skip if already joined to the same room (prevent re-join on effect re-run)
     if (hasJoinedRoomRef.current && currentRoomGameIdRef.current === gameId) {
-      console.log('[HostWaitingRoom] Already joined room for this gameId, skipping duplicate join');
       return;
     }
 
-    // Join the game room to receive events using SocketProvider helper (has built-in deduplication)
-    console.log('[HostWaitingRoom] Joining room:', gameId);
     hasJoinedRoomRef.current = true;
     currentRoomGameIdRef.current = gameId;
     socketJoinRoom(gameId);
 
-    // Listen for player join/leave events
-    const handlePlayerJoined = (data?: { playerId?: string; playerName?: string }) => {
+    const handlePlayerJoined = () => {
       if (isNavigatingRef.current) return;
-      console.log('Player joined:', data);
-      // Refresh player list when a player joins
       fetchPlayersRef.current?.();
     };
 
-    const handlePlayerLeft = (data?: { playerId?: string }) => {
+    const handlePlayerLeft = () => {
       if (isNavigatingRef.current) return;
-      console.log('Player left:', data);
-      // Refresh player list when a player leaves
       fetchPlayersRef.current?.();
     };
 
-    // Listen for room user events (these fire when players join/leave the room)
     socket.on('room:user-joined', handlePlayerJoined);
     socket.on('room:user-left', handlePlayerLeft);
-
-    // Also listen for game-specific player events if they exist
     socket.on('game:player-joined', handlePlayerJoined);
     socket.on('game:player-left', handlePlayerLeft);
 
-    // Listen for room lock status changes
     const handleRoomLocked = (data: { locked: boolean }) => {
       if (isNavigatingRef.current) return;
       setIsRoomLocked(data.locked);
     };
     socket.on('game:room-locked', handleRoomLocked);
 
-    // Listen for player kicked events
     const handlePlayerKicked = (data: { player_id: string; player_name: string }) => {
       if (isNavigatingRef.current) return;
-      console.log('Player kicked:', data);
-      // Refresh player list when a player is kicked
       fetchPlayersRef.current?.();
-      // Show notification
       toast.success(`${data.player_name}がBANされました`, {
         icon: '🚫',
       });
@@ -380,11 +344,6 @@ function HostWaitingRoomContent() {
     socket.on('game:player-kicked', handlePlayerKicked);
 
     return () => {
-      // Only clean up event listeners
-      // DO NOT leave room here - room leave is handled in the effect body when:
-      // 1. gameId changes (handled above)
-      // 2. socket ID changes (handled above)
-      // 3. Component unmounts (handled by separate unmount effect below)
       socket.off('room:user-joined', handlePlayerJoined);
       socket.off('room:user-left', handlePlayerLeft);
       socket.off('game:player-joined', handlePlayerJoined);
@@ -392,9 +351,7 @@ function HostWaitingRoomContent() {
       socket.off('game:room-locked', handleRoomLocked);
       socket.off('game:player-kicked', handlePlayerKicked);
     };
-    // Use socket.id and socket.connected instead of socket object to prevent re-runs on reference changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket?.id, socket?.connected, gameId, socketJoinRoom, socketLeaveRoom]);
+  }, [socket, socket?.id, socket?.connected, gameId, socketJoinRoom, socketLeaveRoom]);
 
   //----------------------------------------------------
   // 6.7. Event Handlers
@@ -407,28 +364,23 @@ function HostWaitingRoomContent() {
   const handlePlayerBan = async (playerId: string) => {
     if (!gameId) return;
 
-    // Find player name for better error messages
     const playerToBan = players.find((p) => p.id === playerId);
     const playerName = playerToBan?.name || 'プレイヤー';
 
     try {
-      // Call backend API to kick player
       const { error } = await gameApi.kickPlayer(gameId, playerId);
       if (error) {
         const errorMessage = error.message || 'プレイヤーのBANに失敗しました';
         toast.error(errorMessage, {
           icon: '❌',
         });
-        console.error('Failed to ban player:', error);
         return;
       }
 
-      // Show success message
       toast.success(`${playerName}をBANしました`, {
         icon: '🚫',
       });
 
-      // Refresh player list after banning
       await fetchPlayers();
     } catch (err) {
       const errorMessage =
@@ -436,7 +388,6 @@ function HostWaitingRoomContent() {
       toast.error(errorMessage, {
         icon: '❌',
       });
-      console.error('Error banning player:', err);
     }
   };
 
@@ -448,13 +399,10 @@ function HostWaitingRoomContent() {
   // 6.8. Game ID Initialization
   //----------------------------------------------------
   useEffect(() => {
-    // Skip if we already have a gameId (to avoid re-running when gameId state updates)
     if (gameId) return;
 
-    // Priority 1: gameId from URL params (preferred - game should be created before navigation)
     if (gameIdParam) {
       setGameId(gameIdParam);
-      // Store in sessionStorage for player join flow
       if (roomCode) {
         sessionStorage.setItem(`game_${roomCode}`, gameIdParam);
       }
@@ -462,14 +410,12 @@ function HostWaitingRoomContent() {
       return;
     }
 
-    // Priority 2: gameId from sessionStorage (fallback for direct navigation)
     if (roomCode) {
       const storedGameId = sessionStorage.getItem(`game_${roomCode}`);
       if (storedGameId) {
         setGameId(storedGameId);
         setGameCode(roomCode);
         setGameIdError(null);
-        // Update URL to include gameId
         router.replace(
           `/host-waiting-room?code=${roomCode}&quizId=${quizId}&gameId=${storedGameId}`,
         );
@@ -477,13 +423,10 @@ function HostWaitingRoomContent() {
       }
     }
 
-    // If we have quizId but no gameId, show error (game should be created in dashboard)
     if (quizId && !gameIdParam) {
       setGameIdError('ゲームが見つかりません。ダッシュボードからゲームを開始してください。');
     }
-    // gameId is checked inside the effect to prevent re-runs when it changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomCode, gameIdParam, quizId, router]);
+  }, [roomCode, gameIdParam, quizId, router, gameId]);
 
   /**
    * Function: handleConfirmStartQuiz
@@ -498,74 +441,55 @@ function HostWaitingRoomContent() {
     }
 
     try {
-      // Set navigating flag to prevent socket room join/leave loops
       isNavigatingRef.current = true;
 
       setGameIdError(null);
-      // Start the game via API
       const { data: game, error } = await gameApi.startGame(gameId);
       if (error || !game) {
         const errorMessage = error?.message || 'ゲームの開始に失敗しました';
         setGameIdError(errorMessage);
-        console.error('Failed to start game:', error);
+        toast.error(errorMessage);
         setIsStartConfirmOpen(false);
-        isNavigatingRef.current = false; // Reset flag on error
+        isNavigatingRef.current = false;
         return;
       }
 
-      // Wait a moment to ensure all players have joined the room before emitting events
-      // This prevents race conditions where events are emitted before players are listening
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Emit WebSocket events to notify all clients (players and public screen)
       const actualGameCode = gameCode || roomCode;
       if (socket && socket.connected) {
-        console.log('[HostWaitingRoom] Emitting game:started and phase:change events');
-        // Emit game:started event for players
         socket.emit('game:started', { roomId: gameId, roomCode: actualGameCode });
-        // Emit phase change to countdown for public screen and players
         socket.emit('game:phase:change', { roomId: gameId, phase: 'countdown' });
       } else {
         console.warn('[HostWaitingRoom] Socket not connected, cannot emit events');
       }
 
-      // Don't leave the room - game-host page needs to be in the room
-      // The room will persist and game-host will join (or already be in it)
-      console.log('[HostWaitingRoom] Keeping room connection for game-host page');
-
-      // Small delay to ensure events are emitted before navigation
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Redirect to game host page
       router.push(`/game-host?gameId=${gameId}&phase=countdown`);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'ゲームの開始中にエラーが発生しました';
       setGameIdError(errorMessage);
-      console.error('Error starting game:', err);
+      toast.error(errorMessage);
       setIsStartConfirmOpen(false);
-      isNavigatingRef.current = false; // Reset flag on error
+      isNavigatingRef.current = false;
     }
   };
 
   const handleOpenScreen = useCallback(() => {
-    // Open host screen in new window
     const actualGameCode = gameCode || roomCode;
     const hostScreenUrl = `/host-screen?code=${actualGameCode}&quizId=${quizId}${
       gameId ? `&gameId=${gameId}` : ''
     }`;
     window.open(hostScreenUrl, 'host-screen', 'width=1200,height=800,scrollbars=yes,resizable=yes');
 
-    // Track that public screen is open in sessionStorage
     if (gameId) {
       sessionStorage.setItem(`public_screen_open_${gameId}`, 'true');
     }
   }, [gameCode, roomCode, quizId, gameId]);
 
-  const handleAddPlayer = useCallback(() => {
-    // Remove this function - players join via the join endpoint, not manually
-    console.warn('handleAddPlayer is deprecated - players join via the join endpoint');
-  }, []);
+  const handleAddPlayer = useCallback(() => {}, []);
 
   /**
    * Function: handleRoomLockToggle
@@ -574,28 +498,24 @@ function HostWaitingRoomContent() {
    */
   const handleRoomLockToggle = async (isLocked: boolean) => {
     if (!gameId) {
-      console.error('Cannot lock room: gameId is missing');
+      toast.error('ゲームIDが見つかりません');
       return;
     }
 
     try {
-      // Update room lock status via backend API
       const { data: game, error } = await gameApi.lockGame(gameId, isLocked);
 
       if (error || !game) {
         const errorMessage =
           error?.message || `ルームの${isLocked ? 'ロック' : 'アンロック'}に失敗しました`;
         setGameIdError(errorMessage);
-        console.error('Failed to lock/unlock room:', error);
-        // Revert the state change on error
+        toast.error(errorMessage);
         setIsRoomLocked(!isLocked);
         return;
       }
 
-      // Update local state on success
       setIsRoomLocked(game.locked);
 
-      // Emit WebSocket event to notify players about room lock status
       if (socket) {
         socket.emit('game:room-locked', {
           roomId: gameId,
@@ -608,8 +528,7 @@ function HostWaitingRoomContent() {
           ? err.message
           : `ルームの${isLocked ? 'ロック' : 'アンロック'}中にエラーが発生しました`;
       setGameIdError(errorMessage);
-      console.error('Error locking/unlocking room:', err);
-      // Revert the state change on error
+      toast.error(errorMessage);
       setIsRoomLocked(!isLocked);
     }
   };
