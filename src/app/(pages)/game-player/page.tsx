@@ -438,6 +438,517 @@ const GameEndContent: React.FC<{
 // 10. Custom Hooks
 //----------------------------------------------------
 /**
+ * Hook: usePlayerGameState
+ * Description:
+ * - Manages all state for player game component
+ */
+function usePlayerGameState(gameIdParam: string, phaseParam: PlayerPhase) {
+  const [gameId, setGameId] = useState<string>(gameIdParam);
+  const [currentPhase, setCurrentPhase] = useState<PlayerPhase>(phaseParam);
+  const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
+  const [explanationData, setExplanationData] = useState<ExplanationData | null>(null);
+  const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
+  const [quizPlaySettings, setQuizPlaySettings] = useState<{
+    time_bonus: boolean;
+    streak_bonus: boolean;
+  } | null>(null);
+  const [currentQuestionData, setCurrentQuestionData] = useState<CurrentQuestionData | null>(null);
+  const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
+  const [answerDurationMs, setAnswerDurationMs] = useState<number | null>(null);
+  const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
+  const [questionRemainingMs, setQuestionRemainingMs] = useState<number | null>(null);
+  const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
+  const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
+  const [isMobile, setIsMobile] = useState(true);
+  const [correctAnswerIdState, setCorrectAnswerIdState] = useState<string | null>(null);
+
+  return {
+    gameId,
+    setGameId,
+    currentPhase,
+    setCurrentPhase,
+    countdownStartedAt,
+    setCountdownStartedAt,
+    explanationData,
+    setExplanationData,
+    questions,
+    setQuestions,
+    quizPlaySettings,
+    setQuizPlaySettings,
+    currentQuestionData,
+    setCurrentQuestionData,
+    isDisplayPhaseDone,
+    setIsDisplayPhaseDone,
+    answerDurationMs,
+    setAnswerDurationMs,
+    answerRemainingMs,
+    setAnswerRemainingMs,
+    questionRemainingMs,
+    setQuestionRemainingMs,
+    answerStats,
+    setAnswerStats,
+    selectedAnswer,
+    setSelectedAnswer,
+    isMobile,
+    setIsMobile,
+    correctAnswerIdState,
+    setCorrectAnswerIdState,
+  };
+}
+
+/**
+ * Hook: usePlayerGameDataEffects
+ * Description:
+ * - Handles data loading effects (quiz, questions, explanations)
+ */
+function usePlayerGameDataEffects({
+  gameId,
+  roomCode,
+  gameFlow,
+  currentPhase,
+  explanationData,
+  setGameId,
+  setQuestions,
+  setQuizPlaySettings,
+  setCurrentQuestionData,
+  setExplanationData,
+  setIsDisplayPhaseDone,
+  setAnswerDurationMs,
+  setAnswerRemainingMs,
+  setSelectedAnswer,
+  setCountdownStartedAt,
+  phaseParam,
+}: {
+  gameId: string;
+  roomCode: string;
+  gameFlow: unknown;
+  currentPhase: PlayerPhase;
+  explanationData: ExplanationData | null;
+  setGameId: React.Dispatch<React.SetStateAction<string>>;
+  setQuestions: React.Dispatch<React.SetStateAction<QuestionWithAnswers[]>>;
+  setQuizPlaySettings: React.Dispatch<
+    React.SetStateAction<{ time_bonus: boolean; streak_bonus: boolean } | null>
+  >;
+  setCurrentQuestionData: React.Dispatch<React.SetStateAction<CurrentQuestionData | null>>;
+  setExplanationData: React.Dispatch<React.SetStateAction<ExplanationData | null>>;
+  setIsDisplayPhaseDone: React.Dispatch<React.SetStateAction<boolean>>;
+  setAnswerDurationMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setSelectedAnswer: React.Dispatch<React.SetStateAction<string | undefined>>;
+  setCorrectAnswerIdState: React.Dispatch<React.SetStateAction<string | null>>;
+  setCountdownStartedAt: React.Dispatch<React.SetStateAction<number | undefined>>;
+  phaseParam: PlayerPhase;
+}) {
+  useEffect(() => {
+    if (phaseParam === 'countdown' && !explanationData) {
+      const stored = sessionStorage.getItem(`countdown_started_${gameId}`);
+      if (stored) {
+        const timestamp = parseInt(stored, RADIX_DECIMAL);
+        if (!isNaN(timestamp)) {
+          setCountdownStartedAt(timestamp);
+        }
+      }
+    }
+  }, [phaseParam, gameId, explanationData, setCountdownStartedAt]);
+
+  useEffect(() => {
+    const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
+    if (!currentQuestionId) return;
+    setIsDisplayPhaseDone(false);
+    setAnswerDurationMs(null);
+    setAnswerRemainingMs(null);
+    setExplanationData(null);
+  }, [
+    gameFlow,
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setExplanationData,
+  ]);
+
+  useEffect(() => {
+    const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
+    if (currentQuestionId) {
+      setSelectedAnswer(undefined);
+    }
+  }, [gameFlow, setSelectedAnswer]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveGameId = async () => {
+      if (gameId) return gameId;
+
+      const stored = roomCode ? sessionStorage.getItem(`game_${roomCode}`) : null;
+      if (stored) {
+        if (!cancelled) setGameId(stored);
+        return stored;
+      }
+      return null;
+    };
+
+    const loadQuiz = async (resolvedGameId: string) => {
+      try {
+        if (!apiClient.isAuthenticated()) {
+          return;
+        }
+        const { data: game } = await gameApi.getGame(resolvedGameId);
+        const quizId = game?.quiz_id || game?.quiz_set_id;
+        if (quizId) {
+          const quiz = await quizService.getQuizComplete(quizId);
+          const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
+          if (!cancelled) {
+            setQuestions(sorted);
+            if (quiz.play_settings) {
+              setQuizPlaySettings({
+                time_bonus: quiz.play_settings.time_bonus ?? false,
+                streak_bonus: quiz.play_settings.streak_bonus ?? false,
+              });
+            }
+          }
+        }
+      } catch {
+        // Silent error - quiz load is best-effort
+      }
+    };
+
+    resolveGameId().then((resolvedId) => {
+      if (!resolvedId) return;
+      loadQuiz(resolvedId);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, roomCode, setGameId, setQuestions, setQuizPlaySettings]);
+
+  useEffect(() => {
+    if (!gameId || !(gameFlow as { current_question_id?: string })?.current_question_id) {
+      setCurrentQuestionData(null);
+      return;
+    }
+
+    const fetchCurrentQuestion = async () => {
+      try {
+        const { data, error } = await gameApi.getCurrentQuestion(gameId);
+        if (error || !data) {
+          return;
+        }
+
+        const question: Question = {
+          id: data.question.id,
+          text: data.question.text,
+          image: data.question.image_url || undefined,
+          timeLimit: data.question.show_question_time + data.question.answering_time,
+          show_question_time: data.question.show_question_time,
+          answering_time: data.question.answering_time,
+          show_explanation_time: data.question.show_explanation_time,
+          choices: data.answers
+            .sort((a, b) => a.order_index - b.order_index)
+            .map((a, i) => ({
+              id: a.id,
+              text: a.text,
+              letter: ANSWER_LETTERS[i] || String.fromCharCode(65 + i),
+            })),
+          correctAnswerId: data.answers.find((a) => a.is_correct)?.id || '',
+          explanation: data.question.explanation_text || undefined,
+          type: data.question.type as Question['type'],
+        };
+
+        setCurrentQuestionData({
+          question,
+          serverTime: data.server_time,
+          isActive: data.is_active,
+          points: data.question.points,
+          timeLimit: data.question.show_question_time + data.question.answering_time,
+          answeringTime: data.question.answering_time,
+          showExplanationTime: data.question.show_explanation_time,
+          totalQuestions: data.total_questions,
+        });
+      } catch {
+        // Silent error - question refresh is best-effort
+      }
+    };
+
+    fetchCurrentQuestion();
+
+    const refreshInterval = setInterval(fetchCurrentQuestion, QUESTION_REFRESH_INTERVAL_MS);
+    return () => clearInterval(refreshInterval);
+  }, [gameId, gameFlow, setCurrentQuestionData]);
+
+  useEffect(() => {
+    const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
+    if (currentPhase === 'explanation' && gameId && currentQuestionId && !explanationData) {
+      const fetchExplanation = async () => {
+        try {
+          if (!currentQuestionId) return;
+
+          const { data, error } = await gameApi.getExplanation(gameId, currentQuestionId);
+          if (error) {
+            return;
+          } else if (data) {
+            const hasContent =
+              (data.explanation_text && data.explanation_text.trim() !== '') ||
+              (data.explanation_title && data.explanation_title.trim() !== '');
+
+            if (!hasContent) {
+              return;
+            }
+            setExplanationData({
+              title: data.explanation_title,
+              text: data.explanation_text,
+              image_url: data.explanation_image_url,
+              show_time: data.show_explanation_time || DEFAULT_EXPLANATION_TIME_SECONDS,
+            });
+          }
+        } catch {
+          // Silent error - explanation is optional
+        }
+      };
+      fetchExplanation();
+    }
+  }, [currentPhase, gameId, gameFlow, explanationData, setExplanationData]);
+
+  useEffect(() => {
+    if (currentPhase === 'countdown' && !explanationData) {
+      const stored = sessionStorage.getItem(`countdown_started_${gameId}`);
+      if (stored) {
+        const timestamp = parseInt(stored, RADIX_DECIMAL);
+        if (!isNaN(timestamp)) {
+          setCountdownStartedAt(timestamp);
+          sessionStorage.removeItem(`countdown_started_${gameId}`);
+        }
+      }
+    }
+  }, [currentPhase, gameId, explanationData, setCountdownStartedAt]);
+}
+
+/**
+ * Hook: usePlayerGamePhaseEffects
+ * Description:
+ * - Handles phase-related effects and transitions
+ */
+function usePlayerGamePhaseEffects({
+  currentPhase,
+  phaseParam,
+  gameFlow,
+  questionIndexParam,
+  currentQuestionData,
+  questions,
+  totalQuestions,
+  gameId,
+  playerId,
+  router,
+  refreshLeaderboard,
+  setCurrentPhase,
+  currentQuestion,
+  setCorrectAnswerIdState,
+}: {
+  currentPhase: PlayerPhase;
+  phaseParam: PlayerPhase;
+  gameFlow: unknown;
+  questionIndexParam: number;
+  currentQuestionData: CurrentQuestionData | null;
+  questions: QuestionWithAnswers[];
+  totalQuestions: number;
+  gameId: string;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+  refreshLeaderboard: (() => void) | undefined;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  currentQuestion: Question;
+  setCorrectAnswerIdState: React.Dispatch<React.SetStateAction<string | null>>;
+}) {
+  useEffect(() => {
+    setCurrentPhase(phaseParam);
+  }, [phaseParam, setCurrentPhase]);
+
+  useEffect(() => {
+    if (currentQuestion?.correctAnswerId) {
+      setCorrectAnswerIdState(currentQuestion.correctAnswerId);
+    }
+  }, [currentQuestion?.correctAnswerId, setCorrectAnswerIdState]);
+
+  useEffect(() => {
+    if (currentPhase === 'leaderboard' && gameId && refreshLeaderboard) {
+      refreshLeaderboard();
+    }
+  }, [currentPhase, gameId, refreshLeaderboard]);
+
+  useEffect(() => {
+    if (currentPhase === 'leaderboard' && gameFlow) {
+      const questionIndex = (gameFlow as { current_question_index?: number | null })
+        ?.current_question_index;
+      const currentQuestionNum =
+        questionIndex !== null && questionIndex !== undefined && questionIndex >= 0
+          ? questionIndex + 1
+          : questionIndexParam + 1;
+      const totalQuestionsCount =
+        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
+      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
+
+      if (isLastQuestion) {
+        setCurrentPhase('podium');
+        router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
+      }
+    }
+  }, [
+    currentPhase,
+    gameFlow,
+    questionIndexParam,
+    currentQuestionData?.totalQuestions,
+    questions.length,
+    totalQuestions,
+    gameId,
+    playerId,
+    router,
+    setCurrentPhase,
+  ]);
+}
+
+/**
+ * Hook: usePlayerGameTimerEffects
+ * Description:
+ * - Handles timer-related effects for question and answering phases
+ */
+function usePlayerGameTimerEffects({
+  currentPhase,
+  displayRemainingMs,
+  viewingRemainingMs,
+  questionRemainingMs,
+  answerRemainingMs,
+  answerDurationMs,
+  isDisplayPhaseDone,
+  currentQuestion,
+  setQuestionRemainingMs,
+  setAnswerRemainingMs,
+  startAnsweringPhase,
+  submitAnswer,
+  answerStatus,
+  setCurrentPhase,
+  gameId,
+  playerId,
+  router,
+  autoSubmittingRef,
+  hasTransitionedToRevealRef,
+}: {
+  currentPhase: PlayerPhase;
+  displayRemainingMs: number;
+  viewingRemainingMs: number;
+  questionRemainingMs: number | null;
+  answerRemainingMs: number | null;
+  answerDurationMs: number | null;
+  isDisplayPhaseDone: boolean;
+  currentQuestion: Question;
+  setQuestionRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  startAnsweringPhase: () => void;
+  submitAnswer: (answerId: string | null, responseTimeMs: number) => Promise<void>;
+  answerStatus: { hasAnswered: boolean; isProcessing: boolean };
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PlayerPhase>>;
+  gameId: string;
+  playerId: string;
+  router: ReturnType<typeof useRouter>;
+  autoSubmittingRef: React.MutableRefObject<boolean>;
+  hasTransitionedToRevealRef: React.MutableRefObject<boolean>;
+}) {
+  useEffect(() => {
+    if (currentPhase !== 'question') return;
+    if (displayRemainingMs <= 0 && !isDisplayPhaseDone) {
+      startAnsweringPhase();
+    }
+  }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
+
+  useEffect(() => {
+    if (currentPhase !== 'question') return;
+    if (questionRemainingMs === null || questionRemainingMs <= 0) return;
+
+    const interval = setInterval(() => {
+      setQuestionRemainingMs((prev) => {
+        if (prev === null || prev <= 0) return 0;
+        return Math.max(0, prev - TIMER_DECREMENT_INTERVAL_MS);
+      });
+    }, TIMER_DECREMENT_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [currentPhase, questionRemainingMs, setQuestionRemainingMs]);
+
+  useEffect(() => {
+    if (currentPhase === 'question' && questionRemainingMs !== null && viewingRemainingMs > 0) {
+      const difference = Math.abs(questionRemainingMs - viewingRemainingMs);
+      if (difference > TIMER_SYNC_THRESHOLD_MS) {
+        setQuestionRemainingMs(viewingRemainingMs);
+      }
+    }
+  }, [currentPhase, viewingRemainingMs, questionRemainingMs, setQuestionRemainingMs]);
+
+  useEffect(() => {
+    if (currentPhase !== 'answering') return;
+    if (answerDurationMs === null || answerRemainingMs === null) return;
+
+    const interval = setInterval(() => {
+      setAnswerRemainingMs((prev) => {
+        if (prev === null) return null;
+        return Math.max(0, prev - TIMER_DECREMENT_INTERVAL_MS);
+      });
+    }, TIMER_DECREMENT_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [currentPhase, answerDurationMs, answerRemainingMs, setAnswerRemainingMs]);
+
+  useEffect(() => {
+    if (currentPhase !== 'answering') return;
+    if (autoSubmittingRef.current) return;
+    if (answerStatus.hasAnswered) return;
+    if (answerRemainingMs === null || answerRemainingMs > 0) return;
+
+    const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
+      ? currentQuestion.answering_time
+      : DEFAULT_ANSWERING_TIME_SECONDS;
+    const durationMs = answerDurationMs ?? safeAnsweringTime * MS_PER_SECOND;
+    autoSubmittingRef.current = true;
+    submitAnswer(null, durationMs).catch((err) => {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      if (!errorMsg.includes('already') && !errorMsg.includes('Already')) {
+        toast.error('自動送信に失敗しました');
+        autoSubmittingRef.current = false;
+      }
+    });
+  }, [
+    currentPhase,
+    answerStatus.hasAnswered,
+    answerRemainingMs,
+    answerDurationMs,
+    currentQuestion.answering_time,
+    submitAnswer,
+    autoSubmittingRef,
+  ]);
+
+  useEffect(() => {
+    if (currentPhase !== 'answering') {
+      hasTransitionedToRevealRef.current = false;
+      return;
+    }
+    if (hasTransitionedToRevealRef.current) return;
+    if (answerRemainingMs === null || answerRemainingMs > 0) return;
+
+    hasTransitionedToRevealRef.current = true;
+    setAnswerRemainingMs(0);
+    setCurrentPhase('answer_reveal');
+    router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
+  }, [
+    currentPhase,
+    answerRemainingMs,
+    gameId,
+    playerId,
+    router,
+    setCurrentPhase,
+    setAnswerRemainingMs,
+    hasTransitionedToRevealRef,
+  ]);
+}
+
+/**
  * Hook: usePlayerGameTimer
  * Description:
  * - Manages timer calculations and phase transitions for player game
@@ -1043,24 +1554,39 @@ function PlayerGameContent() {
   //----------------------------------------------------
   // 11.2. State Management
   //----------------------------------------------------
-  const [gameId, setGameId] = useState<string>(gameIdParam);
-  const [currentPhase, setCurrentPhase] = useState<PlayerPhase>(phaseParam);
-  const [countdownStartedAt, setCountdownStartedAt] = useState<number | undefined>(undefined);
-  const [explanationData, setExplanationData] = useState<ExplanationData | null>(null);
-  const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
-  const [quizPlaySettings, setQuizPlaySettings] = useState<{
-    time_bonus: boolean;
-    streak_bonus: boolean;
-  } | null>(null);
-  const [currentQuestionData, setCurrentQuestionData] = useState<CurrentQuestionData | null>(null);
-  const [isDisplayPhaseDone, setIsDisplayPhaseDone] = useState(false);
-  const [answerDurationMs, setAnswerDurationMs] = useState<number | null>(null);
-  const [answerRemainingMs, setAnswerRemainingMs] = useState<number | null>(null);
-  const [questionRemainingMs, setQuestionRemainingMs] = useState<number | null>(null);
-  const [answerStats, setAnswerStats] = useState<Record<string, number>>({});
-  const [selectedAnswer, setSelectedAnswer] = useState<string | undefined>();
-  const [isMobile, setIsMobile] = useState(true);
-  const [correctAnswerIdState, setCorrectAnswerIdState] = useState<string | null>(null);
+  const state = usePlayerGameState(gameIdParam, phaseParam);
+  const {
+    gameId,
+    setGameId,
+    currentPhase,
+    setCurrentPhase,
+    countdownStartedAt,
+    setCountdownStartedAt,
+    explanationData,
+    setExplanationData,
+    questions,
+    setQuestions,
+    quizPlaySettings,
+    setQuizPlaySettings,
+    currentQuestionData,
+    setCurrentQuestionData,
+    isDisplayPhaseDone,
+    setIsDisplayPhaseDone,
+    answerDurationMs,
+    setAnswerDurationMs,
+    answerRemainingMs,
+    setAnswerRemainingMs,
+    questionRemainingMs,
+    setQuestionRemainingMs,
+    answerStats,
+    setAnswerStats,
+    selectedAnswer,
+    setSelectedAnswer,
+    isMobile,
+    setIsMobile,
+    correctAnswerIdState,
+    setCorrectAnswerIdState,
+  } = state;
 
   //----------------------------------------------------
   // 11.3. Custom Hooks
@@ -1125,17 +1651,12 @@ function PlayerGameContent() {
           router.replace(`/game-player?gameId=${gameId}&phase=explanation&playerId=${playerId}`);
         }
       },
-      onExplanationHide: () => {
-        // Explanation phase ended, move to next phase
-        // This will be handled by the explanation screen's onTimeExpired
-      },
+      onExplanationHide: () => {},
       onGameEnd: () => {
         setCurrentPhase('podium');
         router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
       },
-      onError: () => {
-        // Error handling is done via toast notifications
-      },
+      onError: () => {},
     },
   });
 
@@ -1191,12 +1712,8 @@ function PlayerGameContent() {
     timeBonusEnabled: quizPlaySettings?.time_bonus ?? false,
     streakBonusEnabled: quizPlaySettings?.streak_bonus ?? false,
     events: {
-      onAnswerSubmitted: () => {
-        // Answer submission handled by hook
-      },
-      onError: () => {
-        // Error handling is done via toast notifications
-      },
+      onAnswerSubmitted: () => {},
+      onError: () => {},
     },
   });
 
@@ -1211,7 +1728,6 @@ function PlayerGameContent() {
   //----------------------------------------------------
   // 11.4. Computed Values
   //----------------------------------------------------
-  // Compute currentQuestion before it's used in effects
   const currentQuestion: Question = useMemo(
     () =>
       computeCurrentQuestion({
@@ -1242,26 +1758,6 @@ function PlayerGameContent() {
   // 11.6. Effects
   //----------------------------------------------------
   useEffect(() => {
-    if (phaseParam === 'countdown' && !countdownStartedAt) {
-      const stored = sessionStorage.getItem(`countdown_started_${gameId}`);
-      if (stored) {
-        const timestamp = parseInt(stored, RADIX_DECIMAL);
-        if (!isNaN(timestamp)) {
-          setCountdownStartedAt(timestamp);
-        }
-      }
-    }
-  }, [phaseParam, gameId, countdownStartedAt]);
-
-  useEffect(() => {
-    if (!gameFlow?.current_question_id) return;
-    setIsDisplayPhaseDone(false);
-    setAnswerDurationMs(null);
-    setAnswerRemainingMs(null);
-    setExplanationData(null);
-  }, [gameFlow?.current_question_id]);
-
-  useEffect(() => {
     gameFlowRef.current = gameFlow;
   }, [gameFlow]);
 
@@ -1270,218 +1766,50 @@ function PlayerGameContent() {
   }, [currentPhase]);
 
   useEffect(() => {
-    setCurrentPhase(phaseParam);
-  }, [phaseParam]);
-
-  useEffect(() => {
-    if (gameFlow?.current_question_id && gameFlow.current_question_id !== questionIdParam) {
-      setSelectedAnswer(undefined);
-    }
-  }, [gameFlow?.current_question_id, questionIdParam]);
-
-  useEffect(() => {
-    if (currentQuestion?.correctAnswerId) {
-      setCorrectAnswerIdState(currentQuestion.correctAnswerId);
-    }
-  }, [currentQuestion?.correctAnswerId]);
-
-  useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT_PX);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  }, [setIsMobile]);
 
-  useEffect(() => {
-    if (currentPhase === 'leaderboard' && gameId && refreshLeaderboard) {
-      refreshLeaderboard();
-    }
-  }, [currentPhase, gameId, refreshLeaderboard]);
-
-  useEffect(() => {
-    if (currentPhase === 'leaderboard' && gameFlow) {
-      const currentQuestionNum =
-        gameFlow.current_question_index !== null && gameFlow.current_question_index >= 0
-          ? gameFlow.current_question_index + 1
-          : questionIndexParam + 1;
-      const totalQuestionsCount =
-        currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions);
-      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
-
-      if (isLastQuestion) {
-        setCurrentPhase('podium');
-        router.replace(`/game-player?gameId=${gameId}&phase=podium&playerId=${playerId}`);
-      }
-    }
-  }, [
+  usePlayerGameDataEffects({
+    gameId,
+    roomCode,
+    gameFlow,
     currentPhase,
+    explanationData,
+    setGameId,
+    setQuestions,
+    setQuizPlaySettings,
+    setCurrentQuestionData,
+    setExplanationData,
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setSelectedAnswer,
+    setCorrectAnswerIdState,
+    setCountdownStartedAt,
+    phaseParam,
+  });
+
+  // Phase management effects
+  usePlayerGamePhaseEffects({
+    currentPhase,
+    phaseParam,
     gameFlow,
     questionIndexParam,
-    currentQuestionData?.totalQuestions,
-    questions.length,
+    currentQuestionData,
+    questions,
     totalQuestions,
     gameId,
     playerId,
     router,
-  ]);
+    refreshLeaderboard,
+    setCurrentPhase,
+    currentQuestion,
+    setCorrectAnswerIdState,
+  });
 
-  useEffect(() => {
-    if (
-      currentPhase === 'explanation' &&
-      gameId &&
-      gameFlow?.current_question_id &&
-      !explanationData
-    ) {
-      const fetchExplanation = async () => {
-        try {
-          const questionId = gameFlow.current_question_id;
-          if (!questionId) return;
-
-          const { data, error } = await gameApi.getExplanation(gameId, questionId);
-          if (error) {
-            return;
-          } else if (data) {
-            const hasContent =
-              (data.explanation_text && data.explanation_text.trim() !== '') ||
-              (data.explanation_title && data.explanation_title.trim() !== '');
-
-            if (!hasContent) {
-              return;
-            }
-            setExplanationData({
-              title: data.explanation_title,
-              text: data.explanation_text,
-              image_url: data.explanation_image_url,
-              show_time: data.show_explanation_time || DEFAULT_EXPLANATION_TIME_SECONDS,
-            });
-          }
-        } catch {
-          // Error handled silently - explanation is optional
-        }
-      };
-      fetchExplanation();
-    }
-  }, [currentPhase, gameId, gameFlow?.current_question_id, explanationData]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const resolveGameId = async () => {
-      if (gameId) return gameId;
-
-      const stored = roomCode ? sessionStorage.getItem(`game_${roomCode}`) : null;
-      if (stored) {
-        if (!cancelled) setGameId(stored);
-        return stored;
-      }
-      return null;
-    };
-
-    const loadQuiz = async (resolvedGameId: string) => {
-      try {
-        if (!apiClient.isAuthenticated()) {
-          return;
-        }
-        const { data: game } = await gameApi.getGame(resolvedGameId);
-        const quizId = game?.quiz_id || game?.quiz_set_id;
-        if (quizId) {
-          const quiz = await quizService.getQuizComplete(quizId);
-          const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
-          if (!cancelled) {
-            setQuestions(sorted);
-            if (quiz.play_settings) {
-              setQuizPlaySettings({
-                time_bonus: quiz.play_settings.time_bonus ?? false,
-                streak_bonus: quiz.play_settings.streak_bonus ?? false,
-              });
-            }
-          }
-        }
-      } catch {
-        // Error handled silently - quiz load is best-effort
-      }
-    };
-
-    resolveGameId().then((resolvedId) => {
-      if (!resolvedId) return;
-      loadQuiz(resolvedId);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [gameId, roomCode]);
-
-  useEffect(() => {
-    if (!gameId || !gameFlow?.current_question_id) {
-      setCurrentQuestionData(null);
-      return;
-    }
-
-    const fetchCurrentQuestion = async () => {
-      try {
-        const { data, error } = await gameApi.getCurrentQuestion(gameId);
-        if (error || !data) {
-          return;
-        }
-
-        const question: Question = {
-          id: data.question.id,
-          text: data.question.text,
-          image: data.question.image_url || undefined,
-          timeLimit: data.question.show_question_time + data.question.answering_time,
-          show_question_time: data.question.show_question_time,
-          answering_time: data.question.answering_time,
-          show_explanation_time: data.question.show_explanation_time,
-          choices: data.answers
-            .sort((a, b) => a.order_index - b.order_index)
-            .map((a, i) => ({
-              id: a.id,
-              text: a.text,
-              letter: ANSWER_LETTERS[i] || String.fromCharCode(65 + i),
-            })),
-          correctAnswerId: data.answers.find((a) => a.is_correct)?.id || '',
-          explanation: data.question.explanation_text || undefined,
-          type: data.question.type as Question['type'],
-        };
-
-        setCurrentQuestionData({
-          question,
-          serverTime: data.server_time,
-          isActive: data.is_active,
-          points: data.question.points,
-          timeLimit: data.question.show_question_time + data.question.answering_time,
-          answeringTime: data.question.answering_time,
-          showExplanationTime: data.question.show_explanation_time,
-          totalQuestions: data.total_questions,
-        });
-      } catch {
-        // Error handled silently - question refresh is best-effort
-      }
-    };
-
-    fetchCurrentQuestion();
-
-    const refreshInterval = setInterval(fetchCurrentQuestion, QUESTION_REFRESH_INTERVAL_MS);
-    return () => clearInterval(refreshInterval);
-  }, [gameId, gameFlow?.current_question_id]);
-
-  useEffect(() => {
-    if (currentPhase === 'countdown' && !countdownStartedAt) {
-      const stored = sessionStorage.getItem(`countdown_started_${gameId}`);
-      if (stored) {
-        const timestamp = parseInt(stored, RADIX_DECIMAL);
-        if (!isNaN(timestamp)) {
-          setCountdownStartedAt(timestamp);
-          sessionStorage.removeItem(`countdown_started_${gameId}`);
-        }
-      }
-    }
-  }, [currentPhase, gameId, countdownStartedAt]);
-
-  //----------------------------------------------------
-  // 11.7. Helper Functions
-  //----------------------------------------------------
   /**
    * Function: handlePlayerKicked
    * Description:
@@ -1637,52 +1965,37 @@ function PlayerGameContent() {
     playerId,
     router,
     answeringPhaseStartTimeRef,
+    setIsDisplayPhaseDone,
+    setAnswerDurationMs,
+    setAnswerRemainingMs,
+    setCurrentPhase,
   ]);
 
-  useEffect(() => {
-    if (currentPhase !== 'question') return;
-    if (displayRemainingMs <= 0 && !isDisplayPhaseDone) {
-      startAnsweringPhase();
-    }
-  }, [currentPhase, displayRemainingMs, isDisplayPhaseDone, startAnsweringPhase]);
+  usePlayerGameTimerEffects({
+    currentPhase,
+    displayRemainingMs,
+    viewingRemainingMs,
+    questionRemainingMs,
+    answerRemainingMs,
+    answerDurationMs,
+    isDisplayPhaseDone,
+    currentQuestion,
+    setQuestionRemainingMs,
+    setAnswerRemainingMs,
+    startAnsweringPhase,
+    submitAnswer,
+    answerStatus,
+    setCurrentPhase,
+    gameId,
+    playerId,
+    router,
+    autoSubmittingRef,
+    hasTransitionedToRevealRef,
+  });
 
-  useEffect(() => {
-    if (currentPhase !== 'question') return;
-    if (questionRemainingMs === null || questionRemainingMs <= 0) return;
-
-    const interval = setInterval(() => {
-      setQuestionRemainingMs((prev) => {
-        if (prev === null || prev <= 0) return 0;
-        return Math.max(0, prev - TIMER_DECREMENT_INTERVAL_MS);
-      });
-    }, TIMER_DECREMENT_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [currentPhase, questionRemainingMs]);
-
-  useEffect(() => {
-    if (currentPhase === 'question' && questionRemainingMs !== null && viewingRemainingMs > 0) {
-      const difference = Math.abs(questionRemainingMs - viewingRemainingMs);
-      if (difference > TIMER_SYNC_THRESHOLD_MS) {
-        setQuestionRemainingMs(viewingRemainingMs);
-      }
-    }
-  }, [currentPhase, viewingRemainingMs, questionRemainingMs]);
-
-  useEffect(() => {
-    if (currentPhase !== 'answering') return;
-    if (answerDurationMs === null || answerRemainingMs === null) return;
-
-    const interval = setInterval(() => {
-      setAnswerRemainingMs((prev) => {
-        if (prev === null) return null;
-        return Math.max(0, prev - TIMER_DECREMENT_INTERVAL_MS);
-      });
-    }, TIMER_DECREMENT_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [currentPhase, answerDurationMs, answerRemainingMs]);
-
+  //----------------------------------------------------
+  // 11.7. Helper Functions
+  //----------------------------------------------------
   const handleAnswerSelect = (answerId: string) => {
     setSelectedAnswer(answerId);
   };
@@ -1737,47 +2050,6 @@ function PlayerGameContent() {
     ],
   );
 
-  useEffect(() => {
-    if (currentPhase !== 'answering') return;
-    if (autoSubmittingRef.current) return;
-    if (answerStatus.hasAnswered) return;
-    if (answerRemainingMs === null || answerRemainingMs > 0) return;
-
-    const safeAnsweringTime = Number.isFinite(currentQuestion.answering_time)
-      ? currentQuestion.answering_time
-      : DEFAULT_ANSWERING_TIME_SECONDS;
-    const durationMs = answerDurationMs ?? safeAnsweringTime * MS_PER_SECOND;
-    autoSubmittingRef.current = true;
-    submitAnswer(null, durationMs).catch((err) => {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      if (!errorMsg.includes('already') && !errorMsg.includes('Already')) {
-        toast.error('自動送信に失敗しました');
-        autoSubmittingRef.current = false;
-      }
-    });
-  }, [
-    currentPhase,
-    answerStatus.hasAnswered,
-    answerRemainingMs,
-    answerDurationMs,
-    currentQuestion.answering_time,
-    submitAnswer,
-  ]);
-
-  useEffect(() => {
-    if (currentPhase !== 'answering') {
-      hasTransitionedToRevealRef.current = false;
-      return;
-    }
-    if (hasTransitionedToRevealRef.current) return;
-    if (answerRemainingMs === null || answerRemainingMs > 0) return;
-
-    hasTransitionedToRevealRef.current = true;
-    setAnswerRemainingMs(0);
-    setCurrentPhase('answer_reveal');
-    router.replace(`/game-player?gameId=${gameId}&phase=answer_reveal&playerId=${playerId}`);
-  }, [currentPhase, answerRemainingMs, gameId, playerId, router]);
-
   //----------------------------------------------------
   // 11.12. Loading State
   //----------------------------------------------------
@@ -1794,12 +2066,7 @@ function PlayerGameContent() {
   }
 
   //----------------------------------------------------
-  // 11.13. Error State
-  //----------------------------------------------------
-  // (Errors handled via toast notifications)
-
-  //----------------------------------------------------
-  // 11.14. Main Render
+  // 11.13. Main Render
   //----------------------------------------------------
   switch (currentPhase) {
     case 'countdown':
@@ -1879,9 +2146,7 @@ function PlayerGameContent() {
             currentQuestionData?.totalQuestions ?? (questions.length || totalQuestions)
           }
           timeLimit={ANSWER_REVEAL_TIME_LIMIT_SECONDS}
-          onTimeExpired={() => {
-            // Answer reveal must NOT auto-advance. We wait for the host to press "Next"
-          }}
+          onTimeExpired={() => {}}
         />
       );
     case 'leaderboard':
