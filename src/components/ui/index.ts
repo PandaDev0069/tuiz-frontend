@@ -1,3 +1,21 @@
+// ====================================================
+// File Name   : index.ts
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-20
+// Last Update : 2025-09-21
+//
+// Description:
+// - Barrel export file for all UI components
+// - Centralizes exports for core, forms, data-display, feedback, navigation, overlays, and other UI components
+// - Provides single import point for all UI components
+//
+// Notes:
+// - Server and client compatible (no 'use client' directive)
+// - Re-exports components from multiple subdirectories
+// - Includes components from providers and auth directories
+// ====================================================
+
 export { Button } from './core/button';
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './core/card';
 export { Input } from './forms/input';
