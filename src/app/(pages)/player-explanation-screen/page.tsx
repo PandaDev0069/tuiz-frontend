@@ -1,24 +1,96 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-09-27
+// Last Update : 2025-12-29
+//
+// Description:
+// - Player explanation screen component
+// - Displays question explanations with timing
+// - Waits for host to advance phase
+//
+// Notes:
+// - Uses game flow hook for real-time game state
+// - Fetches quiz data for question explanations
+// - No auto-navigation (waits for host phase change)
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { Suspense, useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
+
+//----------------------------------------------------
+// 2. Component Imports
+//----------------------------------------------------
 import { PlayerExplanationScreen } from '@/components/game';
-import { ExplanationData } from '@/types/game';
+
+//----------------------------------------------------
+// 3. Hook Imports
+//----------------------------------------------------
 import { useGameFlow } from '@/hooks/useGameFlow';
+
+//----------------------------------------------------
+// 4. Service Imports
+//----------------------------------------------------
 import { gameApi } from '@/services/gameApi';
 import { quizService } from '@/lib/quizService';
+
+//----------------------------------------------------
+// 5. Type Imports
+//----------------------------------------------------
+import { ExplanationData } from '@/types/game';
 import type { QuestionWithAnswers } from '@/types/quiz';
 
+//----------------------------------------------------
+// 6. Utility Imports
+//----------------------------------------------------
+import toast from 'react-hot-toast';
+
+//----------------------------------------------------
+// 7. Main Component
+//----------------------------------------------------
+/**
+ * Component: PlayerExplanationScreenContent
+ * Description:
+ * - Displays question explanations with timing
+ * - Waits for host to advance phase
+ */
 function PlayerExplanationScreenContent() {
+  //----------------------------------------------------
+  // 7.1. URL Parameters & Setup
+  //----------------------------------------------------
   const searchParams = useSearchParams();
   const gameIdParam = searchParams.get('gameId') || '';
   const roomCode = searchParams.get('code') || '';
-
   const [gameId, setGameId] = useState<string>(gameIdParam);
   const [currentQuestion, setCurrentQuestion] = useState<QuestionWithAnswers | null>(null);
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
 
-  // Get gameId from room code if not provided
+  //----------------------------------------------------
+  // 7.2. Game Flow & State
+  //----------------------------------------------------
+  const { gameFlow } = useGameFlow({
+    gameId: gameId || '',
+    autoSync: true,
+    events: {
+      onQuestionStart: () => {},
+      onQuestionEnd: () => {},
+      onAnswerReveal: () => {},
+      onGameEnd: () => {},
+      onError: (err) => {
+        console.error('PlayerExplanationScreen GameFlow Error:', err);
+      },
+    },
+  });
+
+  //----------------------------------------------------
+  // 7.3. Effects
+  //----------------------------------------------------
   useEffect(() => {
     if (gameId || !roomCode) return;
 
@@ -32,20 +104,19 @@ function PlayerExplanationScreenContent() {
 
         const { data: game, error } = await gameApi.getGameByCode(roomCode);
         if (error || !game) {
-          console.error('Failed to get game by code:', error);
+          toast.error('ゲーム情報の取得に失敗しました');
           return;
         }
         setGameId(game.id);
         sessionStorage.setItem(`game_${roomCode}`, game.id);
-      } catch (err) {
-        console.error('Failed to get game ID:', err);
+      } catch {
+        toast.error('ゲームIDの取得に失敗しました');
       }
     };
 
     getGameIdFromCode();
   }, [roomCode, gameId]);
 
-  // Load quiz data to get questions
   useEffect(() => {
     if (!gameId) return;
     const loadQuiz = async () => {
@@ -57,32 +128,18 @@ function PlayerExplanationScreenContent() {
           const sorted = [...quiz.questions].sort((a, b) => a.order_index - b.order_index);
           setQuestions(sorted);
         }
-      } catch (err) {
-        console.error('Failed to load quiz for game', err);
+      } catch {
+        console.error('Failed to load quiz for game');
       }
     };
     loadQuiz();
   }, [gameId]);
 
-  const { gameFlow } = useGameFlow({
-    gameId: gameId || '',
-    autoSync: true,
-    events: {
-      onQuestionStart: () => {},
-      onQuestionEnd: () => {},
-      onAnswerReveal: () => {},
-      onGameEnd: () => {},
-      onError: (err) => console.error('PlayerExplanationScreen GameFlow Error:', err),
-    },
-  });
-
-  // Update current question from questions array when it changes
   useEffect(() => {
     if (questions.length > 0 && gameFlow && gameFlow.current_question_index !== null) {
       const idx = gameFlow.current_question_index;
       setCurrentQuestion(questions[idx] || null);
     } else if (gameFlow?.current_question_id && questions.length > 0) {
-      // Fallback: find by question ID
       const question = questions.find((q) => q.id === gameFlow.current_question_id);
       if (question) {
         setCurrentQuestion(question);
@@ -90,6 +147,9 @@ function PlayerExplanationScreenContent() {
     }
   }, [questions, gameFlow]);
 
+  //----------------------------------------------------
+  // 7.4. Computed Values
+  //----------------------------------------------------
   const currentQuestionIndex = gameFlow?.current_question_index ?? 0;
   const totalQuestions = questions.length || 10;
   const questionNumber = currentQuestionIndex + 1;
@@ -108,12 +168,14 @@ function PlayerExplanationScreenContent() {
     [questionNumber, totalQuestions, currentQuestion],
   );
 
-  const handleTimeExpired = () => {
-    // Players wait for host to advance phase - don't auto-navigate
-    // The main game-player page handles phase transitions via WebSocket
-    console.log('Player explanation time expired - waiting for host');
-  };
+  //----------------------------------------------------
+  // 7.5. Event Handlers
+  //----------------------------------------------------
+  const handleTimeExpired = () => {};
 
+  //----------------------------------------------------
+  // 7.6. Main Render
+  //----------------------------------------------------
   if (!gameId) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -146,6 +208,9 @@ function PlayerExplanationScreenContent() {
   return <PlayerExplanationScreen explanation={explanation} onTimeExpired={handleTimeExpired} />;
 }
 
+//----------------------------------------------------
+// 8. Page Wrapper Component
+//----------------------------------------------------
 export default function PlayerExplanationScreenPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
