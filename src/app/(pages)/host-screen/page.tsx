@@ -228,6 +228,135 @@ const AnswerRevealContent: React.FC<{
 };
 
 /**
+ * Component: LeaderboardContent
+ * Description:
+ * - Renders leaderboard screen with redirect handling
+ */
+const LeaderboardContent: React.FC<{
+  questionIndex: number;
+  totalQuestionsCount: number;
+  leaderboardData: LeaderboardData;
+}> = ({ questionIndex, totalQuestionsCount, leaderboardData }) => {
+  const currentQuestionNum = questionIndex + 1;
+  const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
+
+  if (isLastQuestion) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="p-6 text-white text-xl">リダイレクト中...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return <HostLeaderboardScreen leaderboardData={leaderboardData} onTimeExpired={() => {}} />;
+};
+
+/**
+ * Component: ExplanationContent
+ * Description:
+ * - Renders explanation screen
+ */
+const ExplanationContent: React.FC<{
+  questionIndex: number;
+  totalQuestionsCount: number;
+  currentQuestionData: CurrentQuestionData | null;
+  explanationData: ExplanationData | null;
+  currentQuestion: Question;
+}> = ({
+  questionIndex,
+  totalQuestionsCount,
+  currentQuestionData,
+  explanationData,
+  currentQuestion,
+}) => {
+  const currentQuestionNum = questionIndex + 1;
+
+  return (
+    <HostExplanationScreen
+      explanation={{
+        questionNumber: currentQuestionNum,
+        totalQuestions: totalQuestionsCount,
+        timeLimit:
+          currentQuestionData?.showExplanationTime ??
+          explanationData?.show_time ??
+          currentQuestion.show_explanation_time ??
+          10,
+        title: explanationData?.title || '解説',
+        body: explanationData?.text || currentQuestion.explanation || '解説は近日追加されます。',
+        image: explanationData?.image_url || undefined,
+      }}
+      onTimeExpired={() => {}}
+    />
+  );
+};
+
+/**
+ * Component: PodiumContent
+ * Description:
+ * - Renders podium screen
+ */
+const PodiumContent: React.FC<{
+  leaderboard: unknown;
+  leaderboardEntries: Array<{
+    playerId: string;
+    playerName: string;
+    score: number;
+    rank: number;
+    previousRank: number;
+    rankChange: 'up' | 'down' | 'same';
+    scoreChange: number;
+  }>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PublicPhase>>;
+}> = ({ leaderboard, leaderboardEntries, setCurrentPhase }) => {
+  const podiumEntries = Array.isArray(leaderboard)
+    ? leaderboard
+        .map((entry: { player_id: string; player_name: string; score: number; rank: number }) => ({
+          playerId: entry.player_id,
+          playerName: entry.player_name,
+          score: entry.score,
+          rank: entry.rank,
+          previousRank: entry.rank,
+          rankChange: 'same' as const,
+        }))
+        .sort((a, b) => (a.rank || 0) - (b.rank || 0))
+    : leaderboardEntries;
+
+  return (
+    <HostPodiumScreen
+      entries={podiumEntries}
+      onAnimationComplete={() => {
+        setCurrentPhase('ended');
+      }}
+    />
+  );
+};
+
+/**
+ * Component: EndedScreen
+ * Description:
+ * - Renders game end screen
+ */
+const EndedScreen: React.FC = () => (
+  <PageContainer>
+    <Main className="flex-1">
+      <Container
+        size="sm"
+        className="flex flex-col items-center justify-center py-4 md:py-2 space-y-4 md:space-y-6"
+      >
+        <div className="text-center">
+          <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 bg-clip-text text-transparent">
+            ゲーム終了
+          </h1>
+          <p className="mt-4 text-xl text-gray-600">ありがとうございました！</p>
+        </div>
+      </Container>
+    </Main>
+  </PageContainer>
+);
+
+/**
  * Component: WaitingScreen
  * Description:
  * - Renders waiting room with QR code and room code
@@ -304,6 +433,177 @@ const WaitingScreen: React.FC<{ roomCode: string; joinUrl: string }> = ({ roomCo
 //----------------------------------------------------
 // 10. Custom Hooks
 //----------------------------------------------------
+/**
+ * Hook: useHostScreenTimer
+ * Description:
+ * - Manages timer calculations and phase transitions for host screen
+ */
+function useHostScreenTimer({
+  currentPhase,
+  gameFlow,
+  timerState,
+  currentQuestion,
+  questionRemainingMs,
+  answerRemainingMs,
+  setQuestionRemainingMs,
+  setAnswerRemainingMs,
+  setAnswerDurationMs,
+  setIsDisplayPhaseDone,
+  setCurrentPhase,
+  questionTimerInitializedRef,
+  previousPhaseRef,
+}: {
+  currentPhase: PublicPhase;
+  gameFlow: unknown;
+  timerState: { remainingMs?: number; startTime?: Date } | null;
+  currentQuestion: Question;
+  questionRemainingMs: number | null;
+  answerRemainingMs: number | null;
+  setQuestionRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerRemainingMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setAnswerDurationMs: React.Dispatch<React.SetStateAction<number | null>>;
+  setIsDisplayPhaseDone: React.Dispatch<React.SetStateAction<boolean>>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PublicPhase>>;
+  questionTimerInitializedRef: React.MutableRefObject<string | null>;
+  previousPhaseRef: React.MutableRefObject<PublicPhase | null>;
+}) {
+  const derivedRemainingMsFromFlow =
+    (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
+      ?.current_question_start_time &&
+    (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
+      ?.current_question_end_time
+      ? Math.max(
+          0,
+          new Date(
+            (
+              gameFlow as {
+                current_question_start_time?: string;
+                current_question_end_time?: string;
+              }
+            ).current_question_end_time!,
+          ).getTime() - Date.now(),
+        )
+      : null;
+
+  const showQuestionTime = Number.isFinite(currentQuestion.show_question_time)
+    ? currentQuestion.show_question_time
+    : DEFAULT_SHOW_QUESTION_TIME_SECONDS;
+  const answeringTime = Number.isFinite(currentQuestion.answering_time)
+    ? currentQuestion.answering_time
+    : DEFAULT_ANSWERING_TIME_SECONDS;
+
+  const viewingDurationMs = showQuestionTime * MS_PER_SECOND;
+
+  let questionElapsedMs = 0;
+  if (timerState?.startTime && currentPhase === 'question') {
+    questionElapsedMs = Math.max(0, Date.now() - timerState.startTime.getTime());
+  } else if ((gameFlow as { current_question_start_time?: string })?.current_question_start_time) {
+    questionElapsedMs = Math.max(
+      0,
+      Date.now() -
+        new Date(
+          (gameFlow as { current_question_start_time?: string }).current_question_start_time!,
+        ).getTime(),
+    );
+  }
+
+  const viewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+
+  useEffect(() => {
+    const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
+    const previousPhase = previousPhaseRef.current;
+
+    if (previousPhase === 'question' && currentPhase !== 'question') {
+      setQuestionRemainingMs(null);
+      questionTimerInitializedRef.current = null;
+    }
+
+    previousPhaseRef.current = currentPhase;
+
+    if (currentPhase === 'question' && currentQuestionId) {
+      if (questionTimerInitializedRef.current === currentQuestionId) {
+        if (questionRemainingMs === null) {
+          const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+
+          if (currentViewingRemainingMs > 0) {
+            setQuestionRemainingMs(currentViewingRemainingMs);
+          } else {
+            setIsDisplayPhaseDone(true);
+            setAnswerDurationMs(answeringTime * MS_PER_SECOND);
+            setAnswerRemainingMs(answeringTime * MS_PER_SECOND);
+            setCurrentPhase('answering');
+          }
+        }
+        return;
+      }
+
+      questionTimerInitializedRef.current = currentQuestionId;
+
+      const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
+      const initialTime =
+        currentViewingRemainingMs > 0 ? currentViewingRemainingMs : viewingDurationMs;
+
+      if (initialTime > 0) {
+        setQuestionRemainingMs(initialTime);
+      } else {
+        setIsDisplayPhaseDone(true);
+        setAnswerDurationMs(answeringTime * MS_PER_SECOND);
+        setAnswerRemainingMs(answeringTime * MS_PER_SECOND);
+        setCurrentPhase('answering');
+      }
+    }
+  }, [
+    currentPhase,
+    gameFlow,
+    viewingDurationMs,
+    questionElapsedMs,
+    showQuestionTime,
+    answeringTime,
+    questionRemainingMs,
+    setQuestionRemainingMs,
+    setAnswerRemainingMs,
+    setAnswerDurationMs,
+    setIsDisplayPhaseDone,
+    setCurrentPhase,
+    questionTimerInitializedRef,
+    previousPhaseRef,
+  ]);
+
+  const totalRemainingMs =
+    timerState?.remainingMs ??
+    derivedRemainingMsFromFlow ??
+    (currentPhase === 'question' ? viewingRemainingMs : answeringTime * MS_PER_SECOND);
+
+  const answeringRemainingMsDerived = Math.max(
+    0,
+    Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0,
+  );
+
+  const displayRemainingMs =
+    currentPhase === 'question'
+      ? questionRemainingMs !== null
+        ? questionRemainingMs
+        : viewingRemainingMs
+      : answeringRemainingMsDerived;
+
+  const currentTimeSeconds = useMemo(() => {
+    if (currentPhase === 'question') {
+      const time = Number.isFinite(displayRemainingMs) ? displayRemainingMs : 0;
+      return Math.max(0, Math.round(time / MS_PER_SECOND));
+    } else if (currentPhase === 'answering') {
+      const time = Number.isFinite(answerRemainingMs) ? (answerRemainingMs ?? 0) : 0;
+      return Math.max(0, Math.round(time / MS_PER_SECOND));
+    }
+    return 0;
+  }, [currentPhase, displayRemainingMs, answerRemainingMs]);
+
+  return {
+    displayRemainingMs,
+    currentTimeSeconds,
+    viewingRemainingMs,
+  };
+}
+
 /**
  * Hook: useHostScreenWebSocket
  * Description:
@@ -934,114 +1234,23 @@ function HostScreenContent() {
   ]);
 
   //----------------------------------------------------
-  // 11.8. Additional Computed Values
+  // 11.8. Timer Management
   //----------------------------------------------------
-  const derivedRemainingMsFromFlow =
-    gameFlow?.current_question_start_time && gameFlow?.current_question_end_time
-      ? Math.max(0, new Date(gameFlow.current_question_end_time).getTime() - Date.now())
-      : null;
-
-  const showQuestionTime = Number.isFinite(currentQuestion.show_question_time)
-    ? currentQuestion.show_question_time
-    : DEFAULT_SHOW_QUESTION_TIME_SECONDS;
-  const answeringTime = Number.isFinite(currentQuestion.answering_time)
-    ? currentQuestion.answering_time
-    : DEFAULT_ANSWERING_TIME_SECONDS;
-
-  const viewingDurationMs = showQuestionTime * MS_PER_SECOND;
-
-  let questionElapsedMs = 0;
-  if (timerState?.startTime && currentPhase === 'question') {
-    questionElapsedMs = Math.max(0, Date.now() - timerState.startTime.getTime());
-  } else if (gameFlow?.current_question_start_time) {
-    questionElapsedMs = Math.max(
-      0,
-      Date.now() - new Date(gameFlow.current_question_start_time).getTime(),
-    );
-  }
-
-  const viewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
-
-  useEffect(() => {
-    const currentQuestionId = gameFlow?.current_question_id;
-    const previousPhase = previousPhaseRef.current;
-
-    if (previousPhase === 'question' && currentPhase !== 'question') {
-      setQuestionRemainingMs(null);
-      questionTimerInitializedRef.current = null;
-    }
-
-    previousPhaseRef.current = currentPhase;
-
-    if (currentPhase === 'question' && currentQuestionId) {
-      if (questionTimerInitializedRef.current === currentQuestionId) {
-        if (questionRemainingMs === null) {
-          const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
-
-          if (currentViewingRemainingMs > 0) {
-            setQuestionRemainingMs(currentViewingRemainingMs);
-          } else {
-            setIsDisplayPhaseDone(true);
-            setAnswerDurationMs(answeringTime * MS_PER_SECOND);
-            setAnswerRemainingMs(answeringTime * MS_PER_SECOND);
-            setCurrentPhase('answering');
-          }
-        }
-        return;
-      }
-
-      questionTimerInitializedRef.current = currentQuestionId;
-
-      const currentViewingRemainingMs = Math.max(0, viewingDurationMs - questionElapsedMs);
-      const initialTime =
-        currentViewingRemainingMs > 0 ? currentViewingRemainingMs : viewingDurationMs;
-
-      if (initialTime > 0) {
-        setQuestionRemainingMs(initialTime);
-      } else {
-        setIsDisplayPhaseDone(true);
-        setAnswerDurationMs(answeringTime * MS_PER_SECOND);
-        setAnswerRemainingMs(answeringTime * MS_PER_SECOND);
-        setCurrentPhase('answering');
-      }
-    }
-  }, [
+  const { displayRemainingMs, currentTimeSeconds, viewingRemainingMs } = useHostScreenTimer({
     currentPhase,
-    gameFlow?.current_question_id,
-    viewingDurationMs,
-    questionElapsedMs,
-    showQuestionTime,
-    answeringTime,
+    gameFlow,
+    timerState,
+    currentQuestion,
     questionRemainingMs,
-  ]);
-
-  const totalRemainingMs =
-    timerState?.remainingMs ??
-    derivedRemainingMsFromFlow ??
-    (currentPhase === 'question' ? viewingRemainingMs : answeringTime * MS_PER_SECOND);
-
-  const answeringRemainingMsDerived = Math.max(
-    0,
-    Number.isFinite(totalRemainingMs) ? totalRemainingMs : 0,
-  );
-
-  const displayRemainingMs =
-    currentPhase === 'question'
-      ? questionRemainingMs !== null
-        ? questionRemainingMs
-        : viewingRemainingMs
-      : answeringRemainingMsDerived;
-
-  const currentTimeSeconds = useMemo(() => {
-    if (currentPhase === 'question') {
-      const time = Number.isFinite(displayRemainingMs) ? displayRemainingMs : 0;
-      return Math.max(0, Math.round(time / MS_PER_SECOND));
-    } else if (currentPhase === 'answering') {
-      const time = Number.isFinite(answerRemainingMs) ? (answerRemainingMs ?? 0) : 0;
-      return Math.max(0, Math.round(time / MS_PER_SECOND));
-    }
-    return 0;
-  }, [currentPhase, displayRemainingMs, answerRemainingMs]);
+    answerRemainingMs,
+    setQuestionRemainingMs,
+    setAnswerRemainingMs,
+    setAnswerDurationMs,
+    setIsDisplayPhaseDone,
+    setCurrentPhase,
+    questionTimerInitializedRef,
+    previousPhaseRef,
+  });
 
   //----------------------------------------------------
   // 11.9. Event Handlers
@@ -1267,90 +1476,37 @@ function HostScreenContent() {
         />
       );
 
-    case 'leaderboard': {
-      const currentQuestionNum = questionIndex + 1;
-      const isLastQuestion = currentQuestionNum >= totalQuestionsCount;
-
-      if (isLastQuestion) {
-        return (
-          <div className="flex items-center justify-center h-screen">
-            <div className="text-center">
-              <div className="p-6 text-white text-xl">リダイレクト中...</div>
-            </div>
-          </div>
-        );
-      }
-
-      return <HostLeaderboardScreen leaderboardData={leaderboardData} onTimeExpired={() => {}} />;
-    }
-
-    case 'explanation': {
-      const currentQuestionNum = questionIndex + 1;
-
-      const handleExplanationTimeExpired = () => {};
-
+    case 'leaderboard':
       return (
-        <HostExplanationScreen
-          explanation={{
-            questionNumber: currentQuestionNum,
-            totalQuestions: totalQuestionsCount,
-            timeLimit:
-              currentQuestionData?.showExplanationTime ??
-              explanationData?.show_time ??
-              currentQuestion.show_explanation_time ??
-              10,
-            title: explanationData?.title || '解説',
-            body:
-              explanationData?.text || currentQuestion.explanation || '解説は近日追加されます。',
-            image: explanationData?.image_url || undefined,
-          }}
-          onTimeExpired={handleExplanationTimeExpired}
+        <LeaderboardContent
+          questionIndex={questionIndex}
+          totalQuestionsCount={totalQuestionsCount}
+          leaderboardData={leaderboardData}
         />
       );
-    }
 
-    case 'podium': {
-      const podiumEntries = Array.isArray(leaderboard)
-        ? leaderboard
-            .map((entry) => ({
-              playerId: entry.player_id,
-              playerName: entry.player_name,
-              score: entry.score,
-              rank: entry.rank,
-              previousRank: entry.rank,
-              rankChange: 'same' as const,
-            }))
-            .sort((a, b) => (a.rank || 0) - (b.rank || 0))
-        : leaderboardEntries;
-
+    case 'explanation':
       return (
-        <HostPodiumScreen
-          entries={podiumEntries}
-          onAnimationComplete={() => {
-            setCurrentPhase('ended');
-          }}
+        <ExplanationContent
+          questionIndex={questionIndex}
+          totalQuestionsCount={totalQuestionsCount}
+          currentQuestionData={currentQuestionData}
+          explanationData={explanationData}
+          currentQuestion={currentQuestion}
         />
       );
-    }
+
+    case 'podium':
+      return (
+        <PodiumContent
+          leaderboard={leaderboard}
+          leaderboardEntries={leaderboardEntries}
+          setCurrentPhase={setCurrentPhase}
+        />
+      );
 
     case 'ended':
-      return (
-        <PageContainer>
-          <Main className="flex-1">
-            <Container
-              size="sm"
-              className="flex flex-col items-center justify-center py-4 md:py-2 space-y-4 md:space-y-6"
-            >
-              <div className="text-center">
-                <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 bg-clip-text text-transparent">
-                  ゲーム終了
-                </h1>
-                <p className="mt-4 text-xl text-gray-600">ありがとうございました！</p>
-              </div>
-            </Container>
-          </Main>
-        </PageContainer>
-      );
+      return <EndedScreen />;
 
     case 'waiting':
     default:
