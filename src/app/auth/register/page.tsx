@@ -1,11 +1,39 @@
+// ====================================================
+// File Name   : page.tsx
+// Project     : TUIZ
+// Author      : PandaDev0069 / Panta Aashish
+// Created     : 2025-08-21
+// Last Update : 2025-08-26
+//
+// Description:
+// - Registration page component for new account creation
+// - Handles user registration with email, username, display name, and password
+// - Includes form validation and error handling
+//
+// Notes:
+// - Uses auth store for registration state
+// - Supports username as display name option
+// - Redirects to dashboard on success
+// ====================================================
+
 'use client';
 
+//----------------------------------------------------
+// 1. React & Next.js Imports
+//----------------------------------------------------
 import React, { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/state/useAuthStore';
-import { useUiStore } from '@/state/useUiStore';
+
+//----------------------------------------------------
+// 2. External Library Imports
+//----------------------------------------------------
+// (No external libraries needed)
+
+//----------------------------------------------------
+// 3. Internal Component Imports
+//----------------------------------------------------
 import {
   AuthCard,
   InputField,
@@ -22,15 +50,26 @@ import {
   Footer,
 } from '@/components/ui';
 
-/**
- * Register page component
- * - Account creation form with validation
- * - Email, username, display name, password fields
- * - Form validation and error handling
- * @returns JSX.Element
- */
+//----------------------------------------------------
+// 4. Service & Hook Imports
+//----------------------------------------------------
+import { useAuthStore } from '@/state/useAuthStore';
+import { useUiStore } from '@/state/useUiStore';
 
+//----------------------------------------------------
+// 5. Main Component
+//----------------------------------------------------
+/**
+ * Component: RegisterPage
+ * Description:
+ * - Registration page component for new account creation
+ * - Handles user registration with email, username, display name, and password
+ * - Includes form validation and error handling
+ */
 export default function RegisterPage() {
+  //----------------------------------------------------
+  // 5.1. Setup & State
+  //----------------------------------------------------
   const router = useRouter();
   const { register, loading } = useAuthStore();
   const { setToast } = useUiStore();
@@ -47,6 +86,9 @@ export default function RegisterPage() {
   const [generalError, setGeneralError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
+  //----------------------------------------------------
+  // 5.2. Event Handlers
+  //----------------------------------------------------
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => {
@@ -55,7 +97,6 @@ export default function RegisterPage() {
         [name]: value,
       };
 
-      // If "use username as display name" is checked, sync display name
       if (name === 'username' && useUsernameAsDisplayName) {
         newData.displayName = value;
       }
@@ -63,7 +104,6 @@ export default function RegisterPage() {
       return newData;
     });
 
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors((prev) => ({
         ...prev,
@@ -85,14 +125,12 @@ export default function RegisterPage() {
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
 
-    // Email validation
     if (!formData.email) {
       newErrors.email = 'メールアドレスを入力してください';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = '有効なメールアドレスを入力してください';
     }
 
-    // Username validation
     if (!formData.username) {
       newErrors.username = 'ユーザー名を入力してください';
     } else if (formData.username.length < 3) {
@@ -103,21 +141,18 @@ export default function RegisterPage() {
       newErrors.username = '英数字とアンダースコアのみ使用可能です';
     }
 
-    // Display name validation
     if (!formData.displayName) {
       newErrors.displayName = '表示名を入力してください';
     } else if (formData.displayName.length < 1 || formData.displayName.length > 50) {
       newErrors.displayName = '表示名は1-50文字で入力してください';
     }
 
-    // Password validation
     if (!formData.password) {
       newErrors.password = 'パスワードを入力してください';
     } else if (formData.password.length < 6) {
       newErrors.password = 'パスワードは6文字以上で入力してください';
     }
 
-    // Confirm password validation
     if (!formData.confirmPassword) {
       newErrors.confirmPassword = 'パスワード確認を入力してください';
     } else if (formData.password !== formData.confirmPassword) {
@@ -148,11 +183,9 @@ export default function RegisterPage() {
         displayName: formData.displayName || undefined,
       });
 
-      // Success - show message and redirect
       setSuccessMessage('アカウントが正常に作成されました！ダッシュボードに移動します...');
       setToast('アカウントを作成しました');
 
-      // Reset form
       setFormData({
         email: '',
         username: '',
@@ -163,7 +196,6 @@ export default function RegisterPage() {
       setUseUsernameAsDisplayName(false);
       setErrors({});
 
-      // Redirect after success
       setTimeout(() => {
         router.push('/dashboard');
       }, 2000);
@@ -176,6 +208,9 @@ export default function RegisterPage() {
     }
   };
 
+  //----------------------------------------------------
+  // 5.3. Main Render
+  //----------------------------------------------------
   return (
     <PageContainer
       entrance="scaleIn"
@@ -183,7 +218,6 @@ export default function RegisterPage() {
     >
       <main role="main">
         <Container size="sm" className="w-full max-w-md mx-auto">
-          {/* Header */}
           <div className="text-center mb-8">
             <div className="flex justify-center items-center mb-4">
               <Image
@@ -204,13 +238,10 @@ export default function RegisterPage() {
 
           <AuthCard variant="success" className="shadow-2xl">
             <form onSubmit={handleSubmit} className="space-y-6" noValidate>
-              {/* General Error */}
               {generalError && <FormError message={generalError} />}
 
-              {/* Success Message */}
               {successMessage && <FormSuccess message={successMessage} />}
 
-              {/* Email Field */}
               <InputField
                 label="メールアドレス"
                 type="email"
@@ -222,7 +253,6 @@ export default function RegisterPage() {
                 required
               />
 
-              {/* Username Field */}
               <div className="space-y-1">
                 <InputField
                   label="ユーザー名"
@@ -241,7 +271,6 @@ export default function RegisterPage() {
                 />
               </div>
 
-              {/* Display Name Field */}
               <div className="space-y-2">
                 <InputField
                   label="表示名"
@@ -263,7 +292,6 @@ export default function RegisterPage() {
                 />
               </div>
 
-              {/* Password Field */}
               <div className="space-y-1">
                 <PasswordField
                   label="パスワード"
@@ -277,7 +305,6 @@ export default function RegisterPage() {
                 <ValidationMessage variant="info" message="6文字以上のパスワード" size="sm" />
               </div>
 
-              {/* Confirm Password Field */}
               <PasswordField
                 label="パスワード確認"
                 name="confirmPassword"
@@ -288,7 +315,6 @@ export default function RegisterPage() {
                 required
               />
 
-              {/* Register Button */}
               <Button
                 type="submit"
                 variant="gradient"
@@ -299,7 +325,6 @@ export default function RegisterPage() {
                 {loading ? '作成中...' : 'アカウント作成'}
               </Button>
 
-              {/* Login Link */}
               <RedirectLink
                 text="既にアカウントをお持ちの方は"
                 linkText="ログイン"
@@ -310,7 +335,6 @@ export default function RegisterPage() {
             </form>
           </AuthCard>
 
-          {/* Back to Home Link */}
           <div className="mt-8 text-center">
             <Link
               href="/"
