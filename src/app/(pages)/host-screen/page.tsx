@@ -161,12 +161,335 @@ interface GameEventData {
 //----------------------------------------------------
 // 9. Helper Components
 //----------------------------------------------------
-// (No helper components needed)
+/**
+ * Component: AnswerRevealContent
+ * Description:
+ * - Renders answer reveal screen with statistics
+ */
+const AnswerRevealContent: React.FC<{
+  currentQuestion: Question;
+  answerStats: Record<string, number>;
+  leaderboard: unknown;
+  leaderboardEntries: unknown[];
+  questionIndex: number;
+  totalQuestionsCount: number;
+}> = ({
+  currentQuestion,
+  answerStats,
+  leaderboard,
+  leaderboardEntries,
+  questionIndex,
+  totalQuestionsCount,
+}) => {
+  if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-red-600 text-xl">問題データが読み込まれていません</div>
+      </div>
+    );
+  }
+
+  const totalAnswered = currentQuestion.choices.reduce(
+    (sum, choice) => sum + (answerStats[choice.id] ?? 0),
+    0,
+  );
+  const statistics = currentQuestion.choices.map((choice) => {
+    const count = answerStats[choice.id] || 0;
+    return {
+      choiceId: choice.id,
+      count,
+      percentage: totalAnswered > 0 ? (count / totalAnswered) * 100 : 0,
+    };
+  });
+
+  const correctAnswerChoice =
+    currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId) ||
+    currentQuestion.choices[0];
+
+  const answerResult = {
+    question: currentQuestion,
+    correctAnswer: correctAnswerChoice,
+    playerAnswer: undefined,
+    isCorrect: false,
+    statistics,
+    totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : leaderboardEntries.length,
+    totalAnswered,
+  };
+
+  return (
+    <HostAnswerRevealScreen
+      answerResult={answerResult}
+      questionNumber={questionIndex + 1}
+      totalQuestions={totalQuestionsCount}
+      timeLimit={ANSWER_REVEAL_TIME_LIMIT_SECONDS}
+      onTimeExpired={() => {}}
+    />
+  );
+};
+
+/**
+ * Component: WaitingScreen
+ * Description:
+ * - Renders waiting room with QR code and room code
+ */
+const WaitingScreen: React.FC<{ roomCode: string; joinUrl: string }> = ({ roomCode, joinUrl }) => (
+  <PageContainer>
+    <Main className="flex-1">
+      <Container
+        size="sm"
+        className="flex flex-col items-center justify-center py-4 md:py-2 space-y-4 md:space-y-6"
+      >
+        <div className="text-center">
+          <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 bg-clip-text text-transparent animate-pulse">
+            TUIZ情報王
+          </h1>
+          <div className="mt-3 relative inline-block">
+            <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-blue-100 rounded-xl blur-sm opacity-50 scale-105"></div>
+            <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-6 py-3 rounded-xl border border-cyan-200">
+              <p className="text-base md:text-lg font-semibold bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent">
+                参加コードでクイズに参加しよう！
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="text-center">
+          <div className="relative inline-block">
+            <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl blur-lg opacity-30 scale-110"></div>
+            <div className="relative bg-gradient-to-br from-cyan-100 via-blue-50 to-cyan-100 px-16 py-10 rounded-xl border-2 border-cyan-300 shadow-2xl transform hover:scale-105 hover:shadow-cyan-200/50 transition-all duration-300">
+              <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl"></div>
+              <div className="relative">
+                <span className="text-8xl md:text-9xl font-mono font-black bg-gradient-to-r from-cyan-700 via-blue-600 to-cyan-700 bg-clip-text text-transparent tracking-wider drop-shadow-sm">
+                  {roomCode || '------'}
+                </span>
+              </div>
+            </div>
+            <div className="absolute -top-3 -left-3 w-6 h-6 bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-full shadow-lg"></div>
+            <div className="absolute -bottom-3 -right-3 w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
+            <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
+          </div>
+        </div>
+
+        <div className="text-center max-w-md">
+          <div className="relative inline-block">
+            <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-blue-100 rounded-2xl blur-sm opacity-50 scale-105"></div>
+            <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-8 py-6 rounded-2xl border border-cyan-200">
+              <h3 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent mb-4">
+                QRコードで参加
+              </h3>
+              <div className="relative inline-block mb-4">
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl blur-lg opacity-30 scale-110"></div>
+                <div className="relative bg-gradient-to-br from-cyan-100 via-blue-50 to-cyan-100 px-8 py-8 rounded-xl border-2 border-cyan-300 shadow-2xl transform hover:scale-105 hover:shadow-cyan-200/50 transition-all duration-300">
+                  <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl"></div>
+                  {joinUrl ? (
+                    <QRCode value={joinUrl} size={300} className="rounded-lg" />
+                  ) : (
+                    <div className="w-64 h-64 bg-gray-100 rounded-lg flex items-center justify-center">
+                      <p className="text-gray-500">QRコード生成中...</p>
+                    </div>
+                  )}
+                  <div className="absolute -top-3 -left-3 w-6 h-6 bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-full shadow-lg"></div>
+                  <div className="absolute -bottom-3 -right-3 w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
+                  <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Container>
+    </Main>
+  </PageContainer>
+);
 
 //----------------------------------------------------
 // 10. Custom Hooks
 //----------------------------------------------------
-// (Custom hooks imported from @/hooks)
+/**
+ * Hook: useHostScreenWebSocket
+ * Description:
+ * - Manages WebSocket connection and event handlers for host screen
+ */
+function useHostScreenWebSocket({
+  gameId,
+  roomCode,
+  socket,
+  isConnected,
+  joinRoom,
+  leaveRoom,
+  gameFlowRef,
+  currentPhaseRef,
+  setCurrentPhase,
+  setAnswerStats,
+  setCountdownStartedAt,
+}: {
+  gameId: string | null;
+  roomCode: string;
+  socket: ReturnType<typeof useSocket>['socket'];
+  isConnected: boolean;
+  joinRoom: (roomId: string) => void;
+  leaveRoom: (roomId: string) => void;
+  gameFlowRef: React.MutableRefObject<unknown>;
+  currentPhaseRef: React.MutableRefObject<PublicPhase>;
+  setCurrentPhase: React.Dispatch<React.SetStateAction<PublicPhase>>;
+  setAnswerStats: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  setCountdownStartedAt: React.Dispatch<React.SetStateAction<number | undefined>>;
+}) {
+  const hasJoinedRoomRef = useRef(false);
+  const socketIdRef = useRef<string | null>(null);
+
+  const handleStatsUpdate = useCallback(
+    (data: StatsUpdateData) => {
+      if (
+        data.roomId === gameId &&
+        data.questionId ===
+          (gameFlowRef.current as { current_question_id?: string })?.current_question_id
+      ) {
+        setAnswerStats(data.counts);
+      }
+    },
+    [gameId, gameFlowRef, setAnswerStats],
+  );
+
+  const handleAnswerLocked = useCallback(
+    (data: AnswerLockedData) => {
+      if (data.roomId !== gameId) return;
+      if (
+        data.counts &&
+        data.questionId ===
+          (gameFlowRef.current as { current_question_id?: string })?.current_question_id
+      ) {
+        setAnswerStats(data.counts);
+      }
+      setCurrentPhase('answer_reveal');
+    },
+    [gameId, gameFlowRef, setAnswerStats, setCurrentPhase],
+  );
+
+  const handlePhaseChange = useCallback(
+    (data: PhaseChangeData) => {
+      if (data.roomId !== gameId) return;
+
+      const current = currentPhaseRef.current;
+      if (data.phase !== 'waiting') {
+        const isValidTransition =
+          (current === 'explanation' && data.phase === 'countdown') ||
+          (current === 'leaderboard' && data.phase === 'countdown') ||
+          data.phase === 'explanation' ||
+          data.phase === 'leaderboard';
+
+        const currentRank = PHASE_PRIORITY[current];
+        const nextRank = PHASE_PRIORITY[data.phase];
+        if (
+          !isValidTransition &&
+          Number.isFinite(currentRank) &&
+          Number.isFinite(nextRank) &&
+          nextRank < currentRank
+        ) {
+          return;
+        }
+      }
+
+      if (current !== data.phase) {
+        setCurrentPhase(data.phase);
+      }
+
+      if (data.phase === 'countdown' && data.startedAt) {
+        setCountdownStartedAt(data.startedAt);
+      }
+    },
+    [gameId, currentPhaseRef, setCurrentPhase, setCountdownStartedAt],
+  );
+
+  const handleGameStarted = useCallback(
+    (data: GameEventData) => {
+      const targetGameId = data.gameId || data.roomId;
+      if (targetGameId === gameId || data.roomCode === roomCode) {
+        setCurrentPhase('countdown');
+      }
+    },
+    [gameId, roomCode, setCurrentPhase],
+  );
+
+  const handleGamePause = useCallback(() => {}, []);
+  const handleGameResume = useCallback(() => {}, []);
+  const handleGameEnd = useCallback(
+    (data: GameEventData) => {
+      const targetGameId = data.gameId;
+      if (targetGameId === gameId) {
+        setCurrentPhase('ended');
+      }
+    },
+    [gameId, setCurrentPhase],
+  );
+
+  const setupSocketListeners = useCallback(
+    (currentSocket: typeof socket) => {
+      if (!currentSocket) return () => {};
+
+      currentSocket.on('game:answer:stats:update', handleStatsUpdate);
+      currentSocket.on('game:answer:stats', handleStatsUpdate);
+      currentSocket.on('game:answer:locked', handleAnswerLocked);
+      currentSocket.on('game:phase:change', handlePhaseChange);
+      currentSocket.on('game:started', handleGameStarted);
+      currentSocket.on('game:pause', handleGamePause);
+      currentSocket.on('game:resume', handleGameResume);
+      currentSocket.on('game:end', handleGameEnd);
+
+      return () => {
+        currentSocket.off('game:answer:stats:update', handleStatsUpdate);
+        currentSocket.off('game:answer:stats', handleStatsUpdate);
+        currentSocket.off('game:answer:locked', handleAnswerLocked);
+        currentSocket.off('game:phase:change', handlePhaseChange);
+        currentSocket.off('game:started', handleGameStarted);
+        currentSocket.off('game:pause', handleGamePause);
+        currentSocket.off('game:resume', handleGameResume);
+        currentSocket.off('game:end', handleGameEnd);
+      };
+    },
+    [
+      handleStatsUpdate,
+      handleAnswerLocked,
+      handlePhaseChange,
+      handleGameStarted,
+      handleGamePause,
+      handleGameResume,
+      handleGameEnd,
+    ],
+  );
+
+  const joinRoomSafe = useCallback(() => {
+    if (hasJoinedRoomRef.current) {
+      return;
+    }
+    if (isConnected) {
+      joinRoom(gameId || '');
+      hasJoinedRoomRef.current = true;
+    }
+  }, [gameId, joinRoom, isConnected]);
+
+  useEffect(() => {
+    if (!socket || !isConnected || !gameId) return;
+
+    const currentSocketId = socket.id || null;
+    if (socketIdRef.current !== currentSocketId) {
+      if (socketIdRef.current) {
+        hasJoinedRoomRef.current = false;
+      }
+      socketIdRef.current = currentSocketId;
+    }
+
+    const cleanupListeners = setupSocketListeners(socket);
+    joinRoomSafe();
+
+    return () => {
+      cleanupListeners();
+      if (gameId && hasJoinedRoomRef.current) {
+        leaveRoom(gameId);
+        hasJoinedRoomRef.current = false;
+      }
+    };
+  }, [socket, isConnected, gameId, joinRoom, leaveRoom, joinRoomSafe, setupSocketListeners]);
+}
 
 //----------------------------------------------------
 // 11. Main Page Content Component
@@ -341,13 +664,9 @@ function HostScreenContent() {
   //----------------------------------------------------
   // 11.4. Refs
   //----------------------------------------------------
-  const hasJoinedRoomRef = useRef(false);
   const gameFlowRef = useRef(gameFlow);
-  const socketRef = useRef(socket);
-  const isConnectedRef = useRef(isConnected);
   const currentPhaseRef = useRef<PublicPhase>(DEFAULT_PHASE);
   const currentQuestionIdRef = useRef<string | null>(null);
-  const socketIdRef = useRef<string | null>(null);
   const questionTimerInitializedRef = useRef<string | null>(null);
   const previousPhaseRef = useRef<PublicPhase | null>(null);
   const hasTransitionedToRevealRef = useRef(false);
@@ -368,14 +687,6 @@ function HostScreenContent() {
   useEffect(() => {
     gameFlowRef.current = gameFlow;
   }, [gameFlow]);
-
-  useEffect(() => {
-    socketRef.current = socket;
-  }, [socket]);
-
-  useEffect(() => {
-    isConnectedRef.current = isConnected;
-  }, [isConnected]);
 
   useEffect(() => {
     currentQuestionIdRef.current = gameFlow?.current_question_id ?? null;
@@ -499,211 +810,21 @@ function HostScreenContent() {
   }, [gameId, gameFlow?.current_question_id]);
 
   //----------------------------------------------------
-  // 11.6. Helper Functions
+  // 11.6. WebSocket Setup
   //----------------------------------------------------
-  /**
-   * Function: handleStatsUpdate
-   * Description:
-   * - Handles WebSocket answer statistics updates
-   * - Only updates stats for current question
-   */
-  const handleStatsUpdate = useCallback(
-    (data: StatsUpdateData) => {
-      if (data.roomId === gameId && data.questionId === gameFlowRef.current?.current_question_id) {
-        setAnswerStats(data.counts);
-      }
-    },
-    [gameId],
-  );
-
-  /**
-   * Function: handleAnswerLocked
-   * Description:
-   * - Handles answer locked event from host
-   * - Transitions to answer reveal phase
-   */
-  const handleAnswerLocked = useCallback(
-    (data: AnswerLockedData) => {
-      if (data.roomId !== gameId) return;
-      if (data.counts && data.questionId === gameFlowRef.current?.current_question_id) {
-        setAnswerStats(data.counts);
-      }
-      setCurrentPhase('answer_reveal');
-    },
-    [gameId],
-  );
-
-  /**
-   * Function: handlePhaseChange
-   * Description:
-   * - Handles WebSocket phase change events from host
-   * - Prevents invalid phase downgrades
-   */
-  const handlePhaseChange = useCallback(
-    (data: PhaseChangeData) => {
-      if (data.roomId !== gameId) return;
-
-      const current = currentPhaseRef.current;
-      if (data.phase !== 'waiting') {
-        const isValidTransition =
-          (current === 'explanation' && data.phase === 'countdown') ||
-          (current === 'leaderboard' && data.phase === 'countdown') ||
-          data.phase === 'explanation' ||
-          data.phase === 'leaderboard';
-
-        const currentRank = PHASE_PRIORITY[current];
-        const nextRank = PHASE_PRIORITY[data.phase];
-        if (
-          !isValidTransition &&
-          Number.isFinite(currentRank) &&
-          Number.isFinite(nextRank) &&
-          nextRank < currentRank
-        ) {
-          return;
-        }
-      }
-
-      if (current !== data.phase) {
-        setCurrentPhase(data.phase);
-      }
-
-      if (data.phase === 'countdown' && data.startedAt) {
-        setCountdownStartedAt(data.startedAt);
-      }
-    },
-    [gameId],
-  );
-
-  /**
-   * Function: handleGameStarted
-   * Description:
-   * - Handles game started event
-   * - Transitions to countdown phase
-   */
-  const handleGameStarted = useCallback(
-    (data: GameEventData) => {
-      const targetGameId = data.gameId || data.roomId;
-      if (targetGameId === gameId || data.roomCode === roomCode) {
-        setCurrentPhase('countdown');
-      }
-    },
-    [gameId, roomCode],
-  );
-
-  /**
-   * Function: handleGamePause
-   * Description:
-   * - Handles game pause event
-   * - Timer will be paused by useGameFlow hook
-   */
-  const handleGamePause = useCallback((data: GameEventData) => {
-    void data;
-  }, []);
-
-  /**
-   * Function: handleGameResume
-   * Description:
-   * - Handles game resume event
-   * - Timer will be resumed by useGameFlow hook
-   */
-  const handleGameResume = useCallback((data: GameEventData) => {
-    void data;
-  }, []);
-
-  /**
-   * Function: handleGameEnd
-   * Description:
-   * - Handles game end event
-   * - Transitions to ended phase
-   */
-  const handleGameEnd = useCallback(
-    (data: GameEventData) => {
-      const targetGameId = data.gameId;
-      if (targetGameId === gameId) {
-        setCurrentPhase('ended');
-      }
-    },
-    [gameId],
-  );
-
-  /**
-   * Function: setupSocketListeners
-   * Description:
-   * - Sets up all WebSocket event listeners
-   * - Returns cleanup function
-   */
-  const setupSocketListeners = useCallback(
-    (currentSocket: typeof socket) => {
-      if (!currentSocket) return () => {};
-
-      currentSocket.on('game:answer:stats:update', handleStatsUpdate);
-      currentSocket.on('game:answer:stats', handleStatsUpdate);
-      currentSocket.on('game:answer:locked', handleAnswerLocked);
-      currentSocket.on('game:phase:change', handlePhaseChange);
-      currentSocket.on('game:started', handleGameStarted);
-      currentSocket.on('game:pause', handleGamePause);
-      currentSocket.on('game:resume', handleGameResume);
-      currentSocket.on('game:end', handleGameEnd);
-
-      return () => {
-        currentSocket.off('game:answer:stats:update', handleStatsUpdate);
-        currentSocket.off('game:answer:stats', handleStatsUpdate);
-        currentSocket.off('game:answer:locked', handleAnswerLocked);
-        currentSocket.off('game:phase:change', handlePhaseChange);
-        currentSocket.off('game:started', handleGameStarted);
-        currentSocket.off('game:pause', handleGamePause);
-        currentSocket.off('game:resume', handleGameResume);
-        currentSocket.off('game:end', handleGameEnd);
-      };
-    },
-    [
-      handleStatsUpdate,
-      handleAnswerLocked,
-      handlePhaseChange,
-      handleGameStarted,
-      handleGamePause,
-      handleGameResume,
-      handleGameEnd,
-    ],
-  );
-
-  /**
-   * Function: joinRoomSafe
-   * Description:
-   * - Safely joins WebSocket room with deduplication
-   */
-  const joinRoomSafe = useCallback(() => {
-    if (hasJoinedRoomRef.current) {
-      return;
-    }
-    if (isConnectedRef.current) {
-      joinRoom(gameId || '');
-      hasJoinedRoomRef.current = true;
-    }
-  }, [gameId, joinRoom]);
-
-  useEffect(() => {
-    if (!socket || !isConnected || !gameId) return;
-
-    const currentSocketId = socket.id || null;
-    if (socketIdRef.current !== currentSocketId) {
-      if (socketIdRef.current) {
-        hasJoinedRoomRef.current = false;
-      }
-      socketIdRef.current = currentSocketId;
-    }
-
-    const cleanupListeners = setupSocketListeners(socket);
-    joinRoomSafe();
-
-    return () => {
-      cleanupListeners();
-      if (gameId && hasJoinedRoomRef.current) {
-        leaveRoom(gameId);
-        hasJoinedRoomRef.current = false;
-      }
-    };
-  }, [socket, isConnected, gameId, joinRoom, leaveRoom, joinRoomSafe, setupSocketListeners]);
+  useHostScreenWebSocket({
+    gameId,
+    roomCode,
+    socket,
+    isConnected,
+    joinRoom,
+    leaveRoom,
+    gameFlowRef,
+    currentPhaseRef,
+    setCurrentPhase,
+    setAnswerStats,
+    setCountdownStartedAt,
+  });
 
   useEffect(() => {
     if (!gameFlow?.current_question_id) return;
@@ -1134,52 +1255,17 @@ function HostScreenContent() {
         />
       );
 
-    case 'answer_reveal': {
-      if (!currentQuestion.choices || currentQuestion.choices.length === 0) {
-        return (
-          <div className="flex items-center justify-center h-screen">
-            <div className="text-red-600 text-xl">問題データが読み込まれていません</div>
-          </div>
-        );
-      }
-
-      const totalAnswered = currentQuestion.choices.reduce(
-        (sum, choice) => sum + (answerStats[choice.id] ?? 0),
-        0,
-      );
-      const statistics = currentQuestion.choices.map((choice) => {
-        const count = answerStats[choice.id] || 0;
-        return {
-          choiceId: choice.id,
-          count,
-          percentage: totalAnswered > 0 ? (count / totalAnswered) * 100 : 0,
-        };
-      });
-
-      const correctAnswerChoice =
-        currentQuestion.choices.find((c) => c.id === currentQuestion.correctAnswerId) ||
-        currentQuestion.choices[0];
-
-      const answerResult = {
-        question: currentQuestion,
-        correctAnswer: correctAnswerChoice,
-        playerAnswer: undefined,
-        isCorrect: false,
-        statistics,
-        totalPlayers: Array.isArray(leaderboard) ? leaderboard.length : leaderboardEntries.length,
-        totalAnswered,
-      };
-
+    case 'answer_reveal':
       return (
-        <HostAnswerRevealScreen
-          answerResult={answerResult}
-          questionNumber={questionIndex + 1}
-          totalQuestions={totalQuestionsCount}
-          timeLimit={ANSWER_REVEAL_TIME_LIMIT_SECONDS}
-          onTimeExpired={() => {}}
+        <AnswerRevealContent
+          currentQuestion={currentQuestion}
+          answerStats={answerStats}
+          leaderboard={leaderboard}
+          leaderboardEntries={leaderboardEntries}
+          questionIndex={questionIndex}
+          totalQuestionsCount={totalQuestionsCount}
         />
       );
-    }
 
     case 'leaderboard': {
       const currentQuestionNum = questionIndex + 1;
@@ -1268,85 +1354,7 @@ function HostScreenContent() {
 
     case 'waiting':
     default:
-      return (
-        <PageContainer>
-          <Main className="flex-1">
-            <Container
-              size="sm"
-              className="flex flex-col items-center justify-center py-4 md:py-2 space-y-4 md:space-y-6"
-            >
-              <div className="text-center">
-                <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 bg-clip-text text-transparent animate-pulse">
-                  TUIZ情報王
-                </h1>
-                <div className="mt-3 relative inline-block">
-                  {/* Background glow */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-blue-100 rounded-xl blur-sm opacity-50 scale-105"></div>
-
-                  {/* Message container */}
-                  <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-6 py-3 rounded-xl border border-cyan-200">
-                    <p className="text-base md:text-lg font-semibold bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent">
-                      参加コードでクイズに参加しよう！
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="text-center">
-                <div className="relative inline-block">
-                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl blur-lg opacity-30 scale-110"></div>
-
-                  <div className="relative bg-gradient-to-br from-cyan-100 via-blue-50 to-cyan-100 px-16 py-10 rounded-xl border-2 border-cyan-300 shadow-2xl transform hover:scale-105 hover:shadow-cyan-200/50 transition-all duration-300">
-                    <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl"></div>
-
-                    <div className="relative">
-                      <span className="text-8xl md:text-9xl font-mono font-black bg-gradient-to-r from-cyan-700 via-blue-600 to-cyan-700 bg-clip-text text-transparent tracking-wider drop-shadow-sm">
-                        {roomCode || '------'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="absolute -top-3 -left-3 w-6 h-6 bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-full shadow-lg"></div>
-                  <div className="absolute -bottom-3 -right-3 w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
-                  <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
-                </div>
-              </div>
-
-              <div className="text-center max-w-md">
-                <div className="relative inline-block">
-                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-100 to-blue-100 rounded-2xl blur-sm opacity-50 scale-105"></div>
-
-                  <div className="relative bg-gradient-to-r from-cyan-50 to-blue-50 px-8 py-6 rounded-2xl border border-cyan-200">
-                    <h3 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-cyan-700 to-blue-700 bg-clip-text text-transparent mb-4">
-                      QRコードで参加
-                    </h3>
-
-                    <div className="relative inline-block mb-4">
-                      <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl blur-lg opacity-30 scale-110"></div>
-
-                      <div className="relative bg-gradient-to-br from-cyan-100 via-blue-50 to-cyan-100 px-8 py-8 rounded-xl border-2 border-cyan-300 shadow-2xl transform hover:scale-105 hover:shadow-cyan-200/50 transition-all duration-300">
-                        <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent rounded-t-xl"></div>
-
-                        {joinUrl ? (
-                          <QRCode value={joinUrl} size={300} className="rounded-lg" />
-                        ) : (
-                          <div className="w-64 h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                            <p className="text-gray-500">QRコード生成中...</p>
-                          </div>
-                        )}
-
-                        <div className="absolute -top-3 -left-3 w-6 h-6 bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-full shadow-lg"></div>
-                        <div className="absolute -bottom-3 -right-3 w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full shadow-lg"></div>
-                        <div className="absolute top-1/2 -right-2 w-3 h-3 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full shadow-md"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Container>
-          </Main>
-        </PageContainer>
-      );
+      return <WaitingScreen roomCode={roomCode} joinUrl={joinUrl} />;
   }
 }
 
