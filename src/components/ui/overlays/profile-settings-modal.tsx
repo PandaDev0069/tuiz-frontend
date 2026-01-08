@@ -511,9 +511,6 @@ const ActionButtons: React.FC<{
       </>
     ) : (
       <>
-        <Button variant="outline" onClick={onClose}>
-          閉じる
-        </Button>
         <Button variant="gradient2" onClick={onEdit} className={EDIT_BUTTON_CLASSES}>
           <Edit3 className={SAVE_ICON_CLASSES} />
           編集
