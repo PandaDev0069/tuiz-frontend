@@ -303,6 +303,7 @@ function validateSubmissionParams(
   questionNumber: number | undefined,
   hasAnswered: boolean,
   isSubmitting: boolean,
+  responseTimeMs?: number,
 ): void {
   if (!gameId || !playerId || !questionId) {
     throw new Error(ERROR_MESSAGES.MISSING_REQUIRED_PARAMETERS);
@@ -314,6 +315,17 @@ function validateSubmissionParams(
 
   if (!questionNumber || questionNumber < MIN_QUESTION_NUMBER) {
     throw new Error(ERROR_MESSAGES.QUESTION_NUMBER_REQUIRED);
+  }
+
+  // Validate responseTimeMs if provided
+  if (responseTimeMs !== undefined) {
+    if (
+      typeof responseTimeMs !== 'number' ||
+      !Number.isFinite(responseTimeMs) ||
+      responseTimeMs < 0
+    ) {
+      throw new Error('Invalid response time value');
+    }
   }
 }
 
@@ -425,6 +437,21 @@ async function submitAnswerToApi(
   if (apiError && (apiError.statusCode === 409 || apiError.error === 'answer_already_submitted')) {
     // Return a special marker that answer was already submitted
     throw new Error(ERROR_MESSAGES.ANSWER_ALREADY_SUBMITTED);
+  }
+
+  // Handle 400 Bad Request - log for debugging but don't block UI
+  if (apiError && apiError.statusCode === 400) {
+    // Log the error for debugging but allow the UI to continue
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[useGameAnswer] Bad request on answer submission:', {
+        gameId,
+        playerId,
+        questionId,
+        questionNumber,
+        error: apiError,
+      });
+    }
+    throw new Error(apiError.message || ERROR_MESSAGES.FAILED_TO_SUBMIT_ANSWER);
   }
 
   if (apiError || !data) {
@@ -590,14 +617,20 @@ function handleSubmissionError(
     error instanceof Error ? error.message : ERROR_MESSAGES.FAILED_TO_SUBMIT_ANSWER;
   const isAlreadyAnswered = isAlreadyAnsweredError(errorMessage);
 
-  if (!isAlreadyAnswered) {
-    isSubmittingRef.current = false;
-  } else {
+  // Always reset processing state to ensure UI can render
+  isSubmittingRef.current = false;
+  setAnswerStatus((prev) => ({ ...prev, isProcessing: false }));
+
+  if (isAlreadyAnswered) {
+    // For "already answered" errors, mark as answered but don't show error
     hasAnsweredRef.current = true;
+    setAnswerStatus((prev) => ({ ...prev, hasAnswered: true }));
+    // Don't set error state for expected "already answered" cases
+    return;
   }
 
+  // For other errors, set error state but ensure UI can still render
   setError(errorMessage);
-  setAnswerStatus((prev) => ({ ...prev, isProcessing: false }));
   events?.onError?.(errorMessage);
 }
 
@@ -655,6 +688,18 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
 
   const submitAnswer = useCallback(
     async (selectedOption: string | null, responseTimeMs: number) => {
+      // Validate responseTimeMs before other validations
+      if (
+        typeof responseTimeMs !== 'number' ||
+        !Number.isFinite(responseTimeMs) ||
+        responseTimeMs < 0
+      ) {
+        const errorMsg = 'Invalid response time value';
+        setError(errorMsg);
+        setAnswerStatus((prev) => ({ ...prev, isProcessing: false }));
+        return;
+      }
+
       validateSubmissionParams(
         gameId,
         playerId,
@@ -662,6 +707,7 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
         questionNumber,
         hasAnsweredRef.current,
         isSubmittingRef.current,
+        responseTimeMs,
       );
 
       try {
@@ -730,7 +776,15 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
           hasAnsweredRef,
           eventsRef.current,
         );
-        throw err;
+        // Don't throw error - it's already handled and UI should continue rendering
+        // Only throw for "already answered" which is expected and handled gracefully
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (!isAlreadyAnsweredError(errorMessage)) {
+          // Log error but don't block UI
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[useGameAnswer] Answer submission error (non-blocking):', errorMessage);
+          }
+        }
       }
     },
     [

@@ -781,6 +781,44 @@ class GameApiClient {
     timeTakenSeconds: number,
     pointsEarned: number = DEFAULT_POINTS_EARNED,
   ) {
+    // Validate required parameters before making the request
+    if (!gameId || !playerId || !questionId) {
+      return {
+        data: null,
+        error: {
+          error: 'validation_error',
+          message: 'Missing required parameters: gameId, playerId, or questionId',
+          statusCode: 400,
+        },
+      };
+    }
+
+    if (!questionNumber || questionNumber < 1) {
+      return {
+        data: null,
+        error: {
+          error: 'validation_error',
+          message: 'Invalid question number',
+          statusCode: 400,
+        },
+      };
+    }
+
+    if (
+      typeof timeTakenSeconds !== 'number' ||
+      timeTakenSeconds < 0 ||
+      !Number.isFinite(timeTakenSeconds)
+    ) {
+      return {
+        data: null,
+        error: {
+          error: 'validation_error',
+          message: 'Invalid time taken value',
+          statusCode: 400,
+        },
+      };
+    }
+
     const result = await this.request<GamePlayerData>(
       `/games/${gameId}/players/${playerId}/answer`,
       {
@@ -804,6 +842,18 @@ class GameApiClient {
           ...result.error,
           error: 'answer_already_submitted',
           message: result.error.message || 'Answer already submitted for this question',
+        },
+      };
+    }
+
+    // Handle 400 Bad Request - provide more context
+    if (result.error && result.error.statusCode === 400) {
+      return {
+        data: null,
+        error: {
+          ...result.error,
+          error: result.error.error || 'bad_request',
+          message: result.error.message || 'Invalid request parameters',
         },
       };
     }
