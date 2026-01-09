@@ -117,6 +117,7 @@ export const metadata: Metadata = {
   other: {
     'theme-color': '#bff098',
     'msapplication-TileColor': '#bff098',
+    'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-status-bar-style': 'default',
     'apple-mobile-web-app-title': 'TUIZ情報王',

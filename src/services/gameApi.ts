@@ -176,6 +176,7 @@ export interface ApiError {
   error: string;
   message?: string;
   requestId?: string;
+  statusCode?: number;
 }
 
 //----------------------------------------------------
@@ -717,9 +718,11 @@ class GameApiClient {
       }),
     });
 
+    // Handle 409 Conflict (player data already exists) - this is expected and not an error
     if (
       result.error &&
-      (result.error.error === ERROR_CODE_DATA_CREATION_FAILED ||
+      (result.error.statusCode === 409 ||
+        result.error.error === ERROR_CODE_DATA_CREATION_FAILED ||
         result.error.message?.includes(ERROR_MESSAGE_ALREADY_EXISTS) ||
         result.error.message?.includes(ERROR_MESSAGE_PLAYER_DATA_EXISTS))
     ) {
@@ -786,9 +789,19 @@ class GameApiClient {
    * - Promise<{ data: Answer[] | null; error: ApiError | null }>: Player answers or error
    */
   async getPlayerAnswers(gameId: string, playerId: string) {
-    return this.request<Answer[]>(`/games/${gameId}/players/${playerId}/answers`, {
+    const result = await this.request<Answer[]>(`/games/${gameId}/players/${playerId}/answers`, {
       method: 'GET',
     });
+
+    // Handle 404 Not Found (player hasn't submitted answers yet) - return empty array instead of error
+    if (result.error && result.error.statusCode === 404) {
+      return {
+        data: [],
+        error: null,
+      };
+    }
+
+    return result;
   }
 
   /**
@@ -881,17 +894,26 @@ class GameApiClient {
         },
       });
 
-      const json = await response.json();
+      // Handle empty responses (e.g., 204 No Content, or empty error responses)
+      const contentType = response.headers.get('content-type');
+      const hasJsonContent = contentType?.includes('application/json');
+      const text = await response.text();
+      const json = hasJsonContent && text ? JSON.parse(text) : {};
 
       if (!response.ok) {
         return {
           data: null,
-          error: json as ApiError,
+          error: {
+            ...(json as ApiError),
+            statusCode: response.status,
+            error: (json as ApiError).error || `HTTP ${response.status}`,
+            message: (json as ApiError).message || response.statusText,
+          },
         };
       }
 
       return {
-        data: json as T,
+        data: (hasJsonContent && text ? json : null) as T,
         error: null,
       };
     } catch (error) {

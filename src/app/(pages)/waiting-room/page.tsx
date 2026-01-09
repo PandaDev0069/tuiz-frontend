@@ -234,7 +234,7 @@ function WaitingRoomContent() {
    * - Syncs game state to recover if WebSocket events were missed
    */
   const syncGameState = useCallback(async () => {
-    if (!gameId || isNavigatingRef.current) return;
+    if (!gameId || isNavigatingRef.current || !isInitialized) return;
 
     try {
       const { data, error } = await gameApi.getGameState(gameId);
@@ -259,12 +259,15 @@ function WaitingRoomContent() {
 
       if (nextPhase !== 'waiting') {
         isNavigatingRef.current = true;
-        router.replace(
-          `/game-player?gameId=${gameId}&phase=${nextPhase}&playerId=${playerId || playerName}`,
-        );
+        // Use flushSync to ensure navigation happens immediately
+        flushSync(() => {
+          router.replace(
+            `/game-player?gameId=${gameId}&phase=${nextPhase}&playerId=${playerId || playerName}`,
+          );
+        });
       }
     } catch {}
-  }, [gameId, router, playerId, playerName]);
+  }, [gameId, router, playerId, playerName, isInitialized]);
 
   /**
    * Function: resolveGameId
@@ -666,33 +669,54 @@ function WaitingRoomContent() {
   ]);
 
   //----------------------------------------------------
-  // 7.8. Game State Sync
+  // 7.8. Game State Sync (Periodic)
   //----------------------------------------------------
   useEffect(() => {
-    if (isInitialized) {
-      syncGameState();
+    if (!isInitialized || !gameId || isNavigatingRef.current) {
+      return;
     }
-  }, [isInitialized, syncGameState]);
+
+    // Initial sync
+    syncGameState();
+
+    // Periodic sync every 2 seconds to catch missed socket events
+    const syncInterval = setInterval(() => {
+      if (!isNavigatingRef.current && gameId) {
+        syncGameState();
+      }
+    }, 2000);
+
+    return () => {
+      clearInterval(syncInterval);
+    };
+  }, [isInitialized, gameId, syncGameState]);
 
   //----------------------------------------------------
   // 7.9. WebSocket Setup
   //----------------------------------------------------
   useEffect(() => {
-    if (!socket || !isConnected || !isRegistered || !gameId || !isInitialized || !playerId) {
+    // Don't set up if we don't have the essentials
+    if (!socket || !gameId || !isInitialized) {
       return;
     }
+
+    // Wait for connection and registration, but set up listeners early
+    const shouldJoinRoom = isConnected && isRegistered && playerId;
 
     let reconnectAttempted = false;
 
     const joinRoomSafe = () => {
-      if (hasJoinedRoomRef.current) {
+      if (hasJoinedRoomRef.current || !shouldJoinRoom) {
         return;
       }
       joinRoom(gameId);
       hasJoinedRoomRef.current = true;
     };
 
-    joinRoomSafe();
+    // Try to join room if conditions are met
+    if (shouldJoinRoom) {
+      joinRoomSafe();
+    }
 
     const handleGameStarted = (data: {
       roomId?: string;
@@ -702,28 +726,44 @@ function WaitingRoomContent() {
     }) => {
       const targetGameId = data.gameId || data.roomId;
       if (isNavigatingRef.current) return;
-      if (targetGameId === gameId || data.roomCode === roomCode) {
+
+      // Match by gameId, roomId, or roomCode
+      const matchesGame = targetGameId === gameId;
+      const matchesRoomCode = data.roomCode === roomCode;
+
+      if (matchesGame || matchesRoomCode) {
         isNavigatingRef.current = true;
         if (data.startedAt) {
           sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
         }
-        router.replace(
-          `/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId || playerName}`,
-        );
+
+        // Use flushSync to ensure navigation happens immediately
+        flushSync(() => {
+          router.replace(
+            `/game-player?gameId=${gameId}&phase=countdown&playerId=${playerId || playerName}`,
+          );
+        });
       }
     };
 
     const handlePhaseChange = (data: { roomId: string; phase: string; startedAt?: number }) => {
-      if (data.roomId === gameId) {
+      // Match by gameId or roomId
+      const matchesGame = data.roomId === gameId;
+
+      if (matchesGame) {
         if (data.phase === 'countdown' && data.startedAt) {
           sessionStorage.setItem(`countdown_started_${gameId}`, data.startedAt.toString());
         }
         if (isNavigatingRef.current) return;
 
         isNavigatingRef.current = true;
-        router.replace(
-          `/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId || playerName}`,
-        );
+
+        // Use flushSync to ensure navigation happens immediately
+        flushSync(() => {
+          router.replace(
+            `/game-player?gameId=${gameId}&phase=${data.phase}&playerId=${playerId || playerName}`,
+          );
+        });
       }
     };
 
@@ -787,6 +827,7 @@ function WaitingRoomContent() {
       }
     };
 
+    // Set up listeners immediately, even if not fully connected yet
     socket.on('game:started', handleGameStarted);
     socket.on('game:phase:change', handlePhaseChange);
     socket.on('game:room-locked', handleRoomLocked);
@@ -795,8 +836,20 @@ function WaitingRoomContent() {
     socket.on('game:player-kicked', handlePlayerKicked);
     socket.on('connect', handleReconnect); // Handle reconnection
 
+    // If connection becomes ready after listeners are set up, join room
+    const checkAndJoin = () => {
+      if (isConnected && isRegistered && playerId && !hasJoinedRoomRef.current) {
+        joinRoomSafe();
+      }
+    };
+
+    // Check immediately and set up a check interval
+    checkAndJoin();
+    const joinCheckInterval = setInterval(checkAndJoin, 500);
+
     // Cleanup on unmount
     return () => {
+      clearInterval(joinCheckInterval);
       socket.off('game:started', handleGameStarted);
       socket.off('game:phase:change', handlePhaseChange);
       socket.off('game:room-locked', handleRoomLocked);

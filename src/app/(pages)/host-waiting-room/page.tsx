@@ -457,11 +457,39 @@ function HostWaitingRoomContent() {
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const actualGameCode = gameCode || roomCode;
-      if (socket && socket.connected) {
-        socket.emit('game:started', { roomId: gameId, roomCode: actualGameCode });
-        socket.emit('game:phase:change', { roomId: gameId, phase: 'countdown' });
-      } else {
-        console.warn('[HostWaitingRoom] Socket not connected, cannot emit events');
+
+      // Emit socket events with retry logic
+      const emitGameEvents = () => {
+        if (socket && socket.connected) {
+          socket.emit('game:started', {
+            roomId: gameId,
+            gameId: gameId,
+            roomCode: actualGameCode,
+            startedAt: Date.now(),
+          });
+          socket.emit('game:phase:change', {
+            roomId: gameId,
+            phase: 'countdown',
+            startedAt: Date.now(),
+          });
+          return true;
+        }
+        return false;
+      };
+
+      // Try to emit immediately
+      if (!emitGameEvents()) {
+        console.warn('[HostWaitingRoom] Socket not connected, will retry...');
+
+        // Retry after a short delay if socket connects
+        const retryTimeout = setTimeout(() => {
+          if (socket && socket.connected) {
+            emitGameEvents();
+          }
+        }, 1000);
+
+        // Clean up timeout if component unmounts
+        setTimeout(() => clearTimeout(retryTimeout), 5000);
       }
 
       await new Promise((resolve) => setTimeout(resolve, 100));
