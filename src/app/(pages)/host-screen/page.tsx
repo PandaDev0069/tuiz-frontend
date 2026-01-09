@@ -1037,16 +1037,107 @@ function HostScreenContent() {
     loadQuiz();
   }, [gameId]);
 
+  // Extract current question ID for dependency array
+  const currentQuestionId = gameFlow?.current_question_id;
+
   useEffect(() => {
-    if (!gameId || !gameFlow?.current_question_id) {
+    if (!gameId) {
       setCurrentQuestionData(null);
       return;
     }
 
-    const fetchCurrentQuestion = async () => {
+    // Only require current_question_id if gameFlow exists and is loaded
+    // This allows fetching even if gameFlow hasn't loaded yet (fallback to API)
+    const currentQuestionIdFromFlow = currentQuestionId;
+    if (gameFlow && !currentQuestionIdFromFlow) {
+      setCurrentQuestionData(null);
+      return;
+    }
+
+    // Log when question fetch is triggered for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[HostScreen] Fetching current question:', {
+        gameId,
+        questionId: currentQuestionIdFromFlow,
+        hasGameFlow: !!gameFlow,
+      });
+    }
+
+    // Track if we're currently fetching to prevent duplicate requests
+    let isFetching = false;
+    let fetchTimeout: NodeJS.Timeout | null = null;
+    // Track last fetched question ID to prevent redundant fetches
+    // Use object ref to persist across async operations
+    const lastFetchedQuestionIdRef = { value: null as string | null };
+
+    // Reset tracked question ID if it changed
+    if (currentQuestionIdFromFlow && lastFetchedQuestionIdRef.value !== currentQuestionIdFromFlow) {
+      lastFetchedQuestionIdRef.value = null;
+    }
+
+    const fetchCurrentQuestion = async (retryCount = 0, isRetry = false) => {
+      // Prevent multiple simultaneous fetches
+      if (isFetching && !isRetry) {
+        return;
+      }
+
+      // Skip if we've already fetched this question (unless it's a retry)
+      if (
+        !isRetry &&
+        currentQuestionIdFromFlow &&
+        lastFetchedQuestionIdRef.value === currentQuestionIdFromFlow
+      ) {
+        return;
+      }
+
+      isFetching = true;
+
       try {
         const { data, error } = await gameApi.getCurrentQuestion(gameId);
-        if (error || !data) {
+
+        if (error) {
+          // Log error for debugging (only in development or first retry)
+          if (retryCount === 0) {
+            console.warn('[HostScreen] Failed to fetch current question:', {
+              error: error.error,
+              message: error.message,
+              statusCode: error.statusCode,
+              gameId,
+              retryCount,
+            });
+          }
+
+          // Retry 404 errors when transitioning to question phase (question might not be ready yet)
+          // This is common when transitioning from countdown to question
+          if (error.statusCode === 404 && retryCount < 3) {
+            const delayMs = 500 * (retryCount + 1); // 500ms, 1000ms, 1500ms
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            isFetching = false;
+            return fetchCurrentQuestion(retryCount + 1, true);
+          }
+
+          // Don't retry 404 after max retries - question genuinely doesn't exist
+          if (error.statusCode === 404) {
+            isFetching = false;
+            return;
+          }
+
+          // Retry network errors up to 2 times
+          if (
+            (error.error === 'network_error' || error.statusCode === undefined) &&
+            retryCount < 2
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1)));
+            isFetching = false;
+            return fetchCurrentQuestion(retryCount + 1, true);
+          }
+
+          isFetching = false;
+          return;
+        }
+
+        if (!data) {
+          isFetching = false;
           return;
         }
 
@@ -1089,13 +1180,61 @@ function HostScreenContent() {
           showExplanationTime: data.question.show_explanation_time,
           totalQuestions: data.total_questions,
         });
-      } catch {}
+
+        // Track the successfully fetched question ID
+        if (currentQuestionIdFromFlow) {
+          lastFetchedQuestionIdRef.value = currentQuestionIdFromFlow;
+        }
+
+        isFetching = false;
+      } catch (err) {
+        // Log unexpected errors for debugging
+        console.error('[HostScreen] Unexpected error fetching current question:', {
+          error: err,
+          gameId,
+          retryCount,
+        });
+
+        // Retry on unexpected errors (likely network issues)
+        if (retryCount < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1)));
+          isFetching = false;
+          return fetchCurrentQuestion(retryCount + 1, true);
+        }
+
+        isFetching = false;
+      }
     };
 
-    fetchCurrentQuestion();
-    const refreshInterval = setInterval(fetchCurrentQuestion, QUESTION_REFRESH_INTERVAL_MS);
-    return () => clearInterval(refreshInterval);
-  }, [gameId, gameFlow?.current_question_id]);
+    // Add a small delay when transitioning to question phase to allow backend to be ready
+    // This helps prevent 404 errors during countdown->question transition
+    const shouldDelay = currentQuestionIdFromFlow && gameFlow; // Only delay if we have question ID
+
+    if (shouldDelay) {
+      fetchTimeout = setTimeout(() => {
+        fetchCurrentQuestion();
+      }, 200); // 200ms delay to allow backend to be ready
+    } else {
+      fetchCurrentQuestion();
+    }
+
+    const refreshInterval = setInterval(() => {
+      if (!isFetching) {
+        fetchCurrentQuestion();
+      }
+    }, QUESTION_REFRESH_INTERVAL_MS);
+
+    return () => {
+      if (fetchTimeout) {
+        clearTimeout(fetchTimeout);
+      }
+      clearInterval(refreshInterval);
+      isFetching = false;
+    };
+    // Only depend on current_question_id, not the entire gameFlow object
+    // This prevents the effect from firing on every gameFlow update
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, currentQuestionId]);
 
   //----------------------------------------------------
   // 11.6. WebSocket Setup

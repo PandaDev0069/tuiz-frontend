@@ -350,15 +350,6 @@ class GameApiClient {
     }>(`/games/${gameId}/questions/current`, {
       method: 'GET',
     });
-
-    // Handle 404 Not Found (no current question) - return null gracefully
-    if (result.error && result.error.statusCode === 404) {
-      return {
-        data: null,
-        error: null,
-      };
-    }
-
     return result;
   }
 

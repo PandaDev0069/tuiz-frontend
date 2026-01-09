@@ -622,6 +622,9 @@ function usePlayerGameDataEffects({
     };
   }, [gameId, roomCode, setGameId, setQuestions, setQuizPlaySettings]);
 
+  // Extract current question ID for dependency array
+  const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
+
   useEffect(() => {
     if (!gameId) {
       setCurrentQuestionData(null);
@@ -630,8 +633,7 @@ function usePlayerGameDataEffects({
 
     // Only require current_question_id if gameFlow exists and is loaded
     // This allows fetching even if gameFlow hasn't loaded yet (fallback to API)
-    const currentQuestionIdFromFlow = (gameFlow as { current_question_id?: string })
-      ?.current_question_id;
+    const currentQuestionIdFromFlow = currentQuestionId;
     if (gameFlow && !currentQuestionIdFromFlow) {
       setCurrentQuestionData(null);
       return;
@@ -649,10 +651,27 @@ function usePlayerGameDataEffects({
     // Track if we're currently fetching to prevent duplicate requests
     let isFetching = false;
     let fetchTimeout: NodeJS.Timeout | null = null;
+    // Track last fetched question ID to prevent redundant fetches
+    // Use object ref to persist across async operations
+    const lastFetchedQuestionIdRef = { value: null as string | null };
+
+    // Reset tracked question ID if it changed
+    if (currentQuestionIdFromFlow && lastFetchedQuestionIdRef.value !== currentQuestionIdFromFlow) {
+      lastFetchedQuestionIdRef.value = null;
+    }
 
     const fetchCurrentQuestion = async (retryCount = 0, isRetry = false) => {
       // Prevent multiple simultaneous fetches
       if (isFetching && !isRetry) {
+        return;
+      }
+
+      // Skip if we've already fetched this question (unless it's a retry)
+      if (
+        !isRetry &&
+        currentQuestionIdFromFlow &&
+        lastFetchedQuestionIdRef.value === currentQuestionIdFromFlow
+      ) {
         return;
       }
 
@@ -738,6 +757,11 @@ function usePlayerGameDataEffects({
           totalQuestions: data.total_questions,
         });
 
+        // Track the successfully fetched question ID
+        if (currentQuestionIdFromFlow) {
+          lastFetchedQuestionIdRef.value = currentQuestionIdFromFlow;
+        }
+
         isFetching = false;
       } catch (err) {
         // Log unexpected errors for debugging
@@ -783,7 +807,10 @@ function usePlayerGameDataEffects({
       clearInterval(refreshInterval);
       isFetching = false;
     };
-  }, [gameId, gameFlow, setCurrentQuestionData]);
+    // Only depend on current_question_id, not the entire gameFlow object
+    // This prevents the effect from firing on every gameFlow update
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId, currentQuestionId, setCurrentQuestionData]);
 
   useEffect(() => {
     const currentQuestionId = (gameFlow as { current_question_id?: string })?.current_question_id;
