@@ -712,6 +712,7 @@ class GameApiClient {
    * Description:
    * - Initializes player data for a game by creating game_player_data record
    * - Returns success even if data already exists (409 Conflict) as this is expected behavior
+   * - Note: Browser console may show 409 errors - these are expected and handled gracefully
    *
    * Parameters:
    * - gameId (string): Game identifier
@@ -735,6 +736,7 @@ class GameApiClient {
     });
 
     // Handle 409 Conflict (player data already exists) - this is expected and not an error
+    // The browser console may show this as an error, but it's handled gracefully here
     if (
       result.error &&
       (result.error.statusCode === 409 ||
@@ -813,6 +815,8 @@ class GameApiClient {
    * Method: getPlayerAnswers
    * Description:
    * - Fetches all answers for a player in the game
+   * - Returns empty array if player hasn't submitted answers yet (404 is expected)
+   * - Note: Browser console may show 404 errors - these are expected and handled gracefully
    *
    * Parameters:
    * - gameId (string): Game identifier
@@ -827,6 +831,7 @@ class GameApiClient {
     });
 
     // Handle 404 Not Found (player hasn't submitted answers yet) - return empty array instead of error
+    // The browser console may show this as an error, but it's handled gracefully here
     if (result.error && result.error.statusCode === 404) {
       return {
         data: [],

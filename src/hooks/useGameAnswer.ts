@@ -859,10 +859,28 @@ export function useGameAnswer(options: UseGameAnswerOptions): UseGameAnswerRetur
     }
   }, [questionId]);
 
+  // Track if we've already attempted to fetch answers to prevent duplicate calls
+  const hasFetchedAnswersRef = useRef(false);
+  const lastFetchKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (gameId && playerId) {
-      refreshAnswersRef.current?.();
+    if (!gameId || !playerId) {
+      hasFetchedAnswersRef.current = false;
+      lastFetchKeyRef.current = null;
+      return;
     }
+
+    // Create a unique key for this gameId+playerId combination
+    const fetchKey = `${gameId}:${playerId}`;
+
+    // Skip if we've already fetched for this combination
+    if (lastFetchKeyRef.current === fetchKey && hasFetchedAnswersRef.current) {
+      return;
+    }
+
+    lastFetchKeyRef.current = fetchKey;
+    hasFetchedAnswersRef.current = true;
+    refreshAnswersRef.current?.();
   }, [gameId, playerId]);
 
   return {

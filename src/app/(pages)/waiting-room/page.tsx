@@ -389,18 +389,35 @@ function WaitingRoomContent() {
    * Function: initializePlayerGameData
    * Description:
    * - Initializes player game data (handles 409 conflicts gracefully)
+   * - Prevents duplicate calls for the same gameId+playerId combination
    */
+  const initializedDataRef = useRef<Set<string>>(new Set());
+
   const initializePlayerGameData = useCallback(
     async (currentGameId: string, playerId: string, deviceId: string) => {
+      // Create a unique key for this gameId+playerId combination
+      const initKey = `${currentGameId}:${playerId}`;
+
+      // Skip if we've already initialized for this combination
+      if (initializedDataRef.current.has(initKey)) {
+        return;
+      }
+
       try {
         const { error: dataError } = await gameApi.initializePlayerData(
           currentGameId,
           playerId,
           deviceId,
         );
+        // Mark as initialized regardless of error (409 is expected if data already exists)
+        initializedDataRef.current.add(initKey);
         if (dataError) {
+          // 409 errors are expected and handled gracefully by the API
         }
-      } catch {}
+      } catch {
+        // Mark as attempted even on error to prevent infinite retries
+        initializedDataRef.current.add(initKey);
+      }
     },
     [],
   );
