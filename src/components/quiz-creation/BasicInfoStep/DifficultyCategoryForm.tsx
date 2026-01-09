@@ -17,7 +17,8 @@
 // - Implements error handling with visual feedback
 // ====================================================
 
-import React from 'react';
+'use client';
+import React, { useEffect } from 'react';
 
 import {
   Card,
@@ -95,6 +96,18 @@ export const DifficultyCategoryForm: React.FC<DifficultyCategoryFormProps> = ({
     label: category,
   }));
 
+  // Get the first category option as default
+  const defaultCategory = categoryOptions[0]?.value || DEFAULT_EMPTY_VALUE;
+  const categoryValue = formData.category || defaultCategory;
+
+  // Set default category if not already set (only on initial mount)
+  useEffect(() => {
+    if (!formData.category && defaultCategory) {
+      handleInputChange(FORM_FIELD_CATEGORY, defaultCategory);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount - intentionally empty deps to set default once
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
       <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-lg card-with-dropdown">
@@ -141,7 +154,7 @@ export const DifficultyCategoryForm: React.FC<DifficultyCategoryFormProps> = ({
           </Label>
           <Select
             id={FORM_FIELD_CATEGORY}
-            value={formData.category || DEFAULT_EMPTY_VALUE}
+            value={categoryValue}
             onValueChange={(value) => handleInputChange(FORM_FIELD_CATEGORY, value)}
             placeholder="カテゴリを選択してください"
             options={categoryOptions}

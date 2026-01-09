@@ -335,14 +335,14 @@ const PlayerLimitSection: React.FC<{
       </div>
       <Input
         type="number"
-        value={playSettings.max_players || 400}
+        value={playSettings.max_players || 200}
         onChange={handleMaxPlayersChange}
         min={1}
-        max={400}
+        max={200}
         className="w-24"
       />
       {errors.max_players && <div className="text-red-600 text-sm mt-1">{errors.max_players}</div>}
-      <p className="text-xs text-gray-500 mt-1">同時に参加できる最大プレイヤー数（1-400人）</p>
+      <p className="text-xs text-gray-500 mt-1">同時に参加できる最大プレイヤー数（1-200人）</p>
     </div>
   );
 };
