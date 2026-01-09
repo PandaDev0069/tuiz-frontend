@@ -1561,8 +1561,12 @@ function usePlayerGameEventHandlers({
         }
 
         await submitAnswer(targetAnswerId, responseTimeMs);
-      } catch {
-        toast.error('回答の送信に失敗しました');
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        // Don't show error for "already answered" - this is expected behavior
+        if (!errorMsg.includes('already') && !errorMsg.includes('Already')) {
+          toast.error('回答の送信に失敗しました');
+        }
       }
     },
     [

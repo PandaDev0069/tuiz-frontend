@@ -313,7 +313,7 @@ class GameApiClient {
    * - Promise<{ data: CurrentQuestionResponse | null; error: ApiError | null }>: Question data or error
    */
   async getCurrentQuestion(gameId: string) {
-    return this.request<{
+    const result = await this.request<{
       question: {
         id: string;
         text: string;
@@ -345,6 +345,16 @@ class GameApiClient {
     }>(`/games/${gameId}/questions/current`, {
       method: 'GET',
     });
+
+    // Handle 404 Not Found (no current question) - return null gracefully
+    if (result.error && result.error.statusCode === 404) {
+      return {
+        data: null,
+        error: null,
+      };
+    }
+
+    return result;
   }
 
   /**
@@ -565,7 +575,7 @@ class GameApiClient {
    * - Promise<{ data: QuestionExplanation | null; error: ApiError | null }>: Explanation data or error
    */
   async getExplanation(gameId: string, questionId: string) {
-    return this.request<{
+    const result = await this.request<{
       question_id: string;
       explanation_title: string | null;
       explanation_text: string | null;
@@ -574,6 +584,16 @@ class GameApiClient {
     }>(`/games/${gameId}/questions/${questionId}/explanation`, {
       method: 'GET',
     });
+
+    // Handle 404 Not Found (explanation doesn't exist) - return null gracefully
+    if (result.error && result.error.statusCode === 404) {
+      return {
+        data: null,
+        error: null,
+      };
+    }
+
+    return result;
   }
 
   /**
@@ -763,17 +783,34 @@ class GameApiClient {
     timeTakenSeconds: number,
     pointsEarned: number = DEFAULT_POINTS_EARNED,
   ) {
-    return this.request<GamePlayerData>(`/games/${gameId}/players/${playerId}/answer`, {
-      method: 'POST',
-      body: JSON.stringify({
-        question_id: questionId,
-        question_number: questionNumber,
-        answer_id: answerId,
-        is_correct: isCorrect,
-        time_taken: timeTakenSeconds,
-        points_earned: pointsEarned,
-      }),
-    });
+    const result = await this.request<GamePlayerData>(
+      `/games/${gameId}/players/${playerId}/answer`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          question_id: questionId,
+          question_number: questionNumber,
+          answer_id: answerId,
+          is_correct: isCorrect,
+          time_taken: timeTakenSeconds,
+          points_earned: pointsEarned,
+        }),
+      },
+    );
+
+    // Handle 409 Conflict (answer already submitted) - mark as "already answered" error
+    if (result.error && result.error.statusCode === 409) {
+      return {
+        data: null,
+        error: {
+          ...result.error,
+          error: 'answer_already_submitted',
+          message: result.error.message || 'Answer already submitted for this question',
+        },
+      };
+    }
+
+    return result;
   }
 
   /**

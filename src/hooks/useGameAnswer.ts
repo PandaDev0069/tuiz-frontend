@@ -421,6 +421,12 @@ async function submitAnswerToApi(
     pointsEarned,
   );
 
+  // Handle 409 Conflict (answer already submitted) - this is expected, don't throw error
+  if (apiError && (apiError.statusCode === 409 || apiError.error === 'answer_already_submitted')) {
+    // Return a special marker that answer was already submitted
+    throw new Error(ERROR_MESSAGES.ANSWER_ALREADY_SUBMITTED);
+  }
+
   if (apiError || !data) {
     const errorMsg = apiError?.message || apiError?.error || ERROR_MESSAGES.FAILED_TO_SUBMIT_ANSWER;
     throw new Error(errorMsg);
