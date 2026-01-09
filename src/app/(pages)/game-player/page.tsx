@@ -991,6 +991,7 @@ function usePlayerGameTimer({
   router: ReturnType<typeof useRouter>;
 }) {
   const derivedRemainingMsFromFlow =
+    gameFlow &&
     (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
       ?.current_question_start_time &&
     (gameFlow as { current_question_start_time?: string; current_question_end_time?: string })
@@ -1020,7 +1021,10 @@ function usePlayerGameTimer({
   let questionElapsedMs = 0;
   if (timerState?.startTime && currentPhase === 'question') {
     questionElapsedMs = Math.max(0, Date.now() - timerState.startTime.getTime());
-  } else if ((gameFlow as { current_question_start_time?: string })?.current_question_start_time) {
+  } else if (
+    gameFlow &&
+    (gameFlow as { current_question_start_time?: string })?.current_question_start_time
+  ) {
     questionElapsedMs = Math.max(
       0,
       Date.now() -
@@ -1141,6 +1145,9 @@ function usePlayerGameTimer({
  * - Calculates question duration from game flow timestamps
  */
 function getDurationFromFlowSeconds(gameFlow: unknown): number | null {
+  if (!gameFlow) {
+    return null;
+  }
   const flow = gameFlow as {
     current_question_start_time?: string;
     current_question_end_time?: string;
