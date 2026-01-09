@@ -200,6 +200,11 @@ class GameApiClient {
    */
   constructor() {
     this.baseUrl = cfg.apiBase || DEFAULT_API_BASE_URL;
+
+    // Log API base URL in development for debugging cross-browser issues
+    if (process.env.NODE_ENV === 'development' || typeof window !== 'undefined') {
+      console.log('[GameApi] Initialized with base URL:', this.baseUrl);
+    }
   }
 
   /**
@@ -954,11 +959,24 @@ class GameApiClient {
         error: null,
       };
     } catch (error) {
+      // Enhanced error logging for network issues
+      const errorMessage = error instanceof Error ? error.message : ERROR_MESSAGE_NETWORK_FAILED;
+
+      // Log network errors for debugging (especially useful for cross-browser issues)
+      if (process.env.NODE_ENV === 'development' || typeof window !== 'undefined') {
+        console.error('[GameApi] Network error:', {
+          endpoint: `${this.baseUrl}${endpoint}`,
+          method: options.method || 'GET',
+          error: errorMessage,
+          baseUrl: this.baseUrl,
+        });
+      }
+
       return {
         data: null,
         error: {
           error: ERROR_CODE_NETWORK,
-          message: error instanceof Error ? error.message : ERROR_MESSAGE_NETWORK_FAILED,
+          message: errorMessage,
         },
       };
     }

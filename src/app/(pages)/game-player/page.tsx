@@ -623,15 +623,87 @@ function usePlayerGameDataEffects({
   }, [gameId, roomCode, setGameId, setQuestions, setQuizPlaySettings]);
 
   useEffect(() => {
-    if (!gameId || !(gameFlow as { current_question_id?: string })?.current_question_id) {
+    if (!gameId) {
       setCurrentQuestionData(null);
       return;
     }
 
-    const fetchCurrentQuestion = async () => {
+    // Only require current_question_id if gameFlow exists and is loaded
+    // This allows fetching even if gameFlow hasn't loaded yet (fallback to API)
+    const currentQuestionIdFromFlow = (gameFlow as { current_question_id?: string })
+      ?.current_question_id;
+    if (gameFlow && !currentQuestionIdFromFlow) {
+      setCurrentQuestionData(null);
+      return;
+    }
+
+    // Log when question fetch is triggered for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[GamePlayer] Fetching current question:', {
+        gameId,
+        questionId: currentQuestionIdFromFlow,
+        hasGameFlow: !!gameFlow,
+      });
+    }
+
+    // Track if we're currently fetching to prevent duplicate requests
+    let isFetching = false;
+    let fetchTimeout: NodeJS.Timeout | null = null;
+
+    const fetchCurrentQuestion = async (retryCount = 0, isRetry = false) => {
+      // Prevent multiple simultaneous fetches
+      if (isFetching && !isRetry) {
+        return;
+      }
+
+      isFetching = true;
+
       try {
         const { data, error } = await gameApi.getCurrentQuestion(gameId);
-        if (error || !data) {
+
+        if (error) {
+          // Log error for debugging (only in development or first retry)
+          if (retryCount === 0) {
+            console.warn('[GamePlayer] Failed to fetch current question:', {
+              error: error.error,
+              message: error.message,
+              statusCode: error.statusCode,
+              gameId,
+              retryCount,
+            });
+          }
+
+          // Retry 404 errors when transitioning to question phase (question might not be ready yet)
+          // This is common when transitioning from countdown to question
+          if (error.statusCode === 404 && retryCount < 3) {
+            const delayMs = 500 * (retryCount + 1); // 500ms, 1000ms, 1500ms
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            isFetching = false;
+            return fetchCurrentQuestion(retryCount + 1, true);
+          }
+
+          // Don't retry 404 after max retries - question genuinely doesn't exist
+          if (error.statusCode === 404) {
+            isFetching = false;
+            return;
+          }
+
+          // Retry network errors up to 2 times
+          if (
+            (error.error === 'network_error' || error.statusCode === undefined) &&
+            retryCount < 2
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1)));
+            isFetching = false;
+            return fetchCurrentQuestion(retryCount + 1, true);
+          }
+
+          isFetching = false;
+          return;
+        }
+
+        if (!data) {
+          isFetching = false;
           return;
         }
 
@@ -665,15 +737,52 @@ function usePlayerGameDataEffects({
           showExplanationTime: data.question.show_explanation_time,
           totalQuestions: data.total_questions,
         });
-      } catch {
-        // Silent error - question refresh is best-effort
+
+        isFetching = false;
+      } catch (err) {
+        // Log unexpected errors for debugging
+        console.error('[GamePlayer] Unexpected error fetching current question:', {
+          error: err,
+          gameId,
+          retryCount,
+        });
+
+        // Retry on unexpected errors (likely network issues)
+        if (retryCount < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * (retryCount + 1)));
+          isFetching = false;
+          return fetchCurrentQuestion(retryCount + 1, true);
+        }
+
+        isFetching = false;
       }
     };
 
-    fetchCurrentQuestion();
+    // Add a small delay when transitioning to question phase to allow backend to be ready
+    // This helps prevent 404 errors during countdown->question transition
+    const shouldDelay = currentQuestionIdFromFlow && gameFlow; // Only delay if we have question ID
 
-    const refreshInterval = setInterval(fetchCurrentQuestion, QUESTION_REFRESH_INTERVAL_MS);
-    return () => clearInterval(refreshInterval);
+    if (shouldDelay) {
+      fetchTimeout = setTimeout(() => {
+        fetchCurrentQuestion();
+      }, 200); // 200ms delay to allow backend to be ready
+    } else {
+      fetchCurrentQuestion();
+    }
+
+    const refreshInterval = setInterval(() => {
+      if (!isFetching) {
+        fetchCurrentQuestion();
+      }
+    }, QUESTION_REFRESH_INTERVAL_MS);
+
+    return () => {
+      if (fetchTimeout) {
+        clearTimeout(fetchTimeout);
+      }
+      clearInterval(refreshInterval);
+      isFetching = false;
+    };
   }, [gameId, gameFlow, setCurrentQuestionData]);
 
   useEffect(() => {
