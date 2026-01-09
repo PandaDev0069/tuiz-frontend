@@ -112,14 +112,17 @@ export const TimeBar: React.FC<TimeBarProps> = memo(
         <div className={`absolute top-0 left-0 right-0 z-10 ${className}`}>
           <div className="bg-gray-200 h-2 w-full">
             <div
-              className={`h-full transition-all duration-[${TIMER_BAR_ANIMATION_MS}ms] ease-linear ${
+              className={`h-full transition-all ease-linear ${
                 isExpired
                   ? 'bg-gradient-to-r from-red-500 to-red-600'
                   : shouldWarn
                     ? 'bg-gradient-to-r from-orange-500 to-red-500 animate-pulse'
                     : 'bg-gradient-to-r from-cyan-500 to-blue-500'
               }`}
-              style={{ width: `${PERCENT_MAX - progressPercent}%` }}
+              style={{
+                width: `${PERCENT_MAX - progressPercent}%`,
+                transitionDuration: `${TIMER_BAR_ANIMATION_MS}ms`,
+              }}
             />
           </div>
         </div>
