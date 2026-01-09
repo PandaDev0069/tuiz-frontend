@@ -20,8 +20,7 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
-import { Plus, Trash2, Upload, X, CheckCircle, CheckSquare } from 'lucide-react';
+import { Plus, Trash2, CheckCircle, CheckSquare } from 'lucide-react';
 
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@/components/ui';
 import { CreateAnswerForm } from '@/types/quiz';
@@ -37,19 +36,14 @@ const BUTTON_SIZE_SM = 'sm';
 const LABEL_VARIANT_PRIMARY = 'primary';
 const INPUT_VARIANT_DEFAULT = 'default';
 const INPUT_TYPE_TEXT = 'text';
-const INPUT_TYPE_FILE = 'file';
-const FILE_INPUT_ACCEPT = 'image/*';
 
 const LABEL_SIZE_LG = 'lg';
 const LABEL_SIZE_MD = 'md';
-const LABEL_SIZE_SM = 'sm';
 const INPUT_SIZE_LG = 'lg';
 const INPUT_SIZE_MD = 'md';
 
 const ICON_SIZE_SMALL = 'w-3 h-3';
 const ICON_SIZE_MEDIUM = 'w-4 h-4';
-const ICON_SIZE_LARGE = 'w-6 h-6';
-const ICON_SIZE_XLARGE = 'w-8 h-8';
 
 const OPTION_LETTER_SIZE = 'w-6 h-6';
 const OPTION_ICON_SIZE = 'w-8 h-8';
@@ -62,10 +56,7 @@ interface AnswerOptionProps {
   answer: CreateAnswerForm;
   index: number;
   isMobile: boolean;
-  isUploading: boolean;
   onAnswerChange: (index: number, field: keyof CreateAnswerForm, value: string | boolean) => void;
-  onImageUpload: (index: number, e: React.ChangeEvent<HTMLInputElement>) => void;
-  onRemoveImage: (index: number) => void;
   onRemove: (index: number) => void;
   canRemove: boolean;
 }
@@ -87,15 +78,6 @@ interface AnswerTextInputProps {
   onAnswerChange: (index: number, field: keyof CreateAnswerForm, value: string | boolean) => void;
 }
 
-interface ImageUploadSectionProps {
-  index: number;
-  answer: CreateAnswerForm;
-  isMobile: boolean;
-  isUploading: boolean;
-  onImageUpload: (index: number, e: React.ChangeEvent<HTMLInputElement>) => void;
-  onRemoveImage: (index: number) => void;
-}
-
 interface MultipleChoicePanelProps {
   answers: CreateAnswerForm[];
   isMobile: boolean;
@@ -112,15 +94,6 @@ interface MultipleChoicePanelProps {
  */
 const getOptionLetter = (index: number): string => {
   return String.fromCharCode(ASCII_LETTER_A + index);
-};
-
-/**
- * Triggers file input click event.
- *
- * @param {string} inputId - The ID of the file input element
- */
-const triggerFileInput = (inputId: string) => {
-  document.getElementById(inputId)?.click();
 };
 
 /**
@@ -240,92 +213,6 @@ const AnswerTextInput: React.FC<AnswerTextInputProps> = ({
  * @param {ImageUploadSectionProps} props - Component props
  * @returns {React.ReactElement} Image upload section component
  */
-const ImageUploadSection: React.FC<ImageUploadSectionProps> = ({
-  index,
-  answer,
-  isMobile,
-  isUploading,
-  onImageUpload,
-  onRemoveImage,
-}) => {
-  const inputId = `answer_image_${index}`;
-  const labelSize = isMobile ? LABEL_SIZE_MD : LABEL_SIZE_SM;
-
-  const handleImageClick = () => {
-    if (!isUploading) {
-      triggerFileInput(inputId);
-    }
-  };
-
-  const handleButtonClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!isUploading) {
-      triggerFileInput(inputId);
-    }
-  };
-
-  return (
-    <div className={cn(isMobile ? 'flex flex-col' : 'flex-1 flex flex-col')}>
-      <Label htmlFor={inputId} variant={LABEL_VARIANT_PRIMARY} size={labelSize}>
-        画像（任意）
-      </Label>
-      <div className={cn(isMobile ? 'h-20' : 'flex-1 min-h-0', 'w-full')}>
-        {answer.image_url ? (
-          <div className="relative h-full w-full">
-            <div className="h-full w-full max-w-full overflow-hidden rounded-lg border-2 border-blue-200">
-              <Image
-                src={answer.image_url}
-                alt={`Answer option ${index + 1} image`}
-                fill
-                className="object-cover"
-                onError={(e) => {
-                  console.error('Answer image failed to load:', answer.image_url, e);
-                }}
-              />
-            </div>
-            <button
-              type={BUTTON_TYPE_BUTTON}
-              onClick={() => onRemoveImage(index)}
-              className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full"
-            >
-              <X className={ICON_SIZE_SMALL} />
-            </button>
-          </div>
-        ) : (
-          <div
-            className="border-2 border-dashed border-blue-400 rounded-lg p-2 text-center cursor-pointer h-full flex flex-col items-center justify-center"
-            onClick={handleImageClick}
-          >
-            <Upload
-              className={cn(isMobile ? ICON_SIZE_LARGE : ICON_SIZE_XLARGE, 'text-blue-400 mb-1')}
-            />
-            <p className={cn('text-blue-600 mb-1', isMobile ? 'text-xs' : 'text-xs')}>
-              画像をアップロード
-            </p>
-            <input
-              type={INPUT_TYPE_FILE}
-              accept={FILE_INPUT_ACCEPT}
-              onChange={(e) => onImageUpload(index, e)}
-              className="hidden"
-              id={inputId}
-              disabled={isUploading}
-            />
-            <Button
-              type={BUTTON_TYPE_BUTTON}
-              variant={BUTTON_VARIANT_OUTLINE}
-              size={BUTTON_SIZE_SM}
-              onClick={handleButtonClick}
-              disabled={isUploading}
-              className="text-blue-600 border-blue-300 text-xs px-2 py-1"
-            >
-              {isUploading ? 'アップロード中...' : '選択'}
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 /**
  * Component: AnswerOption
@@ -340,10 +227,7 @@ const AnswerOption: React.FC<AnswerOptionProps> = ({
   answer,
   index,
   isMobile,
-  isUploading,
   onAnswerChange,
-  onImageUpload,
-  onRemoveImage,
   onRemove,
   canRemove,
 }) => {
@@ -365,14 +249,6 @@ const AnswerOption: React.FC<AnswerOptionProps> = ({
         answer={answer}
         isMobile={isMobile}
         onAnswerChange={onAnswerChange}
-      />
-      <ImageUploadSection
-        index={index}
-        answer={answer}
-        isMobile={isMobile}
-        isUploading={isUploading}
-        onImageUpload={onImageUpload}
-        onRemoveImage={onRemoveImage}
       />
     </div>
   );
@@ -411,9 +287,7 @@ const AnswerOption: React.FC<AnswerOptionProps> = ({
 export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
   answers,
   isMobile,
-  isUploading,
   onAnswersChange,
-  onImageUpload,
 }) => {
   const handleAnswerChange = (
     index: number,
@@ -458,15 +332,6 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
     onAnswersChange(updatedAnswers);
   };
 
-  const handleRemoveImage = (index: number) => {
-    const updatedAnswers = [...answers];
-    updatedAnswers[index] = {
-      ...updatedAnswers[index],
-      image_url: DEFAULT_IMAGE_URL,
-    };
-    onAnswersChange(updatedAnswers);
-  };
-
   return (
     <Card className="bg-gradient-to-br from-lime-200 to-green-300 border-lime-400 shadow-sm">
       <CardHeader className={cn(isMobile ? 'pb-4 px-4' : 'pb-6 px-6')}>
@@ -486,14 +351,14 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
         </p>
       </CardHeader>
 
-      <CardContent className={cn(isMobile ? 'px-4' : 'px-6')}>
+      <CardContent className={cn(isMobile ? 'px-2' : 'px-6')}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             {answers.map((answer, index) => (
               <div
                 key={index}
                 className={cn(
-                  'p-3 rounded-lg border-2 aspect-[4/3] flex flex-col justify-between',
+                  'p-3 rounded-lg border-2 flex flex-col justify-between',
                   answer.is_correct
                     ? 'border-green-500 bg-green-200 shadow-md'
                     : 'border-lime-600 bg-lime-300',
@@ -503,10 +368,7 @@ export const MultipleChoicePanel: React.FC<MultipleChoicePanelProps> = ({
                   answer={answer}
                   index={index}
                   isMobile={isMobile}
-                  isUploading={isUploading}
                   onAnswerChange={handleAnswerChange}
-                  onImageUpload={onImageUpload}
-                  onRemoveImage={handleRemoveImage}
                   onRemove={handleRemoveOption}
                   canRemove={answers.length > MIN_ANSWERS}
                 />
