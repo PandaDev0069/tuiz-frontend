@@ -339,6 +339,7 @@ export default function Page() {
             <div className="text-gray-600">
               <p>&copy; 2025 TUIZ情報王. All rights reserved.</p>
               <p className="text-sm">Next.js + Socket.IO • Real-time Quiz Platform</p>
+              <a href="https://github.com/PandaDev0069/tuiz-frontend">Github</a>
             </div>
           </Container>
         </Footer>
